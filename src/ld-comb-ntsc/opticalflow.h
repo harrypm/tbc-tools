@@ -1,6 +1,6 @@
 /************************************************************************
 
-    ntscfilter.h
+    opticalflow.h
 
     ld-comb-ntsc - NTSC colourisation filter for ld-decode
     Copyright (C) 2018 Chad Page
@@ -23,36 +23,39 @@
 
 ************************************************************************/
 
-#ifndef NTSCFILTER_H
-#define NTSCFILTER_H
+#ifndef OPTICALFLOW_H
+#define OPTICALFLOW_H
 
-#include <QObject>
+#include <QCoreApplication>
 #include <QDebug>
-#include <QFile>
-#include <QElapsedTimer>
+#include <QtMath>
 
-// Include the ld-decode-tools shared libary headers
-#include "sourcevideo.h"
-#include "lddecodemetadata.h"
+// OpenCV3
+#include <opencv2/core/core.hpp>
+#include <opencv2/video/tracking.hpp>
 
-#include "comb.h"
+#include "yiqbuffer.h"
 
-class NtscFilter : public QObject
+class OpticalFlow
 {
-    Q_OBJECT
 public:
-    explicit NtscFilter(QObject *parent = nullptr);
+    OpticalFlow();
 
-    bool process(QString inputFileName, QString outputFileName, qint32 startFrame, qint32 length, bool reverse,
-                 bool blackAndWhite, bool whitePoint, bool use3D, bool showOpticalFlowMap);
+    // Input frame buffer definitions
+    struct yiqLine_t {
+        YIQ pixel[911]; // One line of YIQ data
+    };
 
-signals:
-
-public slots:
+    void denseOpticalFlow(YiqBuffer yiqBuffer, QVector<qreal> &kValues);
 
 private:
-    LdDecodeMetaData ldDecodeMetaData;
-    SourceVideo sourceVideo;
+    // Globals used by the opticalFlow3D method
+    cv::Mat previousFrameGrey;
+    qint32 framesProcessed;
+
+    cv::Mat convertYtoMat(YiqBuffer yiqBuffer);
+    qreal clamp(qreal v, qreal low, qreal high);
+    qreal calculateDistance(qreal yDifference, qreal xDifference);
 };
 
-#endif // NTSCFILTER_H
+#endif // OPTICALFLOW_H

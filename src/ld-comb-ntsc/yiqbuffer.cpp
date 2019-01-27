@@ -1,6 +1,6 @@
 /************************************************************************
 
-    ntscfilter.h
+    yiqbuffer.cpp
 
     ld-comb-ntsc - NTSC colourisation filter for ld-decode
     Copyright (C) 2018 Chad Page
@@ -23,36 +23,30 @@
 
 ************************************************************************/
 
-#ifndef NTSCFILTER_H
-#define NTSCFILTER_H
+#include "yiqbuffer.h"
 
-#include <QObject>
-#include <QDebug>
-#include <QFile>
-#include <QElapsedTimer>
-
-// Include the ld-decode-tools shared libary headers
-#include "sourcevideo.h"
-#include "lddecodemetadata.h"
-
-#include "comb.h"
-
-class NtscFilter : public QObject
+YiqBuffer::YiqBuffer(void)
 {
-    Q_OBJECT
-public:
-    explicit NtscFilter(QObject *parent = nullptr);
+    bufferHeight = 525;
+    yiqLine.resize(bufferHeight);
+}
 
-    bool process(QString inputFileName, QString outputFileName, qint32 startFrame, qint32 length, bool reverse,
-                 bool blackAndWhite, bool whitePoint, bool use3D, bool showOpticalFlowMap);
+void YiqBuffer::clear(void)
+{
+    for (qint32 counter = 0; counter < bufferHeight; counter++) {
+        yiqLine[counter].yiq->y = 0;
+        yiqLine[counter].yiq->i = 0;
+        yiqLine[counter].yiq->q = 0;
+    }
+}
 
-signals:
+// Overload the [] operator to return an indexed value
+YiqLine& YiqBuffer::operator[] (const int index)
+{
+    if (index > bufferHeight || index < 0) {
+        qCritical() << "BUG: Out of bounds call to YiqLine with an index of" << index;
+        exit(EXIT_FAILURE);
+    }
 
-public slots:
-
-private:
-    LdDecodeMetaData ldDecodeMetaData;
-    SourceVideo sourceVideo;
-};
-
-#endif // NTSCFILTER_H
+    return yiqLine[index];
+}

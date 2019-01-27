@@ -1,14 +1,13 @@
 /************************************************************************
 
-    ntscfilter.h
+    dropoutanalysisdialog.h
 
-    ld-comb-ntsc - NTSC colourisation filter for ld-decode
-    Copyright (C) 2018 Chad Page
+    ld-analyse - TBC output analysis
     Copyright (C) 2018-2019 Simon Inns
 
     This file is part of ld-decode-tools.
 
-    ld-comb-ntsc is free software: you can redistribute it and/or
+    ld-dropout-correct is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as
     published by the Free Software Foundation, either version 3 of the
     License, or (at your option) any later version.
@@ -23,36 +22,38 @@
 
 ************************************************************************/
 
-#ifndef NTSCFILTER_H
-#define NTSCFILTER_H
+#ifndef DROPOUTANALYSISDIALOG_H
+#define DROPOUTANALYSISDIALOG_H
 
-#include <QObject>
-#include <QDebug>
-#include <QFile>
-#include <QElapsedTimer>
+#include <QDialog>
+#include <QtCharts>
 
-// Include the ld-decode-tools shared libary headers
-#include "sourcevideo.h"
 #include "lddecodemetadata.h"
 
-#include "comb.h"
+using namespace QtCharts;
 
-class NtscFilter : public QObject
+namespace Ui {
+class DropoutAnalysisDialog;
+}
+
+class DropoutAnalysisDialog : public QDialog
 {
     Q_OBJECT
+
 public:
-    explicit NtscFilter(QObject *parent = nullptr);
+    explicit DropoutAnalysisDialog(QWidget *parent = nullptr);
+    ~DropoutAnalysisDialog();
 
-    bool process(QString inputFileName, QString outputFileName, qint32 startFrame, qint32 length, bool reverse,
-                 bool blackAndWhite, bool whitePoint, bool use3D, bool showOpticalFlowMap);
-
-signals:
-
-public slots:
+    void updateChart(LdDecodeMetaData *ldDecodeMetaData);
 
 private:
-    LdDecodeMetaData ldDecodeMetaData;
-    SourceVideo sourceVideo;
+    Ui::DropoutAnalysisDialog *ui;
+
+    QChart *chart;
+    QLineSeries *series;
+    QChartView *chartView;
+    QValueAxis *axisX;
+    QValueAxis *axisY;
 };
 
-#endif // NTSCFILTER_H
+#endif // DROPOUTANALYSISDIALOG_H

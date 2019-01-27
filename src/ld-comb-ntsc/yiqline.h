@@ -1,6 +1,6 @@
 /************************************************************************
 
-    ntscfilter.h
+    yiqline.h
 
     ld-comb-ntsc - NTSC colourisation filter for ld-decode
     Copyright (C) 2018 Chad Page
@@ -23,36 +23,27 @@
 
 ************************************************************************/
 
-#ifndef NTSCFILTER_H
-#define NTSCFILTER_H
+#ifndef YIQLINE_H
+#define YIQLINE_H
 
-#include <QObject>
+#include <QCoreApplication>
+#include <QVector>
 #include <QDebug>
-#include <QFile>
-#include <QElapsedTimer>
 
-// Include the ld-decode-tools shared libary headers
-#include "sourcevideo.h"
-#include "lddecodemetadata.h"
+#include "yiq.h"
 
-#include "comb.h"
-
-class NtscFilter : public QObject
+class YiqLine
 {
-    Q_OBJECT
 public:
-    explicit NtscFilter(QObject *parent = nullptr);
+    YiqLine();
+    YIQ& operator[] (const int index);
+    qint32 width(void);
 
-    bool process(QString inputFileName, QString outputFileName, qint32 startFrame, qint32 length, bool reverse,
-                 bool blackAndWhite, bool whitePoint, bool use3D, bool showOpticalFlowMap);
-
-signals:
-
-public slots:
+    YIQ yiq[910]; // One line of YIQ data
 
 private:
-    LdDecodeMetaData ldDecodeMetaData;
-    SourceVideo sourceVideo;
+    qint32 lineWidth;
+
 };
 
-#endif // NTSCFILTER_H
+#endif // YIQLINE_H

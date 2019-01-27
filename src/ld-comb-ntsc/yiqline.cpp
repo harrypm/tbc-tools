@@ -1,6 +1,6 @@
 /************************************************************************
 
-    ntscfilter.h
+    yiqline.cpp
 
     ld-comb-ntsc - NTSC colourisation filter for ld-decode
     Copyright (C) 2018 Chad Page
@@ -23,36 +23,26 @@
 
 ************************************************************************/
 
-#ifndef NTSCFILTER_H
-#define NTSCFILTER_H
+#include "yiqline.h"
 
-#include <QObject>
-#include <QDebug>
-#include <QFile>
-#include <QElapsedTimer>
-
-// Include the ld-decode-tools shared libary headers
-#include "sourcevideo.h"
-#include "lddecodemetadata.h"
-
-#include "comb.h"
-
-class NtscFilter : public QObject
+YiqLine::YiqLine()
 {
-    Q_OBJECT
-public:
-    explicit NtscFilter(QObject *parent = nullptr);
+    lineWidth = 910;
+}
 
-    bool process(QString inputFileName, QString outputFileName, qint32 startFrame, qint32 length, bool reverse,
-                 bool blackAndWhite, bool whitePoint, bool use3D, bool showOpticalFlowMap);
+// Overload the [] operator to return an indexed value
+YIQ& YiqLine::operator[] (const int index)
+{
+    if (index > lineWidth || index < 0) {
+        qCritical() << "BUG: Out of bounds call to YiqLine with an index of" << index;
+        exit(EXIT_FAILURE);
+    }
 
-signals:
+    return yiq[index];
+}
 
-public slots:
-
-private:
-    LdDecodeMetaData ldDecodeMetaData;
-    SourceVideo sourceVideo;
-};
-
-#endif // NTSCFILTER_H
+// Method to return the width of the lines within the YiqLine object
+qint32 YiqLine::width(void)
+{
+    return lineWidth;
+}
