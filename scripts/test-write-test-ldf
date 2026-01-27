@@ -101,7 +101,7 @@ echo "  Length: $LENGTH"
 echo "  Temp dir: $TEMP_DIR"
 
 # Set up PATH for helper programs
-export PATH="$BUILD_DIR:$BUILD_DIR/src/ld-ldf-reader:$SOURCE_DIR:$PATH"
+export PATH="$BUILD_DIR/bin:$SOURCE_DIR:$PATH"
 
 # Test 1: Decode with position switches and extract test LDF
 echo ""

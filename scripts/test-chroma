@@ -97,7 +97,7 @@ def test_encode(args, source, sc_locked, png_suffix):
 
     # Encode the .rgb to .tbc, using ld-chroma-encoder
     tbc_file = args.output + '.tbc'
-    cmd = [build_dir + '/src/ld-chroma-decoder/encoder/ld-chroma-encoder']
+    cmd = [build_dir + '/bin/ld-chroma-encoder']
     cmd += ['--input-format', args.input_format]
     if sc_locked:
         cmd += ['--sc-locked']
@@ -131,7 +131,7 @@ def test_decode(args, decoder, phase_locked, output_format, png_suffix):
     # Decode the .tbc using ld-chroma-decoder
     tbc_file = args.output + '.tbc'
     decoded_file = args.output + '.decoded'
-    cmd = [build_dir + '/src/ld-chroma-decoder/ld-chroma-decoder',
+    cmd = [build_dir + '/bin/ld-chroma-decoder',
         '--quiet',
         '-f', decoder,
         '--chroma-nr', '0',
