@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
     // Set application name and version
     QCoreApplication::setApplicationName("vfs-verifier");
     QCoreApplication::setApplicationVersion(
-            QString("Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
+            QString("ld-decode-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
     QCoreApplication::setOrganizationDomain("domesday86.com");
 
     // Set up the command line parser

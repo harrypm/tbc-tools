@@ -131,6 +131,18 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+# Check if there are uncommitted changes
+execute_process(
+    COMMAND git diff-index --quiet HEAD --
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    RESULT_VARIABLE GIT_DIRTY
+)
+
+# Add -dirty suffix if there are uncommitted changes
+if(GIT_DIRTY)
+    set(GIT_COMMIT_HASH "${GIT_COMMIT_HASH}-dirty")
+endif()
+
 add_compile_definitions(APP_BRANCH=\"${GIT_BRANCH}\")
 add_compile_definitions(APP_COMMIT=\"${GIT_COMMIT_HASH}\")
 
