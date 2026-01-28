@@ -235,8 +235,8 @@ def main():
         print('SKIP: ffmpeg not found in PATH')
         sys.exit(77)
 
-    encoder_path = os.path.join(build_dir, 'src', 'ld-chroma-decoder', 'encoder', 'ld-chroma-encoder')
-    decoder_path = os.path.join(build_dir, 'src', 'ld-chroma-decoder', 'ld-chroma-decoder')
+    encoder_path = os.path.join(build_dir, 'bin', 'ld-chroma-encoder')
+    decoder_path = os.path.join(build_dir, 'bin', 'ld-chroma-decoder')
     missing = [path for path in (encoder_path, decoder_path) if not os.path.exists(path)]
     if missing:
         print('SKIP: required tool(s) not built:', ', '.join(missing))

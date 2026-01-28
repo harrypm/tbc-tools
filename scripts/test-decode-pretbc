@@ -478,17 +478,17 @@ def main():
     source_dir = build_dir
 
     required_tools = [
-        os.path.join(build_dir, 'src', 'ld-process-vbi', 'ld-process-vbi'),
-        os.path.join(build_dir, 'src', 'ld-export-metadata', 'ld-export-metadata'),
-        os.path.join(build_dir, 'src', 'ld-export-decode-metadata', 'ld-export-decode-metadata'),
-        os.path.join(build_dir, 'src', 'ld-dropout-correct', 'ld-dropout-correct'),
-        os.path.join(build_dir, 'src', 'ld-chroma-decoder', 'ld-chroma-decoder'),
+        os.path.join(build_dir, 'bin', 'ld-process-vbi'),
+        os.path.join(build_dir, 'bin', 'ld-export-metadata'),
+        os.path.join(build_dir, 'bin', 'ld-export-decode-metadata'),
+        os.path.join(build_dir, 'bin', 'ld-dropout-correct'),
+        os.path.join(build_dir, 'bin', 'ld-chroma-decoder'),
     ]
     if not args.no_efm:
         required_tools += [
-            os.path.join(build_dir, 'src', 'efm-decoder', 'tools', 'efm-decoder-f2', 'efm-decoder-f2'),
-            os.path.join(build_dir, 'src', 'efm-decoder', 'tools', 'efm-decoder-d24', 'efm-decoder-d24'),
-            os.path.join(build_dir, 'src', 'efm-decoder', 'tools', 'efm-decoder-audio', 'efm-decoder-audio'),
+            os.path.join(build_dir, 'bin', 'efm-decoder-f2'),
+            os.path.join(build_dir, 'bin', 'efm-decoder-d24'),
+            os.path.join(build_dir, 'bin', 'efm-decoder-audio'),
         ]
     missing = [path for path in required_tools if not os.path.exists(path)]
     if missing:
