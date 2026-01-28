@@ -73,11 +73,6 @@ if(MSVC)
     add_compile_options(/permissive-)
 endif()
 
-option(BUILD_LDF_READER
-    "build ld_ldf_reader"
-    ON
-)
-
 option(BUILD_PYTHON
     "Build and install ld-decode's Python library and tools"
     OFF
@@ -170,8 +165,4 @@ if(BUILD_TESTING)
     add_subdirectory(src/library/tbc/testvbidecoder)
     add_subdirectory(src/library/tbc/testvitcdecoder)
     include(LdDecodeTests)
-endif()
-
-if(BUILD_LDF_READER)
-    add_subdirectory(src/ld-ldf-reader)
 endif()

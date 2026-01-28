@@ -106,7 +106,6 @@ make ld-json-converter
 - `ld-process-vbi` - VBI processor
 - `ld-process-vits` - VITS processor
 - `ld-cut` - Cut/segment tool
-- `ld-ldf-reader` - LDF file reader
 - `ld-discmap` - Disc mapper
 - `ld-dropout-correct` - Dropout corrector
 
