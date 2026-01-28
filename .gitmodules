@@ -1,3 +1,6 @@
 [submodule "ezpwd"]
 	path = src/efm-decoder/libs/ezpwd
 	url = https://github.com/pjkundert/ezpwd-reed-solomon.git
+[submodule "src/efm-decoder/libs/ezpwd"]
+	path = src/efm-decoder/libs/ezpwd
+	url = https://github.com/pjkundert/ezpwd-reed-solomon.git
