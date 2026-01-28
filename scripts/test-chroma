@@ -33,11 +33,18 @@
 
 import argparse
 import os
+import shutil
 import statistics
 import subprocess
 import sys
 
 build_dir = None
+
+def resolve_tool(*candidates):
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return candidates[0]
 
 def safe_unlink(filename):
     """Remove a file if it exists; if not, do nothing."""
@@ -97,7 +104,10 @@ def test_encode(args, source, sc_locked, png_suffix):
 
     # Encode the .rgb to .tbc, using ld-chroma-encoder
     tbc_file = args.output + '.tbc'
-    cmd = [build_dir + '/src/ld-chroma-decoder/encoder/ld-chroma-encoder']
+    cmd = [resolve_tool(
+        os.path.join(build_dir, 'bin', 'ld-chroma-encoder'),
+        os.path.join(build_dir, 'src', 'ld-chroma-decoder', 'encoder', 'ld-chroma-encoder'),
+    )]
     cmd += ['--input-format', args.input_format]
     if sc_locked:
         cmd += ['--sc-locked']
@@ -131,7 +141,10 @@ def test_decode(args, decoder, phase_locked, output_format, png_suffix):
     # Decode the .tbc using ld-chroma-decoder
     tbc_file = args.output + '.tbc'
     decoded_file = args.output + '.decoded'
-    cmd = [build_dir + '/src/ld-chroma-decoder/ld-chroma-decoder',
+    cmd = [resolve_tool(
+        os.path.join(build_dir, 'bin', 'ld-chroma-decoder'),
+        os.path.join(build_dir, 'src', 'ld-chroma-decoder', 'ld-chroma-decoder'),
+    ),
         '--quiet',
         '-f', decoder,
         '--chroma-nr', '0',
@@ -217,6 +230,17 @@ def main():
     build_dir = os.path.dirname(os.path.dirname(prog_path))
     if args.build:
         build_dir = args.build
+
+    if shutil.which('ffmpeg') is None:
+        print('SKIP: ffmpeg not found in PATH')
+        sys.exit(77)
+
+    encoder_path = os.path.join(build_dir, 'src', 'ld-chroma-decoder', 'encoder', 'ld-chroma-encoder')
+    decoder_path = os.path.join(build_dir, 'src', 'ld-chroma-decoder', 'ld-chroma-decoder')
+    missing = [path for path in (encoder_path, decoder_path) if not os.path.exists(path)]
+    if missing:
+        print('SKIP: required tool(s) not built:', ', '.join(missing))
+        sys.exit(77)
 
     # Remove display environment variables, as the decoding tools shouldn't
     # depend on having a display
