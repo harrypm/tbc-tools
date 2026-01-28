@@ -101,7 +101,7 @@ def run_ld_process_vbi(args):
 
     clean(args, ['.tbc.json.bup', '.tbc.db.bup'])
 
-    cmd = [build_dir + '/bin/ld-process-vbi']
+    cmd = [build_dir + '/src/ld-process-vbi/ld-process-vbi']
     cmd += [args.output + '.tbc']
     run_command(cmd)
 
@@ -180,7 +180,7 @@ def run_ld_export_metadata(args):
 
     clean(args, ['.vits.csv', '.vbi.csv', '.ffmetadata'])
 
-    cmd = [build_dir + '/bin/ld-export-metadata']
+    cmd = [build_dir + '/src/ld-export-metadata/ld-export-metadata']
     cmd += ['--vits-csv', args.output + '.vits.csv']
     cmd += ['--vbi-csv', args.output + '.vbi.csv']
     cmd += ['--ffmetadata', args.output + '.ffmetadata']
@@ -200,7 +200,7 @@ def run_ld_export_decode_metadata(args):
 
     clean(args, ['.tbc.export.json'])
 
-    cmd = [build_dir + '/bin/ld-export-decode-metadata']
+    cmd = [build_dir + '/src/ld-export-decode-metadata/ld-export-decode-metadata']
     cmd += ['--input-sqlite', db_file]
     run_command(cmd)
 
@@ -318,19 +318,19 @@ def run_efm_decoder(args):
             die(efm_file, 'is empty')
 
     # Run efm-decoder-f2 (EFM T-values to F2 Section)
-    cmd = [build_dir + '/bin/efm-decoder-f2']
+    cmd = [build_dir + '/src/efm-decoder/tools/efm-decoder-f2/efm-decoder-f2']
     if args.no_efm_timecodes:
         cmd += ['--no-timecodes']
     cmd += [efm_file, f2_file]
     run_command(cmd)
 
     # Run efm-decoder-d24 (F2 Section to Data24 Section)
-    cmd = [build_dir + '/bin/efm-decoder-d24']
+    cmd = [build_dir + '/src/efm-decoder/tools/efm-decoder-d24/efm-decoder-d24']
     cmd += [f2_file, d24_file]
     run_command(cmd)
 
     # Run efm-decoder-audio (Data24 to Audio WAV)
-    cmd = [build_dir + '/bin/efm-decoder-audio']
+    cmd = [build_dir + '/src/efm-decoder/tools/efm-decoder-audio/efm-decoder-audio']
     cmd += [d24_file, wav_file]
     run_command(cmd)
 
@@ -352,7 +352,7 @@ def run_ld_dropout_correct(args):
 
     clean(args, ['.doc.tbc', '.doc.tbc.db'])
 
-    cmd = [build_dir + '/bin/ld-dropout-correct']
+    cmd = [build_dir + '/src/ld-dropout-correct/ld-dropout-correct']
     cmd += ['--overcorrect', args.output + '.tbc', args.output + '.doc.tbc']
     run_command(cmd)
 
@@ -362,7 +362,7 @@ def run_ld_chroma_decoder(args, decoder):
     clean(args, ['.rgb'])
     rgb_file = args.output + '.rgb'
 
-    cmd = [build_dir + '/bin/ld-chroma-decoder']
+    cmd = [build_dir + '/src/ld-chroma-decoder/ld-chroma-decoder']
     if decoder is not None:
         cmd += ['--decoder', decoder]
     cmd += [args.output + '.doc.tbc', rgb_file]

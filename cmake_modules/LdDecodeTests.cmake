@@ -49,114 +49,67 @@ add_test(
 )
 set_tests_properties(chroma-pal-ycbcr PROPERTIES DEPENDS chroma-pal-rgb)
 
+# Tests using pre-generated TBC files (ld-decode/ld-cut not part of this repo)
+# Note: These tests were previously named ld-cut-ntsc and decode-ntsc-cav but both
+# used the same source file. Now using pre-generated TBC, they test the same pipeline.
 add_test(
-    NAME ld-cut-ntsc
-    COMMAND ${SCRIPTS_DIR}/test-decode
-        --source ${CMAKE_SOURCE_DIR}
-        --build ${CMAKE_BINARY_DIR}
-        --cut-seek 30255
-        --cut-length 4
-        --expect-frames 4
-        --expect-vbi 9151563,15925845,15925845
-        ${TESTDATA_DIR}/ntsc/ve-snw-cut.ldf
-)
-
-add_test(
-    NAME ld-cut-pal
-    COMMAND ${SCRIPTS_DIR}/test-decode
-        --source ${CMAKE_SOURCE_DIR}
-        --build ${CMAKE_BINARY_DIR}
-        --pal
-        --no-efm  # GGV discs do not contain EFM data
-        --cut-seek 760
-        --cut-length 4
-        --expect-frames 4
-        --expect-vbi 9152512,15730528,15730528
-        ${TESTDATA_DIR}/pal/ggv-mb-1khz.ldf
-)
-
-add_test(
-    NAME decode-ntsc-cav
-    COMMAND ${SCRIPTS_DIR}/test-decode
-        --source ${CMAKE_SOURCE_DIR}
+    NAME decode-pretbc-ntsc-cav
+    COMMAND ${SCRIPTS_DIR}/test-decode-pretbc
         --build ${CMAKE_BINARY_DIR}
         --decoder mono --decoder ntsc2d --decoder ntsc3d
         --expect-frames 29
         --expect-bpsnr 43.3
         --expect-vbi 9151563,15925840,15925840
         --expect-efm-samples 40572
-        ${TESTDATA_DIR}/ntsc/ve-snw-cut.ldf
+        ${CMAKE_SOURCE_DIR}/test-data/ntsc/ve-snw-cut
 )
 
 add_test(
-    NAME decode-ntsc-clv
-    COMMAND ${SCRIPTS_DIR}/test-decode
-        --source ${CMAKE_SOURCE_DIR}
+    NAME decode-pretbc-ntsc-clv
+    COMMAND ${SCRIPTS_DIR}/test-decode-pretbc
         --build ${CMAKE_BINARY_DIR}
         --no-efm-timecodes
         --expect-frames 4
         --expect-bpsnr 37.6
         --expect-vbi 9167913,15785241,15785241
-        ${TESTDATA_DIR}/ntsc/issue176.ldf
+        ${CMAKE_SOURCE_DIR}/test-data/ntsc/issue176
 )
 
 add_test(
-    NAME decode-pal-cav
-    COMMAND ${SCRIPTS_DIR}/test-decode --pal
-        --source ${CMAKE_SOURCE_DIR}
+    NAME decode-pretbc-pal-cav
+    COMMAND ${SCRIPTS_DIR}/test-decode-pretbc
         --build ${CMAKE_BINARY_DIR}
+        --pal
         --decoder mono --decoder pal2d --decoder transform2d --decoder transform3d
         --expect-frames 4
         --expect-bpsnr 38.4
         --expect-vbi 9151527,16065688,16065688
         --expect-vitc 2,10,8,13,4,3,0,1
         --expect-efm-samples 5292
-        ${TESTDATA_DIR}/pal/jason-testpattern.ldf
+        ${CMAKE_SOURCE_DIR}/test-data/pal/jason-testpattern
 )
 
 add_test(
-    NAME decode-pal-clv
-    COMMAND ${SCRIPTS_DIR}/test-decode --pal --no-efm
-        --source ${CMAKE_SOURCE_DIR}
+    NAME decode-pretbc-pal-clv
+    COMMAND ${SCRIPTS_DIR}/test-decode-pretbc
         --build ${CMAKE_BINARY_DIR}
+        --pal
+        --no-efm
         --expect-frames 9
         --expect-bpsnr 30.3
         --expect-vbi 0,8449774,8449774
-        ${TESTDATA_DIR}/pal/kagemusha-leadout-cbar.ldf
+        ${CMAKE_SOURCE_DIR}/test-data/pal/kagemusha-leadout-cbar
 )
 
 add_test(
-    NAME ldf-reader-full
-    COMMAND ${SCRIPTS_DIR}/test-ldf-reader
+    NAME decode-pretbc-pal-ggv
+    COMMAND ${SCRIPTS_DIR}/test-decode-pretbc
         --build ${CMAKE_BINARY_DIR}
-        --testdata ${TESTDATA_DIR}/ntsc
-        --input ggv-ntsc-mb-v2800.ldf
-        --full-sha256 0984ab9a4e66b49426b61e2d4de266e7783801dc48f566ed805257bc596098ec
-        --offset 1000000
-        --partial-bytes 1000000
-        --partial-sha256 7dae0f342b4b365d5d607676961ca28b39ef78c71b7b0be11f77c303a7ac50f7
+        --pal
+        --no-efm  # GGV discs do not contain EFM data
+        --expect-frames 24
+        --expect-vbi 9152512,15730528,15730528
+        ${CMAKE_SOURCE_DIR}/test-data/pal/ggv-mb-1khz
 )
 
-add_test(
-    NAME write-test-ldf-ntsc
-    COMMAND ${SCRIPTS_DIR}/test-write-test-ldf
-        --build ${CMAKE_BINARY_DIR}
-        --source ${CMAKE_SOURCE_DIR}
-        --testdata ${TESTDATA_DIR}
-        --input ggv-ntsc-mb-v2800.ldf
-        --system ntsc
-        --start 0
-        --length 3
-)
-
-add_test(
-    NAME write-test-ldf-pal
-    COMMAND ${SCRIPTS_DIR}/test-write-test-ldf
-        --build ${CMAKE_BINARY_DIR}
-        --source ${CMAKE_SOURCE_DIR}
-        --testdata ${TESTDATA_DIR}/pal
-        --input jason-testpattern.ldf
-        --system pal
-        --start 0
-        --length 2
-)
+# End of LdDecodeTests.cmake
