@@ -14,7 +14,7 @@ target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/tools/library)
 
 # Add the include directory for the ezpwd library
-target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../libs/ezpwd/c++)
+target_include_directories(${TARGET_NAME} PRIVATE ${EZPWD_DIR})
 
 # Link Qt and shared lddecode-library (for TBC logging)
 target_link_libraries(${TARGET_NAME} PUBLIC Qt::Core lddecode-library)

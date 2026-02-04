@@ -26,7 +26,7 @@ add_executable(ld-process-efm
     Decoders/syncf3frames.cpp
 )
 
-target_include_directories(ld-process-efm PRIVATE . ../../tools/library/tbc ../../tools/efm-decoder/libs/ezpwd/c++)
+target_include_directories(ld-process-efm PRIVATE . ../../tools/library/tbc ${EZPWD_DIR})
 
 # Define application version info
 target_compile_definitions(ld-process-efm PRIVATE 

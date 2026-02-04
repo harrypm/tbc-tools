@@ -6,6 +6,6 @@ if(MSVC)
     target_link_libraries(ld-ac3-decode PRIVATE ${Getopt_LIBRARIES})
     target_include_directories(ld-ac3-decode PRIVATE ${Getopt_INCLUDE_DIRS})
 endif()
-target_include_directories(ld-ac3-decode PRIVATE . ../../../tools/efm-decoder/libs/ezpwd/c++)
+target_include_directories(ld-ac3-decode PRIVATE . ${EZPWD_DIR})
 
 install(TARGETS ld-ac3-decode)

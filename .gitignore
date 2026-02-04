@@ -100,3 +100,6 @@ ld_decode.egg-info/
 
 # Compilation script
 compile.bat
+
+# Nix artefacts
+result
