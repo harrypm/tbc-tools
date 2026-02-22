@@ -45,7 +45,7 @@ void testVideoSystem() {
     b = parseVideoSystemName("NTSC", system);
     assert(b);
     assert(system == NTSC);
-    b = parseVideoSystemName("PAL-M", system);
+    b = parseVideoSystemName("PAL_M", system);
     assert(b);
     assert(system == PAL_M);
     b = parseVideoSystemName("", system);

@@ -71,7 +71,7 @@ static constexpr VideoSystemDefaults ntscDefaults {
 
 static constexpr VideoSystemDefaults palMDefaults {
     ExportMetaData::PAL_M,
-    "PAL-M",
+    "PAL_M",
     5.0e6 * (63.0 / 88.0) * (909.0 / 910.0),
     ntscDefaults.minActiveFrameLine,
     ntscDefaults.firstActiveFieldLine, ntscDefaults.lastActiveFieldLine,
