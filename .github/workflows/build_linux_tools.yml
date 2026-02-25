@@ -6,36 +6,14 @@ on:
     types: [created]
 
 env:
-  APPIMAGE_FILE: "linuxdeploy-x86_64.AppImage"
-  APPIMAGE_URL: "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-  APPIMAGE_PLUGIN_FILE: "linuxdeploy-plugin-appimage-x86_64.AppImage"
-  APPIMAGE_PLUGIN_URL: "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
-  APPIMAGE_QT_FILE: "linuxdeploy-plugin-qt-x86_64.AppImage"
-  APPIMAGE_QT_URL: "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+  APPIMAGETOOL_URL: "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
 
 jobs:
   build-tbc-tools:
     name: Build tbc-tools (x86_64)
     runs-on: ubuntu-latest
-    container:
-      image: oraclelinux:8
-      options: --cap-add SYS_ADMIN --cap-add MKNOD --device /dev/fuse:mrw --security-opt apparmor:unconfined --privileged
 
     steps:
-      - name: Set up DNF download cache
-        id: dnf-cache
-        uses: actions/cache@v3
-        with:
-          path: /var/cache/dnf
-          key: dnfcache
-          
-      - name: Setup environment
-        run: |
-          dnf install --assumeyes --nogpgcheck https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm
-          dnf install --assumeyes --nogpgcheck https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-$(rpm -E %rhel).noarch.rpm https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-$(rpm -E %rhel).noarch.rpm
-          FORCE_DNF=1 /usr/bin/crb enable
-          dnf --assumeyes install git file xz qt6-qtbase-devel qt6-qtsvg-devel fftw-devel ffmpeg-devel ffmpeg pkgconf-pkg-config make cmake gcc-c++
-
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -47,67 +25,96 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
-      - name: Create release directory
-        run: mkdir release/
-
-      - name: Build with Nix
+      - name: Configure, build, and install to AppDir (Nix dev shell)
         run: |
-          nix build .#
+          nix develop -c bash -lc "
+            cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release &&
+            cmake --build build --verbose &&
+            cmake --install build --prefix AppDir/usr
+          "
+
+      - name: Copy scripts into AppDir
+        run: |
           mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/lib
-          cp -r result/bin/* AppDir/usr/bin/
-          cp -r result/lib/* AppDir/usr/lib/ || true
+          find scripts -maxdepth 1 -type f -executable -exec cp {} AppDir/usr/bin/ \; || true
 
-      - name: Download linuxdeploy and build AppImage
+      - name: Create desktop file and AppRun
         run: |
-          curl -LJO ${{ env.APPIMAGE_URL }}
-          curl -LJO ${{ env.APPIMAGE_PLUGIN_URL }}
-          curl -LJO ${{ env.APPIMAGE_QT_URL }}
-
-          chmod +x ${{ env.APPIMAGE_FILE }} ${{ env.APPIMAGE_PLUGIN_FILE }} ${{ env.APPIMAGE_QT_FILE }}
-
-          EXTRA_QT_MODULES="core;gui;opengl;svg;widgets;sql" ./${{ env.APPIMAGE_QT_FILE }} --appdir AppDir
-
-          # Create minimal desktop file
-          mkdir -p AppDir/usr/share/applications
-          cat > AppDir/usr/share/applications/tbc-tools.desktop << EOF
-          [Desktop Entry]
-          Type=Application
-          Name=TBC Tools
-          Comment=Time Base Corrected video analysis tools
-          Exec=ld-analyse
-          Icon=tbc-tools
-          Categories=AudioVideo;Video;
-          EOF
-
-          # Create AppRun script
+          mkdir -p AppDir
+          cp AppDir/usr/share/icons/hicolor/128x128/apps/ld-analyse.png AppDir/ld-analyse.png
+          
+          cat > AppDir/ld-analyse.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+NoDisplay=false
+Terminal=false
+Exec=ld-analyse
+Icon=ld-analyse
+Name=ld-analyse
+MimeType=application/video-tbc
+Comment=LaserDisc TBC file analyzer
+Categories=AudioVideo;Video;Utility;
+EOF
+          
           cat > AppDir/AppRun << 'EOF'
-          #!/bin/bash
-          HERE="$(dirname "$(readlink -f "${0}")")"
-          export PATH="${HERE}/usr/bin:$PATH"
-          export LD_LIBRARY_PATH="${HERE}/usr/lib:$LD_LIBRARY_PATH"
-          cd "${HERE}/usr/bin"
-          exec ./ld-analyse "$@"
-          EOF
+#!/bin/sh
+set -eu
+APPDIR="$(dirname "$(readlink -f "$0")")"
+BIN_DIR="$APPDIR/usr/bin"
+export LD_LIBRARY_PATH="$APPDIR/usr/lib:${LD_LIBRARY_PATH:-}"
+export QT_PLUGIN_PATH="$APPDIR/usr/plugins:${QT_PLUGIN_PATH:-}"
+
+if [ "$#" -ge 1 ] && [ -x "$BIN_DIR/$1" ]; then
+  TOOL="$1"
+  shift
+  exec "$BIN_DIR/$TOOL" "$@"
+fi
+
+exec "$BIN_DIR/ld-analyse" "$@"
+EOF
           chmod +x AppDir/AppRun
 
-          ./${{ env.APPIMAGE_FILE }} \
-          --desktop-file AppDir/usr/share/applications/tbc-tools.desktop \
-          --appdir AppDir/ \
-          --output appimage \
-          --custom-apprun AppDir/AppRun
+      - name: Bundle runtime libraries and Qt plugins into AppDir
+        run: |
+          mkdir -p AppDir/usr/lib AppDir/usr/plugins
+          
+          find AppDir/usr/bin -type f -executable -print0 | xargs -0 -I{} ldd {} 2>/dev/null | \
+            awk '/=> \// {print $3} /^\// {print $1}' | sort -u > /tmp/libs.txt
+          
+          while read -r lib; do
+            [ -z "$lib" ] && continue
+            case "$lib" in
+              */ld-linux*|*/ld-linux*.so*|*/linux-vdso.so*|*/libc.so*|*/libpthread.so*|*/librt.so*|*/libm.so*|*/libdl.so*|*/libutil.so*)
+                continue
+                ;;
+            esac
+            
+            if [ -f "$lib" ]; then
+              cp -aL "$lib" AppDir/usr/lib/ 2>/dev/null || true
+            fi
+          done < /tmp/libs.txt
+          
+          nix develop -c bash -lc '
+            LIBQXCB=$(find /nix/store -name "libqxcb.so" 2>/dev/null | head -1)
+            if [ -n "$LIBQXCB" ]; then
+              QT_PLUGINS=$(dirname $(dirname "$LIBQXCB"))
+              cp -r "$QT_PLUGINS"/* AppDir/usr/plugins/ 2>/dev/null || true
+            fi
+          '
+          
+          chmod -R u+w AppDir/usr/lib AppDir/usr/plugins 2>/dev/null || true
+          echo "Bundled $(ls -1 AppDir/usr/lib/*.so* 2>/dev/null | wc -l) .so files"
 
-          cp tbc-tools-x86_64.AppImage release/
+      - name: Download appimagetool and build AppImage
+        run: |
+          curl -LJO ${{ env.APPIMAGETOOL_URL }}
+          chmod +x appimagetool-x86_64.AppImage
+          
+          ./appimagetool-x86_64.AppImage AppDir tbc-tools-x86_64.AppImage
 
-      - name: Copy scripts
-        run: find scripts -maxdepth 1 -type f -executable -exec cp {} release/ \; || true
-
-      - name: Create release archive
-        run: tar -cvJSf tbc-tools_linux_x86_64.tar.xz --transform s/release/tbc-tools/ release/
-
-      - name: Upload binary artifact
+      - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tbc-tools_linux_x86_64
-          path: tbc-tools_linux_x86_64.tar.xz
+          name: tbc-tools_linux_x86_64_appimage
+          path: tbc-tools-x86_64.AppImage
           if-no-files-found: error
