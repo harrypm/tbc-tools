@@ -1,0 +1,112 @@
+name: "Build macOS tools"
+
+on:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  build-tbc-tools:
+    strategy:
+      matrix:
+        os: [macos-13, macos-14]
+        include:
+          - os: macos-13
+            arch: x86_64
+          - os: macos-14
+            arch: arm64
+
+    name: Build tbc-tools (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Build with Nix
+        run: |
+          nix build .#
+          mkdir -p dist/bin
+          mkdir -p dist/lib
+          cp -r result/bin/* dist/bin/
+          cp -r result/lib/* dist/lib/ || true
+
+      - name: Create app structure
+        run: |
+          mkdir -p dist/tbc-tools.app/Contents/{Resources,MacOS}
+
+          # Create Info.plist
+          cat > dist/tbc-tools.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDisplayName</key>
+              <string>TBC Tools</string>
+              <key>CFBundleExecutable</key>
+              <string>ld-analyse</string>
+              <key>CFBundleIconFile</key>
+              <string>tbc-tools</string>
+              <key>CFBundleIdentifier</key>
+              <string>dev.domesday.tbc-tools</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>tbc-tools</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundleVersion</key>
+              <string>1.0</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+          # Create basic icon (just copy a placeholder)
+          touch dist/tbc-tools.app/Contents/Resources/tbc-tools.icns
+          
+          cp -r dist/bin/* dist/tbc-tools.app/Contents/MacOS/
+
+      - name: Copy scripts
+        run: find scripts -maxdepth 1 -perm +111 -type f -exec cp {} dist/tbc-tools.app/Contents/MacOS/ \; || true
+
+      - name: Install create-dmg and dependencies
+        run: |
+          brew install create-dmg
+          
+      - name: Copy Qt dependencies with macdeployqt (if available)
+        run: |
+          # Try to use macdeployqt if Qt is available
+          which macdeployqt && macdeployqt dist/tbc-tools.app -libpath=/usr/local/lib/ -libpath=/opt/homebrew/lib/ || true
+
+      - name: Build DMG file
+        run: >-
+          create-dmg
+          --volname "tbc-tools"
+          --window-pos 200 128
+          --window-size 600 300
+          --icon-size 100
+          --icon "tbc-tools.app" 172 120
+          --app-drop-link 425 128
+          --skip-jenkins
+          --hide-extension "tbc-tools.app"
+          "tbc-tools_${{ matrix.arch }}.dmg"
+          "dist/tbc-tools.app"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tbc-tools_macos_${{ matrix.arch }}
+          path: tbc-tools_${{ matrix.arch }}.dmg
+          if-no-files-found: error

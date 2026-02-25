@@ -1,0 +1,113 @@
+name: "Build Linux tools"
+
+on:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+env:
+  APPIMAGE_FILE: "linuxdeploy-x86_64.AppImage"
+  APPIMAGE_URL: "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+  APPIMAGE_PLUGIN_FILE: "linuxdeploy-plugin-appimage-x86_64.AppImage"
+  APPIMAGE_PLUGIN_URL: "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
+  APPIMAGE_QT_FILE: "linuxdeploy-plugin-qt-x86_64.AppImage"
+  APPIMAGE_QT_URL: "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+
+jobs:
+  build-tbc-tools:
+    name: Build tbc-tools (x86_64)
+    runs-on: ubuntu-latest
+    container:
+      image: oraclelinux:8
+      options: --cap-add SYS_ADMIN --cap-add MKNOD --device /dev/fuse:mrw --security-opt apparmor:unconfined --privileged
+
+    steps:
+      - name: Set up DNF download cache
+        id: dnf-cache
+        uses: actions/cache@v3
+        with:
+          path: /var/cache/dnf
+          key: dnfcache
+          
+      - name: Setup environment
+        run: |
+          dnf install --assumeyes --nogpgcheck https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm
+          dnf install --assumeyes --nogpgcheck https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-$(rpm -E %rhel).noarch.rpm https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-$(rpm -E %rhel).noarch.rpm
+          FORCE_DNF=1 /usr/bin/crb enable
+          dnf --assumeyes install git file xz qt6-qtbase-devel qt6-qtsvg-devel fftw-devel ffmpeg-devel ffmpeg pkgconf-pkg-config make cmake gcc-c++
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Create release directory
+        run: mkdir release/
+
+      - name: Build with Nix
+        run: |
+          nix build .#
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/lib
+          cp -r result/bin/* AppDir/usr/bin/
+          cp -r result/lib/* AppDir/usr/lib/ || true
+
+      - name: Download linuxdeploy and build AppImage
+        run: |
+          curl -LJO ${{ env.APPIMAGE_URL }}
+          curl -LJO ${{ env.APPIMAGE_PLUGIN_URL }}
+          curl -LJO ${{ env.APPIMAGE_QT_URL }}
+
+          chmod +x ${{ env.APPIMAGE_FILE }} ${{ env.APPIMAGE_PLUGIN_FILE }} ${{ env.APPIMAGE_QT_FILE }}
+
+          EXTRA_QT_MODULES="core;gui;opengl;svg;widgets;sql" ./${{ env.APPIMAGE_QT_FILE }} --appdir AppDir
+
+          # Create minimal desktop file
+          mkdir -p AppDir/usr/share/applications
+          cat > AppDir/usr/share/applications/tbc-tools.desktop << EOF
+          [Desktop Entry]
+          Type=Application
+          Name=TBC Tools
+          Comment=Time Base Corrected video analysis tools
+          Exec=ld-analyse
+          Icon=tbc-tools
+          Categories=AudioVideo;Video;
+          EOF
+
+          # Create AppRun script
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          export PATH="${HERE}/usr/bin:$PATH"
+          export LD_LIBRARY_PATH="${HERE}/usr/lib:$LD_LIBRARY_PATH"
+          cd "${HERE}/usr/bin"
+          exec ./ld-analyse "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          ./${{ env.APPIMAGE_FILE }} \
+          --desktop-file AppDir/usr/share/applications/tbc-tools.desktop \
+          --appdir AppDir/ \
+          --output appimage \
+          --custom-apprun AppDir/AppRun
+
+          cp tbc-tools-x86_64.AppImage release/
+
+      - name: Copy scripts
+        run: find scripts -maxdepth 1 -type f -executable -exec cp {} release/ \; || true
+
+      - name: Create release archive
+        run: tar -cvJSf tbc-tools_linux_x86_64.tar.xz --transform s/release/tbc-tools/ release/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tbc-tools_linux_x86_64
+          path: tbc-tools_linux_x86_64.tar.xz
+          if-no-files-found: error

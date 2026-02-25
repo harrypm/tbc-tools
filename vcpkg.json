@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "tbc-tools",
+  "version": "1.0.0",
+  "description": "Time Base Corrected video analysis tools",
+  "dependencies": [
+    {
+      "name": "qt6-base",
+      "features": ["concurrent"]
+    },
+    "qt6-svg",
+    "fftw3",
+    "ffmpeg",
+    "sqlite3"
+  ],
+  "builtin-baseline": "f5cbc726b123896eef77f5acc1b9047a28a0731e"
+}

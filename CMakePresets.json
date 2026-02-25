@@ -1,0 +1,23 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "vcpkg",
+            "displayName": "VCPKG Configuration",
+            "description": "Configuration using vcpkg for dependency management",
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+            "binaryDir": "${sourceDir}/build",
+            "architecture": {
+                "value": "x64"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "vcpkg",
+            "displayName": "VCPKG Build",
+            "description": "Build using vcpkg configuration",
+            "configurePreset": "vcpkg"
+        }
+    ]
+}
