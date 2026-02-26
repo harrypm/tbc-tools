@@ -5,10 +5,10 @@
   "description": "Time Base Corrected video analysis tools",
   "dependencies": [
     {
-      "name": "qt6-base",
+      "name": "qtbase",
       "features": ["concurrent"]
     },
-    "qt6-svg",
+    "qtsvg",
     "fftw3",
     "ffmpeg",
     "sqlite3"
