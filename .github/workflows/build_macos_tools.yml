@@ -294,11 +294,18 @@ jobs:
 
       - name: Install create-dmg
         run: brew install create-dmg
+      - name: Codesign app bundle (ad-hoc)
+        run: |
+          codesign --force --deep --sign - "dist/tbc-tools.app"
 
       - name: Verify app bundle
         run: |
           echo "App bundle contents:"
           find dist/tbc-tools.app -type f | head -20
+          if [ ! -d "dist/tbc-tools.app/Contents/_CodeSignature" ]; then
+            echo "Missing _CodeSignature after codesign"
+            exit 1
+          fi
           echo "\nMain executable dependencies:"
           otool -L dist/tbc-tools.app/Contents/MacOS/ld-analyse 2>/dev/null | head -10 || echo "Could not check dependencies"
           echo "\nMain executable rpaths:"
