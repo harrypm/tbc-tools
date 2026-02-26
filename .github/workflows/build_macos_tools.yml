@@ -35,6 +35,7 @@ jobs:
         uses: cachix/install-nix-action@v27
         with:
           nix_path: nixpkgs=channel:nixos-unstable
+          install_options: --no-daemon
 
       - name: Build with Nix
         run: |
