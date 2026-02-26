@@ -115,8 +115,12 @@ jobs:
           --appdir AppDir/ \
           --output appimage
           APPIMAGE_OUT="$(find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' | head -n 1)"
+          if [ -z "$APPIMAGE_OUT" ]; then
+            echo "No generated AppImage found in workspace root"
+            ls -1 *.AppImage || true
+            exit 1
+          fi
           cp "$APPIMAGE_OUT" release/tbc-tools-x86_64.AppImage
-          cp tbc-tools-x86_64.AppImage release/
 
       - name: Copy scripts
         run: find scripts -maxdepth 1 -type f -executable -exec cp {} release/ \; || true
