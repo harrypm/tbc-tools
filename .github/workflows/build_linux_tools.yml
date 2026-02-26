@@ -53,6 +53,8 @@ jobs:
         shell: bash
         run: |
           curl -L https://nixos.org/nix/install | sh -s -- --no-daemon --yes
+          echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+          echo "/root/.nix-profile/bin" >> "$GITHUB_PATH"
           echo "$HOME/.nix-profile/bin" >> "$GITHUB_PATH"
           echo "NIX_CONFIG=experimental-features = nix-command flakes" >> "$GITHUB_ENV"
           echo "NIX_PATH=nixpkgs=channel:nixos-unstable" >> "$GITHUB_ENV"
@@ -62,6 +64,7 @@ jobs:
 
       - name: Build with Nix
         run: |
+          export PATH="/nix/var/nix/profiles/default/bin:/root/.nix-profile/bin:$HOME/.nix-profile/bin:$PATH"
           nix build .#
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/lib
