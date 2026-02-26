@@ -105,23 +105,16 @@ jobs:
           Icon=tbc-tools
           Categories=AudioVideo;Video;
           EOF
-
-          # Create AppRun script
-          cat > AppDir/AppRun << 'EOF'
-          #!/bin/bash
-          HERE="$(dirname "$(readlink -f "${0}")")"
-          export PATH="${HERE}/usr/bin:$PATH"
-          export LD_LIBRARY_PATH="${HERE}/usr/lib:$LD_LIBRARY_PATH"
-          cd "${HERE}/usr/bin"
-          exec ./ld-analyse "$@"
-          EOF
+          # Provide application icon for desktop entry
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          cp src/ld-analyse/Graphics/256-analyse.png AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png
           chmod +x AppDir/AppRun
 
           ./${{ env.APPIMAGE_FILE }} \
           --desktop-file AppDir/usr/share/applications/tbc-tools.desktop \
+          --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png \
           --appdir AppDir/ \
-          --output appimage \
-          --custom-apprun AppDir/AppRun
+          --output appimage
 
           cp tbc-tools-x86_64.AppImage release/
 
