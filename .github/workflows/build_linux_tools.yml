@@ -90,6 +90,25 @@ jobs:
           LIBGCC_PATH="$(ldd result/bin/.ld-analyse-wrapped | awk '$1 == "libgcc_s.so.1" { print $3; exit }')"
           [ -n "$LIBSTDCPP_PATH" ] && cp -L "$LIBSTDCPP_PATH" AppDir/usr/lib/libstdc++.so.6
           [ -n "$LIBGCC_PATH" ] && cp -L "$LIBGCC_PATH" AppDir/usr/lib/libgcc_s.so.1
+          pending=1
+          while [ "$pending" -eq 1 ]; do
+            pending=0
+            for elf in AppDir/usr/bin/* AppDir/usr/lib/*; do
+              [ -f "$elf" ] || continue
+              for dep in $(ldd "$elf" 2>/dev/null | awk '/=> \/nix\/store/ { print $3 }'); do
+                [ -f "$dep" ] || continue
+                base="$(basename "$dep")"
+                if echo "$base" | grep -Eq '^(libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|libresolv\.so\.2|ld-linux-.*\.so\..*|libnss_.*|libutil\.so\..*|libanl\.so\..*)$'; then
+                  continue
+                fi
+                dest="AppDir/usr/lib/$base"
+                if [ ! -e "$dest" ]; then
+                  cp -L "$dep" "$dest"
+                  pending=1
+                fi
+              done
+            done
+          done
 
       - name: Download linuxdeploy and build AppImage
         run: |
