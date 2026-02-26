@@ -130,19 +130,19 @@ jobs:
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           cp src/ld-analyse/Graphics/256-analyse.png AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png
           cp -a /usr/lib64/libGLX.so* /usr/lib64/libOpenGL.so* /usr/lib64/libEGL.so* /usr/lib64/libGLdispatch.so* AppDir/usr/lib/ 2>/dev/null || true
-          cat > AppDir/AppRun << 'EOF'
+          cat > custom-apprun.sh << 'EOF'
           #!/bin/sh
           HERE="$(dirname "$(readlink -f "$0")")"
           export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           exec "$HERE/usr/lib/ld-linux-x86-64.so.2" --library-path "$HERE/usr/lib" "$HERE/usr/bin/ld-analyse" "$@"
           EOF
-          chmod +x AppDir/AppRun
+          chmod +x custom-apprun.sh
 
           ./${{ env.APPIMAGE_FILE }} \
           --desktop-file AppDir/usr/share/applications/tbc-tools.desktop \
           --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png \
           --appdir AppDir/ \
-          --custom-apprun AppDir/AppRun \
+          --custom-apprun custom-apprun.sh \
           --output appimage
           APPIMAGE_OUT="$(find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' | head -n 1)"
           if [ -z "$APPIMAGE_OUT" ]; then
