@@ -127,7 +127,7 @@ jobs:
             export PATH="$(dirname "$QMAKE"):$PATH"
           fi
 
-          EXTRA_QT_MODULES="core;gui;opengl;widgets;sql;svg" ./${{ env.APPIMAGE_QT_FILE }} --appdir AppDir
+          EXTRA_QT_MODULES="core;gui;opengl;widgets;sql" ./${{ env.APPIMAGE_QT_FILE }} --appdir AppDir
 
           # Ensure SVG icon support is bundled (toolbar icons in ld-analyse are SVG resources)
           for plugin_name in libqsvgicon.so libqsvg.so; do
