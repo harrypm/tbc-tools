@@ -115,6 +115,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config http.version HTTP/1.1
+          git config http.postBuffer 524288000
           git add ci/cache/vcpkg/windows-x64
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) {
@@ -122,8 +124,26 @@ jobs:
             exit 0
           }
           git commit -m "Update Windows vcpkg repository cache [skip ci]"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          $pushed = $false
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
+            git pull --rebase origin main
+            if ($LASTEXITCODE -ne 0) {
+              Write-Warning "Rebase attempt $attempt failed; retrying..."
+              Start-Sleep -Seconds (10 * $attempt)
+              continue
+            }
+            git push origin HEAD:main
+            if ($LASTEXITCODE -eq 0) {
+              $pushed = $true
+              break
+            }
+            Write-Warning "Push attempt $attempt failed; retrying..."
+            Start-Sleep -Seconds (10 * $attempt)
+          }
+          if (-not $pushed) {
+            Write-Warning "Could not push cache update after retries."
+            exit 0
+          }
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
