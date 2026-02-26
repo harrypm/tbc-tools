@@ -4,17 +4,22 @@ on:
   workflow_dispatch:
   release:
     types: [created]
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build-tbc-tools:
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-13, macos-14]
+        os: [macos-latest, macos-15-intel]
         include:
-          - os: macos-13
-            arch: x86_64
-          - os: macos-14
+          - os: macos-latest
             arch: arm64
+          - os: macos-15-intel
+            arch: x86_64
 
     name: Build tbc-tools (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
@@ -39,11 +44,20 @@ jobs:
           cp -r result/bin/* dist/bin/
           cp -r result/lib/* dist/lib/ || true
 
-      - name: Create app structure
+      - name: Get version info
+        id: version
         run: |
-          mkdir -p dist/tbc-tools.app/Contents/{Resources,MacOS}
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(git describe --tags --always --dirty)" >> $GITHUB_OUTPUT
+          fi
 
-          # Create Info.plist
+      - name: Create app bundle structure
+        run: |
+          mkdir -p dist/tbc-tools.app/Contents/{Resources,MacOS,Frameworks}
+
+          # Create Info.plist with dynamic version
           cat > dist/tbc-tools.app/Contents/Info.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,7 +68,7 @@ jobs:
               <key>CFBundleExecutable</key>
               <string>ld-analyse</string>
               <key>CFBundleIconFile</key>
-              <string>tbc-tools</string>
+              <string>tbc-tools.icns</string>
               <key>CFBundleIdentifier</key>
               <string>dev.domesday.tbc-tools</string>
               <key>CFBundleInfoDictionaryVersion</key>
@@ -64,45 +78,137 @@ jobs:
               <key>CFBundlePackageType</key>
               <string>APPL</string>
               <key>CFBundleShortVersionString</key>
-              <string>1.0</string>
+              <string>${{ steps.version.outputs.version }}</string>
               <key>CFBundleVersion</key>
-              <string>1.0</string>
+              <string>${{ steps.version.outputs.version }}</string>
               <key>NSHighResolutionCapable</key>
               <true/>
+              <key>NSRequiresAquaSystemAppearance</key>
+              <false/>
           </dict>
           </plist>
           EOF
 
-          # Create basic icon (just copy a placeholder)
-          touch dist/tbc-tools.app/Contents/Resources/tbc-tools.icns
-          
+          # Copy binaries to MacOS folder
           cp -r dist/bin/* dist/tbc-tools.app/Contents/MacOS/
-
-      - name: Copy scripts
-        run: find scripts -maxdepth 1 -perm +111 -type f -exec cp {} dist/tbc-tools.app/Contents/MacOS/ \; || true
-
-      - name: Install create-dmg and dependencies
-        run: |
-          brew install create-dmg
           
-      - name: Copy Qt dependencies with macdeployqt (if available)
-        run: |
-          # Try to use macdeployqt if Qt is available
-          which macdeployqt && macdeployqt dist/tbc-tools.app -libpath=/usr/local/lib/ -libpath=/opt/homebrew/lib/ || true
+          # Copy scripts if they exist
+          shopt -s nullglob
+          for f in scripts/* scripts/linux/* 2>/dev/null || true; do
+            if [[ -f "$f" && -x "$f" ]]; then
+              cp "$f" dist/tbc-tools.app/Contents/MacOS/
+            fi
+          done
 
-      - name: Build DMG file
-        run: >-
-          create-dmg
-          --volname "tbc-tools"
-          --window-pos 200 128
-          --window-size 600 300
-          --icon-size 100
-          --icon "tbc-tools.app" 172 120
-          --app-drop-link 425 128
-          --skip-jenkins
-          --hide-extension "tbc-tools.app"
-          "tbc-tools_${{ matrix.arch }}.dmg"
-          "dist/tbc-tools.app"
+      - name: Create app icon
+        run: |
+          # Create a simple icon file (placeholder)
+          mkdir -p temp_icon.iconset
+          # In a real setup, you'd have proper icon files
+          # For now, create a basic one
+          cat > temp_icon.iconset/icon_512x512.png << 'EOF'
+          # This would be a real PNG file in practice
+          EOF
+          # iconutil -c icns temp_icon.iconset -o dist/tbc-tools.app/Contents/Resources/tbc-tools.icns || true
+          # For now, just create a placeholder
+          touch dist/tbc-tools.app/Contents/Resources/tbc-tools.icns
+
+      - name: Bundle dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          
+          # Get paths using proper detection
+          BREW_PREFIX="$(brew --prefix)"
+          
+          # Try to use macdeployqt from Qt if available via Homebrew, otherwise use Nix-based approach
+          if command -v "$BREW_PREFIX/bin/macdeployqt" >/dev/null 2>&1; then
+            echo "Using Homebrew macdeployqt"
+            "$BREW_PREFIX/bin/macdeployqt" dist/tbc-tools.app -libpath="$BREW_PREFIX/lib"
+          elif QT_PREFIX=$(brew --prefix qt 2>/dev/null) && [ -f "$QT_PREFIX/bin/macdeployqt" ]; then
+            echo "Using Qt-specific macdeployqt"
+            "$QT_PREFIX/bin/macdeployqt" dist/tbc-tools.app -libpath="$BREW_PREFIX/lib"
+          else
+            echo "Using Nix-based dependency bundling"
+            # Get Qt path from Nix
+            QT_PATH=$(nix eval --raw .#qt6.qtbase.outPath 2>/dev/null || echo "/usr/local")
+            echo "Qt path: $QT_PATH"
+            
+            # Function to copy and fix dylib dependencies
+            fix_dependencies() {
+              local binary="$1"
+              local app_path="$2"
+              
+              if [ ! -f "$binary" ]; then
+                return
+              fi
+              
+              # Get dependencies
+              local deps=$(otool -L "$binary" 2>/dev/null | grep -E '(Qt|/nix/store)' | awk '{print $1}' | grep -v ':$' || true)
+              
+              for dep in $deps; do
+                if [[ "$dep" == *"/nix/store"* ]]; then
+                  local basename=$(basename "$dep")
+                  local target="$app_path/Contents/Frameworks/$basename"
+                  
+                  # Copy the dependency if not already there
+                  if [ ! -f "$target" ]; then
+                    echo "Copying dependency: $dep -> $target"
+                    cp "$dep" "$target" 2>/dev/null || true
+                    chmod +w "$target" 2>/dev/null || true
+                  fi
+                  
+                  # Update the reference in the binary
+                  install_name_tool -change "$dep" "@rpath/$basename" "$binary" 2>/dev/null || true
+                fi
+              done
+              
+              # Add rpath to the binary
+              install_name_tool -add_rpath "@loader_path/../Frameworks" "$binary" 2>/dev/null || true
+            }
+            
+            # Process all binaries
+            for binary in dist/tbc-tools.app/Contents/MacOS/*; do
+              if [ -f "$binary" ] && [ -x "$binary" ]; then
+                echo "Processing binary: $binary"
+                fix_dependencies "$binary" "dist/tbc-tools.app"
+              fi
+            done
+            
+            # Process copied frameworks
+            for framework in dist/tbc-tools.app/Contents/Frameworks/*; do
+              if [ -f "$framework" ]; then
+                echo "Processing framework: $framework"
+                fix_dependencies "$framework" "dist/tbc-tools.app"
+              fi
+            done
+          fi
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Verify app bundle
+        run: |
+          echo "App bundle contents:"
+          find dist/tbc-tools.app -type f | head -20
+          echo "\nMain executable dependencies:"
+          otool -L dist/tbc-tools.app/Contents/MacOS/ld-analyse 2>/dev/null | head -10 || echo "Could not check dependencies"
+
+      - name: Create DMG
+        run: |
+          create-dmg \
+            --volname "TBC Tools ${{ steps.version.outputs.version }}" \
+            --volicon "dist/tbc-tools.app/Contents/Resources/tbc-tools.icns" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "tbc-tools.app" 200 190 \
+            --hide-extension "tbc-tools.app" \
+            --app-drop-link 600 190 \
+            --skip-jenkins \
+            --format UDBZ \
+            "tbc-tools_${{ matrix.arch }}.dmg" \
+            "dist/tbc-tools.app"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
