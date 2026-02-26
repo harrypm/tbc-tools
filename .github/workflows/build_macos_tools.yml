@@ -14,15 +14,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, macos-15-intel]
         include:
-          - os: macos-latest
+          - runner: macos-latest
             arch: arm64
-          - os: macos-15-intel
+          - runner: macos-15-intel
             arch: x86_64
 
     name: Build tbc-tools (${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +42,10 @@ jobs:
         run: |
           nix build .#
           mkdir -p dist/bin
+          if [ ! -f result/bin/ld-analyse.app/Contents/MacOS/.ld-analyse-wrapped ]; then
+            echo "Missing wrapped GUI binary: result/bin/ld-analyse.app/Contents/MacOS/.ld-analyse-wrapped"
+            exit 1
+          fi
           
           # Copy wrapped GUI binary (avoid Nix wrapper with hardcoded paths)
           cp result/bin/ld-analyse.app/Contents/MacOS/.ld-analyse-wrapped dist/bin/ld-analyse
@@ -66,6 +69,7 @@ jobs:
           else
             echo "version=$(git describe --tags --always --dirty)" >> $GITHUB_OUTPUT
           fi
+
 
       - name: Create app bundle structure
         run: |
@@ -108,8 +112,35 @@ jobs:
           
           # Copy scripts if they exist
           if [ -d "scripts" ]; then
-            find scripts -maxdepth 1 -perm +111 -type f -exec cp {} dist/tbc-tools.app/Contents/MacOS/ \; 2>/dev/null || true
+            find scripts -maxdepth 1 -perm -111 -type f -exec cp {} dist/tbc-tools.app/Contents/MacOS/ \; 2>/dev/null || true
           fi
+
+      - name: Verify app executable architecture
+        run: |
+          BIN="dist/tbc-tools.app/Contents/MacOS/ld-analyse"
+          if [ ! -f "$BIN" ]; then
+            echo "Expected app executable missing: $BIN"
+            exit 1
+          fi
+          ARCHS="$(lipo -archs "$BIN" 2>/dev/null || true)"
+          if [ -z "$ARCHS" ]; then
+            echo "Unable to read binary architecture for $BIN"
+            file "$BIN" || true
+            exit 1
+          fi
+          case "${{ matrix.arch }}" in
+            arm64)
+              echo "$ARCHS" | grep -qw arm64 || { echo "Expected arm64 binary, got: $ARCHS"; exit 1; }
+              ;;
+            x86_64)
+              echo "$ARCHS" | grep -qw x86_64 || { echo "Expected x86_64 binary, got: $ARCHS"; exit 1; }
+              ;;
+            *)
+              echo "Unknown matrix.arch value: ${{ matrix.arch }}"
+              exit 1
+              ;;
+          esac
+          echo "Verified architecture: $ARCHS"
       - name: Bundle Python deps (numpy)
         run: |
           APP="dist/tbc-tools.app"
@@ -171,11 +202,20 @@ jobs:
           
           # Extract plugin paths from Nix wrapper and copy plugins
           PLUGIN_PATHS=$(strings -n 8 result/bin/ld-analyse.app/Contents/MacOS/ld-analyse | grep "/qt-6/plugins" | sort -u || true)
-          for p in $PLUGIN_PATHS; do
+          if [ -z "$PLUGIN_PATHS" ]; then
+            echo "No Qt plugin paths detected in Nix-built ld-analyse binary"
+            exit 1
+          fi
+          while IFS= read -r p; do
+            [ -n "$p" ] || continue
             if [ -d "$p" ]; then
               rsync -a "$p/" dist/tbc-tools.app/Contents/PlugIns/
             fi
-          done
+          done <<< "$PLUGIN_PATHS"
+          if [ ! -f dist/tbc-tools.app/Contents/PlugIns/platforms/libqcocoa.dylib ]; then
+            echo "Missing required Qt platform plugin: dist/tbc-tools.app/Contents/PlugIns/platforms/libqcocoa.dylib"
+            exit 1
+          fi
           
           cat > dist/tbc-tools.app/Contents/Resources/qt.conf << 'EOF'
           [Paths]
@@ -325,7 +365,10 @@ jobs:
           fi
 
       - name: Install create-dmg
-        run: brew install create-dmg
+        run: |
+          if ! command -v create-dmg >/dev/null 2>&1; then
+            brew install create-dmg
+          fi
       - name: Codesign app bundle (ad-hoc)
         run: |
           codesign --force --deep --sign - "dist/tbc-tools.app"
