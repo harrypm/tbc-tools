@@ -33,13 +33,13 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: "f5cbc726b123896eef77f5acc1b9047a28a0731e"
+          vcpkgGitCommitId: "d30fdf55cfca16e12bc3ad99cbc615997014b61b"
 
       - name: Run CMake
         uses: lukka/run-cmake@v10
         with:
           configurePreset: vcpkg
-          configurePresetAdditionalArgs: "['-G Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DUSE_QT_VERSION=6', '-DVCPKG_APPLOCAL_DEPS=ON', '-DBUILD_TESTING=OFF',]"
+          configurePresetAdditionalArgs: "['-G Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DUSE_QT_VERSION=6', '-DBUILD_PYTHON=false', '-DVCPKG_APPLOCAL_DEPS=ON', '-DBUILD_TESTING=OFF',]"
           buildPreset: vcpkg
           buildPresetAdditionalArgs: "['--config Release']"
 
@@ -47,7 +47,7 @@ jobs:
         run: New-Item -ItemType Directory -Path release
 
       - name: Copy binaries to release directory
-        run: Get-ChildItem -Recurse -Path build\\bin\\* -Include *.exe, *.dll | Copy-Item -Destination release\\
+        run: Get-ChildItem -Recurse -Path build\\tools\\* -Include *.exe, *.dll | Copy-Item -Destination release\\
 
       - name: Copy Qt plugins to release directory
         run: Copy-Item -Recurse -Exclude *.pdb -Path build\\vcpkg_installed\\x64-windows\\Qt6\\plugins\\* -Destination release\\
@@ -55,14 +55,29 @@ jobs:
       - name: Copy license files to release directory
         run: |
           New-Item -ItemType Directory -Path release\\LICENSES
+          "brotli", `
+          "bzip2", `
           "double-conversion", `
           "fftw3", `
+          "freetype", `
           "getopt-win32", `
+          "harfbuzz", `
+          "icu", `
           "libpng", `
+          "openssl", `
+          "pcre2", `
           "qtbase", `
+          "qwt", `
           "sqlite3", `
-          "zlib" | ForEach-Object { Copy-Item -Path build\\vcpkg_installed\\x64-windows\\share\\$($_)\\copyright -Destination release\\LICENSES\\copyright-$($_) }
+          "zlib", `
+          "zstd" | ForEach-Object { Copy-Item -Path build\\vcpkg_installed\\x64-windows\\share\\$($_)\\copyright -Destination release\\LICENSES\\copyright-$($_) }
           Rename-Item -Path release\\LICENSES\\copyright-qtbase -NewName copyright-qt6
+
+      - name: Copy scripts to release directory (if they exist)
+        run: |
+          if (Test-Path ".\\scripts\\Windows\\*.bat") {
+            Copy-Item .\\scripts\\Windows\\*.bat -Destination release\\
+          }
 
       - name: Download and copy FFmpeg to release directory
         run: |
