@@ -115,7 +115,15 @@ jobs:
           APP="dist/tbc-tools.app"
           PY_DIR="$APP/Contents/Resources/python"
           mkdir -p "$PY_DIR"
-          python3 -m pip install --target "$PY_DIR" numpy
+          PYTHON_BIN="/usr/bin/python3"
+          if [ ! -x "$PYTHON_BIN" ]; then
+            PYTHON_BIN="$(command -v python3 || true)"
+          fi
+          if [ -z "$PYTHON_BIN" ]; then
+            echo "No python3 found for numpy install"
+            exit 1
+          fi
+          "$PYTHON_BIN" -m pip install --target "$PY_DIR" numpy
           
           SCRIPT="$APP/Contents/MacOS/test-decode-pretbc"
           if [ -f "$SCRIPT" ] && [ ! -f "$SCRIPT.py" ]; then
@@ -125,7 +133,12 @@ jobs:
           DIR="$(cd "$(dirname "$0")" && pwd)"
           PY_DIR="$DIR/../Resources/python"
           export PYTHONPATH="$PY_DIR${PYTHONPATH:+:$PYTHONPATH}"
-          exec /usr/bin/env python3 "$DIR/test-decode-pretbc.py" "$@"
+          if [ -x /usr/bin/python3 ]; then
+            PY="/usr/bin/python3"
+          else
+            PY="$(command -v python3)"
+          fi
+          exec "$PY" "$DIR/test-decode-pretbc.py" "$@"
           EOF
             chmod +x "$SCRIPT"
           fi
