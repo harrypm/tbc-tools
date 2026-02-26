@@ -43,9 +43,20 @@ jobs:
         run: |
           nix build .#
           mkdir -p dist/bin
-          mkdir -p dist/lib
-          cp -r result/bin/* dist/bin/
-          cp -r result/lib/* dist/lib/ || true
+          
+          # Copy wrapped GUI binary (avoid Nix wrapper with hardcoded paths)
+          cp result/bin/ld-analyse.app/Contents/MacOS/.ld-analyse-wrapped dist/bin/ld-analyse
+          chmod +x dist/bin/ld-analyse
+          
+          # Copy wrapped CLI tools (strip leading dot and -wrapped suffix)
+          for wrapped in result/bin/.*-wrapped; do
+            [ -f "$wrapped" ] || continue
+            base="$(basename "$wrapped")"
+            base="${base#.}"
+            base="${base%-wrapped}"
+            cp "$wrapped" "dist/bin/$base"
+            chmod +x "dist/bin/$base"
+          done
 
       - name: Get version info
         id: version
@@ -58,7 +69,7 @@ jobs:
 
       - name: Create app bundle structure
         run: |
-          mkdir -p dist/tbc-tools.app/Contents/{Resources,MacOS,Frameworks}
+          mkdir -p dist/tbc-tools.app/Contents/{Resources,MacOS,Frameworks,PlugIns}
 
           # Create Info.plist with dynamic version
           cat > dist/tbc-tools.app/Contents/Info.plist << EOF
@@ -102,86 +113,183 @@ jobs:
 
       - name: Create app icon
         run: |
-          # Create a simple icon file (placeholder)
-          mkdir -p temp_icon.iconset
-          # In a real setup, you'd have proper icon files
-          # For now, create a basic one
-          cat > temp_icon.iconset/icon_512x512.png << 'EOF'
-          # This would be a real PNG file in practice
+          ICONSET_ROOT="$(mktemp -d)"
+          ICONSET="$ICONSET_ROOT/ld-analyse.iconset"
+          mkdir -p "$ICONSET"
+          cp src/ld-analyse/Graphics/16-analyse.png "$ICONSET/icon_16x16.png"
+          cp src/ld-analyse/Graphics/32-analyse.png "$ICONSET/icon_16x16@2x.png"
+          cp src/ld-analyse/Graphics/32-analyse.png "$ICONSET/icon_32x32.png"
+          cp src/ld-analyse/Graphics/64-analyse.png "$ICONSET/icon_32x32@2x.png"
+          cp src/ld-analyse/Graphics/128-analyse.png "$ICONSET/icon_128x128.png"
+          cp src/ld-analyse/Graphics/256-analyse.png "$ICONSET/icon_128x128@2x.png"
+          cp src/ld-analyse/Graphics/256-analyse.png "$ICONSET/icon_256x256.png"
+          if command -v sips >/dev/null 2>&1; then
+            sips -z 512 512 src/ld-analyse/Graphics/256-analyse.png --out "$ICONSET/icon_256x256@2x.png"
+            sips -z 512 512 src/ld-analyse/Graphics/256-analyse.png --out "$ICONSET/icon_512x512.png"
+            sips -z 1024 1024 src/ld-analyse/Graphics/256-analyse.png --out "$ICONSET/icon_512x512@2x.png"
+          else
+            cp src/ld-analyse/Graphics/256-analyse.png "$ICONSET/icon_256x256@2x.png"
+            cp src/ld-analyse/Graphics/256-analyse.png "$ICONSET/icon_512x512.png"
+          fi
+          iconutil -c icns "$ICONSET" -o dist/tbc-tools.app/Contents/Resources/tbc-tools.icns
+
+      - name: Bundle Qt plugins and qt.conf
+        run: |
+          mkdir -p dist/tbc-tools.app/Contents/PlugIns
+          
+          # Extract plugin paths from Nix wrapper and copy plugins
+          PLUGIN_PATHS=$(strings -n 8 result/bin/ld-analyse.app/Contents/MacOS/ld-analyse | grep "/qt-6/plugins" | sort -u || true)
+          for p in $PLUGIN_PATHS; do
+            if [ -d "$p" ]; then
+              rsync -a "$p/" dist/tbc-tools.app/Contents/PlugIns/
+            fi
+          done
+          
+          cat > dist/tbc-tools.app/Contents/Resources/qt.conf << 'EOF'
+          [Paths]
+          Plugins = PlugIns
           EOF
-          # iconutil -c icns temp_icon.iconset -o dist/tbc-tools.app/Contents/Resources/tbc-tools.icns || true
-          # For now, just create a placeholder
-          touch dist/tbc-tools.app/Contents/Resources/tbc-tools.icns
 
       - name: Bundle dependencies
         shell: bash
         run: |
-          set -e
-          
-          # Try to use macdeployqt if available, otherwise use Nix-based approach
-          if command -v macdeployqt >/dev/null 2>&1; then
-            echo "Using system macdeployqt"
-            macdeployqt dist/tbc-tools.app -libpath=/usr/local/lib/ -libpath=/opt/homebrew/lib/ || true
-          elif BREW_PREFIX=$(brew --prefix 2>/dev/null) && command -v "$BREW_PREFIX/bin/macdeployqt" >/dev/null 2>&1; then
-            echo "Using Homebrew macdeployqt"
-            "$BREW_PREFIX/bin/macdeployqt" dist/tbc-tools.app -libpath="$BREW_PREFIX/lib" || true
-          elif QT_PREFIX=$(brew --prefix qt 2>/dev/null) && [ -f "$QT_PREFIX/bin/macdeployqt" ]; then
-            echo "Using Qt-specific macdeployqt"
-            "$QT_PREFIX/bin/macdeployqt" dist/tbc-tools.app -libpath="$QT_PREFIX/lib" || true
-          else
-            echo "Using Nix-based dependency bundling"
-            # Get Qt path from Nix
-            QT_PATH=$(nix eval --raw .#qt6.qtbase.outPath 2>/dev/null || echo "/usr/local")
-            echo "Qt path: $QT_PATH"
-            
-            # Function to copy and fix dylib dependencies
-            fix_dependencies() {
-              local binary="$1"
-              local app_path="$2"
-              
-              if [ ! -f "$binary" ]; then
-                return
+          APP="dist/tbc-tools.app"
+          FW_DIR="$APP/Contents/Frameworks"
+          PLUGINS_DIR="$APP/Contents/PlugIns"
+
+          mkdir -p "$FW_DIR" "$PLUGINS_DIR"
+          chmod -R u+w "$APP/Contents" 2>/dev/null || true
+
+          is_macho() {
+            file "$1" 2>/dev/null | grep -q "Mach-O"
+          }
+
+          newref_for_dep() {
+            local dep="$1"
+            if [[ "$dep" == *".framework/"* ]]; then
+              local framework_root
+              framework_root=$(echo "$dep" | sed -E "s|(.*\\.framework)/.*|\\1|")
+              local framework_name
+              framework_name=$(basename "$framework_root")
+              local version
+              version=$(echo "$dep" | sed -E "s|.*\\.framework/Versions/([^/]+)/.*|\\1|")
+              local bin_name
+              bin_name=$(basename "$dep")
+              echo "@rpath/$framework_name/Versions/$version/$bin_name"
+            else
+              local base
+              base=$(basename "$dep")
+              echo "@rpath/$base"
+            fi
+          }
+
+          copy_dep() {
+            local dep="$1"
+            if [[ "$dep" == *".framework/"* ]]; then
+              local framework_root
+              framework_root=$(echo "$dep" | sed -E "s|(.*\\.framework)/.*|\\1|")
+              local framework_name
+              framework_name=$(basename "$framework_root")
+              local version
+              version=$(echo "$dep" | sed -E "s|.*\\.framework/Versions/([^/]+)/.*|\\1|")
+              local bin_name
+              bin_name=$(basename "$dep")
+              local target="$FW_DIR/$framework_name/Versions/$version/$bin_name"
+
+              if [ ! -f "$target" ]; then
+                rsync -a "$framework_root" "$FW_DIR/"
+                chmod -R u+w "$FW_DIR/$framework_name" || true
               fi
-              
-              # Get dependencies
-              local deps=$(otool -L "$binary" 2>/dev/null | grep -E '(Qt|/nix/store)' | awk '{print $1}' | grep -v ':$' || true)
-              
-              for dep in $deps; do
-                if [[ "$dep" == *"/nix/store"* ]]; then
-                  local basename=$(basename "$dep")
-                  local target="$app_path/Contents/Frameworks/$basename"
-                  
-                  # Copy the dependency if not already there
-                  if [ ! -f "$target" ]; then
-                    echo "Copying dependency: $dep -> $target"
-                    cp "$dep" "$target" 2>/dev/null || true
-                    chmod +w "$target" 2>/dev/null || true
-                  fi
-                  
-                  # Update the reference in the binary
-                  install_name_tool -change "$dep" "@rpath/$basename" "$binary" 2>/dev/null || true
-                fi
-              done
-              
-              # Add rpath to the binary
-              install_name_tool -add_rpath "@loader_path/../Frameworks" "$binary" 2>/dev/null || true
-            }
-            
-            # Process all binaries
-            for binary in dist/tbc-tools.app/Contents/MacOS/*; do
-              if [ -f "$binary" ] && [ -x "$binary" ]; then
-                echo "Processing binary: $binary"
-                fix_dependencies "$binary" "dist/tbc-tools.app"
+
+              install_name_tool -id "@rpath/$framework_name/Versions/$version/$bin_name" "$target" 2>/dev/null || true
+              echo "$target"
+            else
+              local base
+              base=$(basename "$dep")
+              local target="$FW_DIR/$base"
+              if [ ! -f "$target" ]; then
+                cp "$dep" "$target" 2>/dev/null || true
+                chmod u+w "$target" 2>/dev/null || true
+              fi
+              install_name_tool -id "@rpath/$base" "$target" 2>/dev/null || true
+              echo "$target"
+            fi
+          }
+
+          add_rpaths() {
+            local file="$1"
+            install_name_tool -add_rpath "@executable_path/../Frameworks" "$file" 2>/dev/null || true
+            install_name_tool -add_rpath "@loader_path/../Frameworks" "$file" 2>/dev/null || true
+            install_name_tool -add_rpath "@loader_path/../../Frameworks" "$file" 2>/dev/null || true
+          }
+
+          delete_nix_rpaths() {
+            local file="$1"
+            local rpaths
+            rpaths=$(otool -l "$file" 2>/dev/null | awk '/LC_RPATH/{getline;getline;print $2}' || true)
+            for rp in $rpaths; do
+              if [[ "$rp" == /nix/store/* ]]; then
+                install_name_tool -delete_rpath "$rp" "$file" 2>/dev/null || true
               fi
             done
-            
-            # Process copied frameworks
-            for framework in dist/tbc-tools.app/Contents/Frameworks/*; do
-              if [ -f "$framework" ]; then
-                echo "Processing framework: $framework"
-                fix_dependencies "$framework" "dist/tbc-tools.app"
-              fi
+          }
+
+          process_file() {
+            local file="$1"
+            is_macho "$file" || return 0
+
+            chmod u+w "$file" 2>/dev/null || true
+            add_rpaths "$file"
+            delete_nix_rpaths "$file"
+
+            local deps
+            deps=$(otool -L "$file" 2>/dev/null | tail -n +2 | awk "{print \$1}" || true)
+            for dep in $deps; do
+              case "$dep" in
+                /nix/store/*|/usr/local/*|/opt/homebrew/*)
+                  local target
+                  target=$(copy_dep "$dep")
+                  local newref
+                  newref=$(newref_for_dep "$dep")
+                  install_name_tool -change "$dep" "$newref" "$file" 2>/dev/null || true
+                  [ -n "$target" ] && QUEUE+=("$target")
+                  ;;
+                *)
+                  ;;
+              esac
             done
+          }
+
+          QUEUE=()
+          while IFS= read -r -d '' f; do QUEUE+=("$f"); done < <(find "$APP/Contents/MacOS" -type f -print0)
+          while IFS= read -r -d '' f; do QUEUE+=("$f"); done < <(find "$FW_DIR" -type f -print0)
+          if [ -d "$PLUGINS_DIR" ]; then
+            while IFS= read -r -d '' f; do QUEUE+=("$f"); done < <(find "$PLUGINS_DIR" -type f -print0)
+          fi
+
+          SEEN_FILE=$(mktemp)
+          while [ ${#QUEUE[@]} -gt 0 ]; do
+            file="${QUEUE[0]}"
+            QUEUE=("${QUEUE[@]:1}")
+            if grep -Fxq "$file" "$SEEN_FILE"; then
+              continue
+            fi
+            echo "$file" >> "$SEEN_FILE"
+            process_file "$file"
+          done
+          rm -f "$SEEN_FILE"
+
+          if [ -d "$FW_DIR" ]; then
+            while IFS= read -r -d '' lib; do
+              is_macho "$lib" || continue
+              chmod u+w "$lib" 2>/dev/null || true
+              rel="${lib#$FW_DIR/}"
+              if [[ "$rel" == *.framework/* ]]; then
+                install_name_tool -id "@rpath/$rel" "$lib" 2>/dev/null || true
+              else
+                install_name_tool -id "@rpath/$(basename "$lib")" "$lib" 2>/dev/null || true
+              fi
+            done < <(find "$FW_DIR" -type f -print0)
           fi
 
       - name: Install create-dmg
@@ -193,6 +301,30 @@ jobs:
           find dist/tbc-tools.app -type f | head -20
           echo "\nMain executable dependencies:"
           otool -L dist/tbc-tools.app/Contents/MacOS/ld-analyse 2>/dev/null | head -10 || echo "Could not check dependencies"
+          echo "\nMain executable rpaths:"
+          otool -l dist/tbc-tools.app/Contents/MacOS/ld-analyse | grep -A2 LC_RPATH || true
+          if ! otool -l dist/tbc-tools.app/Contents/MacOS/ld-analyse | grep -q LC_RPATH; then
+            echo "No LC_RPATH entries found in ld-analyse"
+            exit 1
+          fi
+          echo "\nScanning for /nix/store references:"
+          FOUND=0
+          while IFS= read -r -d '' f; do
+            if file "$f" 2>/dev/null | grep -q "Mach-O"; then
+              if otool -L "$f" 2>/dev/null | grep -q "/nix/store"; then
+                echo "Nix load refs in: $f"
+                FOUND=1
+              fi
+              if otool -l "$f" 2>/dev/null | grep -q "/nix/store"; then
+                echo "Nix rpath refs in: $f"
+                FOUND=1
+              fi
+            fi
+          done < <(find dist/tbc-tools.app -type f -print0)
+          if [ "$FOUND" -ne 0 ]; then
+            echo "Found /nix/store references in app bundle"
+            exit 1
+          fi
 
       - name: Create DMG
         run: |
