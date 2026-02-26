@@ -34,6 +34,8 @@ jobs:
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: "d30fdf55cfca16e12bc3ad99cbc615997014b61b"
+          # Prevent false-positive "File not found" warnings from broad default log regexes.
+          logCollectionRegExps: "a^"
 
       - name: Run CMake
         uses: lukka/run-cmake@v10
@@ -42,6 +44,8 @@ jobs:
           configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release', '-DUSE_QT_VERSION=6', '-DBUILD_PYTHON=false', '-DVCPKG_APPLOCAL_DEPS=ON', '-DBUILD_TESTING=OFF',]"
           buildPreset: vcpkg
           buildPresetAdditionalArgs: "['--config Release']"
+          # Prevent false-positive "File not found" warnings from broad default log regexes.
+          logCollectionRegExps: "a^"
 
       - name: Create release directory
         run: New-Item -ItemType Directory -Path release
