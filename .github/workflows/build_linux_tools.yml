@@ -82,6 +82,15 @@ jobs:
           curl -LJO ${{ env.APPIMAGE_QT_URL }}
 
           chmod +x ${{ env.APPIMAGE_FILE }} ${{ env.APPIMAGE_PLUGIN_FILE }} ${{ env.APPIMAGE_QT_FILE }}
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          QMAKE="$(find /nix/store -type f -path '*/bin/qmake' | head -n 1 || true)"
+          if [ -z "$QMAKE" ]; then
+            QMAKE="$(find /nix/store -type f -path '*/bin/qmake6' | head -n 1 || true)"
+          fi
+          if [ -n "$QMAKE" ]; then
+            export QMAKE
+            export PATH="$(dirname "$QMAKE"):$PATH"
+          fi
 
           EXTRA_QT_MODULES="core;gui;opengl;svg;widgets;sql" ./${{ env.APPIMAGE_QT_FILE }} --appdir AppDir
 
