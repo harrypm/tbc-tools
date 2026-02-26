@@ -128,6 +128,25 @@ jobs:
           fi
 
           EXTRA_QT_MODULES="core;gui;opengl;widgets;sql" ./${{ env.APPIMAGE_QT_FILE }} --appdir AppDir
+          pending=1
+          while [ "$pending" -eq 1 ]; do
+            pending=0
+            for elf in AppDir/usr/plugins/*/*.so AppDir/usr/lib/*.so*; do
+              [ -f "$elf" ] || continue
+              for dep in $(ldd "$elf" 2>/dev/null | awk '/=> \// { print $3 }'); do
+                [ -f "$dep" ] || continue
+                base="$(basename "$dep")"
+                if echo "$base" | grep -Eq '^(libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|libresolv\.so\.2|ld-linux-.*\.so\..*|libnss_.*|libutil\.so\..*|libanl\.so\..*)$'; then
+                  continue
+                fi
+                dest="AppDir/usr/lib/$base"
+                if [ ! -e "$dest" ]; then
+                  cp -L "$dep" "$dest"
+                  pending=1
+                fi
+              done
+            done
+          done
 
           # Create minimal desktop file
           mkdir -p AppDir/usr/share/applications
@@ -143,8 +162,6 @@ jobs:
           # Provide application icon for desktop entry
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           cp src/ld-analyse/Graphics/256-analyse.png AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png
-          cp -a /usr/lib64/libGLX.so* /usr/lib64/libOpenGL.so* /usr/lib64/libEGL.so* /usr/lib64/libGLdispatch.so* AppDir/usr/lib/ 2>/dev/null || true
-          cp -a /usr/lib64/libX11-xcb.so* /usr/lib64/libSM.so* /usr/lib64/libICE.so* AppDir/usr/lib/ 2>/dev/null || true
 
           ./${{ env.APPIMAGE_FILE }} \
           --desktop-file AppDir/usr/share/applications/tbc-tools.desktop \
