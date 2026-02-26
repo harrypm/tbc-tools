@@ -40,6 +40,20 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\ci\cache\vcpkg\windows-x64" | Out-Null
           "VCPKG_BINARY_SOURCES=clear;files,${{ github.workspace }}\ci\cache\vcpkg\windows-x64,readwrite" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Reassemble chunked repository cache archives
+        run: |
+          $cacheRoot = "${{ github.workspace }}\ci\cache\vcpkg\windows-x64"
+          Get-ChildItem -Recurse -Path $cacheRoot -Filter "*.zip.part.001" | ForEach-Object {
+            $zipPath = $_.FullName -replace '\.part\.001$',''
+            if (Test-Path $zipPath) {
+              return
+            }
+            $parts = Get-ChildItem -Path "$zipPath.part.*" | Sort-Object Name
+            if ($parts.Count -eq 0) {
+              return
+            }
+            cmd /c "copy /b `"$zipPath.part.*`" `"$zipPath`" >nul"
+          }
 
       - name: Run CMake
         uses: lukka/run-cmake@v10
@@ -109,6 +123,33 @@ jobs:
 
       - name: Copy project license
         run: Copy-Item -Path .\\LICENSE -Destination release\\LICENSES\\copyright-tbc-tools
+      - name: Split oversized repository cache archives for git compatibility
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        run: |
+          $cacheRoot = "${{ github.workspace }}\ci\cache\vcpkg\windows-x64"
+          $chunkSize = 95MB
+          Get-ChildItem -Recurse -Path $cacheRoot -Filter "*.zip" | Where-Object { $_.Length -gt $chunkSize } | ForEach-Object {
+            $zipPath = $_.FullName
+            Remove-Item -Force -ErrorAction SilentlyContinue "$zipPath.part.*"
+            $stream = [System.IO.File]::OpenRead($zipPath)
+            try {
+              $buffer = New-Object byte[] $chunkSize
+              $index = 1
+              while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $partPath = "{0}.part.{1:000}" -f $zipPath, $index
+                $partStream = [System.IO.File]::Open($partPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+                try {
+                  $partStream.Write($buffer, 0, $read)
+                } finally {
+                  $partStream.Close()
+                }
+                $index++
+              }
+            } finally {
+              $stream.Close()
+            }
+            Remove-Item -Force $zipPath
+          }
       - name: Commit updated repository cache (workflow_dispatch only)
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         continue-on-error: true
