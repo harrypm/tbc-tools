@@ -110,6 +110,25 @@ jobs:
           if [ -d "scripts" ]; then
             find scripts -maxdepth 1 -perm +111 -type f -exec cp {} dist/tbc-tools.app/Contents/MacOS/ \; 2>/dev/null || true
           fi
+      - name: Bundle Python deps (numpy)
+        run: |
+          APP="dist/tbc-tools.app"
+          PY_DIR="$APP/Contents/Resources/python"
+          mkdir -p "$PY_DIR"
+          python3 -m pip install --target "$PY_DIR" numpy
+          
+          SCRIPT="$APP/Contents/MacOS/test-decode-pretbc"
+          if [ -f "$SCRIPT" ] && [ ! -f "$SCRIPT.py" ]; then
+            mv "$SCRIPT" "$SCRIPT.py"
+            cat > "$SCRIPT" << 'EOF'
+          #!/bin/sh
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          PY_DIR="$DIR/../Resources/python"
+          export PYTHONPATH="$PY_DIR${PYTHONPATH:+:$PYTHONPATH}"
+          exec /usr/bin/env python3 "$DIR/test-decode-pretbc.py" "$@"
+          EOF
+            chmod +x "$SCRIPT"
+          fi
 
       - name: Create app icon
         run: |
