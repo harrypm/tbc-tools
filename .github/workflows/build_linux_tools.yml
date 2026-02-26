@@ -64,7 +64,9 @@ jobs:
 
       - name: Build with Nix
         run: |
+          export HOME=/root
           export PATH="/nix/var/nix/profiles/default/bin:/root/.nix-profile/bin:$HOME/.nix-profile/bin:$PATH"
+          chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
           nix build .#
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/lib
