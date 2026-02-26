@@ -130,14 +130,20 @@ jobs:
           EXTRA_QT_MODULES="core;gui;opengl;widgets;sql" ./${{ env.APPIMAGE_QT_FILE }} --appdir AppDir
 
           # Ensure SVG icon support is bundled (toolbar icons in ld-analyse are SVG resources)
-          for plugin_name in libqsvgicon.so libqsvg.so; do
-            plugin_src="$(find /nix/store -type f -path "*/plugins/*/${plugin_name}" | head -n 1 || true)"
-            if [ -n "$plugin_src" ]; then
-              plugin_subdir="$(basename "$(dirname "$plugin_src")")"
-              mkdir -p "AppDir/usr/plugins/${plugin_subdir}"
-              cp -L "$plugin_src" "AppDir/usr/plugins/${plugin_subdir}/${plugin_name}"
+          copy_qt_plugin() {
+            plugin_rel="$1"
+            plugin_src="$(find /nix/store -type f -path "*/plugins/${plugin_rel}" | sort | head -n 1 || true)"
+            if [ -z "$plugin_src" ]; then
+              echo "Required Qt plugin missing from Nix store: ${plugin_rel}"
+              exit 1
             fi
-          done
+            mkdir -p "AppDir/usr/plugins/$(dirname "$plugin_rel")"
+            cp -L "$plugin_src" "AppDir/usr/plugins/${plugin_rel}"
+            echo "Bundled Qt plugin: ${plugin_rel} <- ${plugin_src}"
+          }
+
+          copy_qt_plugin "iconengines/libqsvgicon.so"
+          copy_qt_plugin "imageformats/libqsvg.so"
           pending=1
           while [ "$pending" -eq 1 ]; do
             pending=0
