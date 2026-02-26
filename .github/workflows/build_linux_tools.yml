@@ -86,14 +86,25 @@ jobs:
             cp -a "$item" "AppDir/usr/bin/$base"
           done
           cp -a result/lib/. AppDir/usr/lib/ || true
-          INTERP_PATH="$(patchelf --print-interpreter result/bin/.ld-analyse-wrapped)"
-          cp -L "$INTERP_PATH" AppDir/usr/lib/ld-linux-x86-64.so.2
-          for wrapped in result/bin/.*-wrapped; do
-            [ -f "$wrapped" ] || continue
-            for dep in $(ldd "$wrapped" | awk '/=> \/nix\/store/ { print $3 }'); do
-              [ -f "$dep" ] || continue
-              cp -Ln "$dep" "AppDir/usr/lib/$(basename "$dep")"
+          pending=1
+          while [ "$pending" -eq 1 ]; do
+            pending=0
+            for elf in AppDir/usr/bin/* AppDir/usr/lib/*; do
+              [ -f "$elf" ] || continue
+              for dep in $(ldd "$elf" 2>/dev/null | awk '/=> \/nix\/store/ { print $3 }'); do
+                [ -f "$dep" ] || continue
+                dest="AppDir/usr/lib/$(basename "$dep")"
+                if [ ! -e "$dest" ]; then
+                  cp -L "$dep" "$dest"
+                  pending=1
+                fi
+              done
             done
+          done
+          for exe in AppDir/usr/bin/*; do
+            [ -f "$exe" ] || continue
+            patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 "$exe" || true
+            patchelf --set-rpath '$ORIGIN/../lib' "$exe" || true
           done
 
       - name: Download linuxdeploy and build AppImage
@@ -130,19 +141,11 @@ jobs:
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           cp src/ld-analyse/Graphics/256-analyse.png AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png
           cp -a /usr/lib64/libGLX.so* /usr/lib64/libOpenGL.so* /usr/lib64/libEGL.so* /usr/lib64/libGLdispatch.so* AppDir/usr/lib/ 2>/dev/null || true
-          cat > custom-apprun.sh << 'EOF'
-          #!/bin/sh
-          HERE="$(dirname "$(readlink -f "$0")")"
-          export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          exec "$HERE/usr/lib/ld-linux-x86-64.so.2" --library-path "$HERE/usr/lib" "$HERE/usr/bin/ld-analyse" "$@"
-          EOF
-          chmod +x custom-apprun.sh
 
           ./${{ env.APPIMAGE_FILE }} \
           --desktop-file AppDir/usr/share/applications/tbc-tools.desktop \
           --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png \
           --appdir AppDir/ \
-          --custom-apprun custom-apprun.sh \
           --output appimage
           APPIMAGE_OUT="$(find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' | head -n 1)"
           if [ -z "$APPIMAGE_OUT" ]; then
