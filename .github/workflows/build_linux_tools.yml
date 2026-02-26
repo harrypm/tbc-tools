@@ -39,7 +39,8 @@ jobs:
           chown root /nix
           groupadd --system nixbld || true
           for i in $(seq 1 32); do
-            useradd --system --gid nixbld --no-create-home --home-dir /var/empty --shell /sbin/nologin "nixbld$i" || true
+            useradd --system --gid nixbld --groups nixbld --no-create-home --home-dir /var/empty --shell /sbin/nologin "nixbld$i" || true
+            usermod --append --groups nixbld "nixbld$i" || true
           done
 
       - uses: actions/checkout@v4
