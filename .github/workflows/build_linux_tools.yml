@@ -86,10 +86,20 @@ jobs:
             cp -a "$item" "AppDir/usr/bin/$base"
           done
           cp -a result/lib/. AppDir/usr/lib/ || true
-          LIBSTDCPP_PATH="$(ldd result/bin/.ld-analyse-wrapped | awk '$1 == "libstdc++.so.6" { print $3; exit }')"
-          LIBGCC_PATH="$(ldd result/bin/.ld-analyse-wrapped | awk '$1 == "libgcc_s.so.1" { print $3; exit }')"
-          [ -n "$LIBSTDCPP_PATH" ] && cp -L "$LIBSTDCPP_PATH" AppDir/usr/lib/libstdc++.so.6
-          [ -n "$LIBGCC_PATH" ] && cp -L "$LIBGCC_PATH" AppDir/usr/lib/libgcc_s.so.1
+          INTERP_PATH="$(patchelf --print-interpreter result/bin/.ld-analyse-wrapped)"
+          cp -L "$INTERP_PATH" AppDir/usr/lib/ld-linux-x86-64.so.2
+          for wrapped in result/bin/.*-wrapped; do
+            [ -f "$wrapped" ] || continue
+            for dep in $(ldd "$wrapped" | awk '/=> \/nix\/store/ { print $3 }'); do
+              [ -f "$dep" ] || continue
+              cp -Ln "$dep" "AppDir/usr/lib/$(basename "$dep")"
+            done
+          done
+          for exe in AppDir/usr/bin/*; do
+            [ -f "$exe" ] || continue
+            patchelf --set-interpreter '$ORIGIN/../lib/ld-linux-x86-64.so.2' "$exe"
+            patchelf --set-rpath '$ORIGIN/../lib' "$exe"
+          done
 
       - name: Download linuxdeploy and build AppImage
         run: |
