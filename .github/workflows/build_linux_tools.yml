@@ -86,8 +86,8 @@ jobs:
             cp -a "$item" "AppDir/usr/bin/$base"
           done
           cp -a result/lib/. AppDir/usr/lib/ || true
-          LIBSTDCPP_PATH="$(ldd result/bin/.ld-analyse-wrapped | awk '$1 == \"libstdc++.so.6\" { print $3; exit }')"
-          LIBGCC_PATH="$(ldd result/bin/.ld-analyse-wrapped | awk '$1 == \"libgcc_s.so.1\" { print $3; exit }')"
+          LIBSTDCPP_PATH="$(ldd result/bin/.ld-analyse-wrapped | awk '$1 == "libstdc++.so.6" { print $3; exit }')"
+          LIBGCC_PATH="$(ldd result/bin/.ld-analyse-wrapped | awk '$1 == "libgcc_s.so.1" { print $3; exit }')"
           [ -n "$LIBSTDCPP_PATH" ] && cp -a "$LIBSTDCPP_PATH" AppDir/usr/lib/
           [ -n "$LIBGCC_PATH" ] && cp -a "$LIBGCC_PATH" AppDir/usr/lib/
 
