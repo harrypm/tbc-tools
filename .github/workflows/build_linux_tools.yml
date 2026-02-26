@@ -86,23 +86,6 @@ jobs:
             cp -a "$item" "AppDir/usr/bin/$base"
           done
           cp -a result/lib/. AppDir/usr/lib/ || true
-          INTERP_PATH="$(patchelf --print-interpreter result/bin/.ld-analyse-wrapped)"
-          cp -L "$INTERP_PATH" AppDir/usr/lib/ld-linux-x86-64.so.2
-          pending=1
-          while [ "$pending" -eq 1 ]; do
-            pending=0
-            for elf in AppDir/usr/bin/* AppDir/usr/lib/*; do
-              [ -f "$elf" ] || continue
-              for dep in $(ldd "$elf" 2>/dev/null | awk '/=> \/nix\/store/ { print $3 }'); do
-                [ -f "$dep" ] || continue
-                dest="AppDir/usr/lib/$(basename "$dep")"
-                if [ ! -e "$dest" ]; then
-                  cp -L "$dep" "$dest"
-                  pending=1
-                fi
-              done
-            done
-          done
 
       - name: Download linuxdeploy and build AppImage
         run: |
@@ -138,6 +121,7 @@ jobs:
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           cp src/ld-analyse/Graphics/256-analyse.png AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png
           cp -a /usr/lib64/libGLX.so* /usr/lib64/libOpenGL.so* /usr/lib64/libEGL.so* /usr/lib64/libGLdispatch.so* AppDir/usr/lib/ 2>/dev/null || true
+          cp -a /usr/lib64/libX11-xcb.so* /usr/lib64/libSM.so* /usr/lib64/libICE.so* AppDir/usr/lib/ 2>/dev/null || true
 
           ./${{ env.APPIMAGE_FILE }} \
           --desktop-file AppDir/usr/share/applications/tbc-tools.desktop \
