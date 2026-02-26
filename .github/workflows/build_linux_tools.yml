@@ -37,6 +37,10 @@ jobs:
           dnf --assumeyes install sudo git file xz fftw-devel ffmpeg-devel ffmpeg pkgconf-pkg-config make cmake gcc-c++
           mkdir -p -m 0755 /nix
           chown root /nix
+          groupadd --system nixbld || true
+          for i in $(seq 1 32); do
+            useradd --system --gid nixbld --no-create-home --home-dir /var/empty --shell /sbin/nologin "nixbld$i" || true
+          done
 
       - uses: actions/checkout@v4
         with:
