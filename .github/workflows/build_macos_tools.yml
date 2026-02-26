@@ -93,12 +93,9 @@ jobs:
           cp -r dist/bin/* dist/tbc-tools.app/Contents/MacOS/
           
           # Copy scripts if they exist
-          shopt -s nullglob
-          for f in scripts/* scripts/linux/* 2>/dev/null || true; do
-            if [[ -f "$f" && -x "$f" ]]; then
-              cp "$f" dist/tbc-tools.app/Contents/MacOS/
-            fi
-          done
+          if [ -d "scripts" ]; then
+            find scripts -maxdepth 1 -perm +111 -type f -exec cp {} dist/tbc-tools.app/Contents/MacOS/ \; 2>/dev/null || true
+          fi
 
       - name: Create app icon
         run: |
@@ -116,18 +113,18 @@ jobs:
       - name: Bundle dependencies
         shell: bash
         run: |
-          set -euxo pipefail
+          set -e
           
-          # Get paths using proper detection
-          BREW_PREFIX="$(brew --prefix)"
-          
-          # Try to use macdeployqt from Qt if available via Homebrew, otherwise use Nix-based approach
-          if command -v "$BREW_PREFIX/bin/macdeployqt" >/dev/null 2>&1; then
+          # Try to use macdeployqt if available, otherwise use Nix-based approach
+          if command -v macdeployqt >/dev/null 2>&1; then
+            echo "Using system macdeployqt"
+            macdeployqt dist/tbc-tools.app -libpath=/usr/local/lib/ -libpath=/opt/homebrew/lib/ || true
+          elif BREW_PREFIX=$(brew --prefix 2>/dev/null) && command -v "$BREW_PREFIX/bin/macdeployqt" >/dev/null 2>&1; then
             echo "Using Homebrew macdeployqt"
-            "$BREW_PREFIX/bin/macdeployqt" dist/tbc-tools.app -libpath="$BREW_PREFIX/lib"
+            "$BREW_PREFIX/bin/macdeployqt" dist/tbc-tools.app -libpath="$BREW_PREFIX/lib" || true
           elif QT_PREFIX=$(brew --prefix qt 2>/dev/null) && [ -f "$QT_PREFIX/bin/macdeployqt" ]; then
             echo "Using Qt-specific macdeployqt"
-            "$QT_PREFIX/bin/macdeployqt" dist/tbc-tools.app -libpath="$BREW_PREFIX/lib"
+            "$QT_PREFIX/bin/macdeployqt" dist/tbc-tools.app -libpath="$QT_PREFIX/lib" || true
           else
             echo "Using Nix-based dependency bundling"
             # Get Qt path from Nix
