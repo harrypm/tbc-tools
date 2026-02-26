@@ -114,7 +114,8 @@ jobs:
           --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png \
           --appdir AppDir/ \
           --output appimage
-
+          APPIMAGE_OUT="$(find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' | head -n 1)"
+          cp "$APPIMAGE_OUT" release/tbc-tools-x86_64.AppImage
           cp tbc-tools-x86_64.AppImage release/
 
       - name: Copy scripts
