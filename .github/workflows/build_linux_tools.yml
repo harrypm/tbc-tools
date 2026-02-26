@@ -72,8 +72,8 @@ jobs:
           nix build .#
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/lib
-          cp -r result/bin/* AppDir/usr/bin/
-          cp -r result/lib/* AppDir/usr/lib/ || true
+          cp -a result/bin/. AppDir/usr/bin/
+          cp -a result/lib/. AppDir/usr/lib/ || true
 
       - name: Download linuxdeploy and build AppImage
         run: |
