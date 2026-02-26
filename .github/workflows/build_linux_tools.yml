@@ -41,7 +41,6 @@ jobs:
           groupadd --system nixbld || true
           for i in $(seq 1 32); do
             useradd --system --gid nixbld --groups nixbld --no-create-home --home-dir /var/empty --shell /sbin/nologin "nixbld$i" || true
-            usermod --append --groups nixbld "nixbld$i" || true
           done
 
       - uses: actions/checkout@v4
@@ -70,8 +69,8 @@ jobs:
           export PATH="/nix/var/nix/profiles/default/bin:/root/.nix-profile/bin:$HOME/.nix-profile/bin:$PATH"
           chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
           nix build .#
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/lib
+          mkdir -p AppDir/usr/bin AppDir/usr/lib
+          SKIP_LIB_REGEX='^(libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|libresolv\.so\.2|ld-linux-.*\.so\..*|libnss_.*|libutil\.so\..*|libanl\.so\..*)$'
           for wrapped in result/bin/.*-wrapped; do
             [ -f "$wrapped" ] || continue
             base="$(basename "$wrapped")"
@@ -98,7 +97,7 @@ jobs:
               for dep in $(ldd "$elf" 2>/dev/null | awk '/=> \/nix\/store/ { print $3 }'); do
                 [ -f "$dep" ] || continue
                 base="$(basename "$dep")"
-                if echo "$base" | grep -Eq '^(libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|libresolv\.so\.2|ld-linux-.*\.so\..*|libnss_.*|libutil\.so\..*|libanl\.so\..*)$'; then
+                if echo "$base" | grep -Eq "$SKIP_LIB_REGEX"; then
                   continue
                 fi
                 dest="AppDir/usr/lib/$base"
@@ -118,9 +117,10 @@ jobs:
 
           chmod +x ${{ env.APPIMAGE_FILE }} ${{ env.APPIMAGE_PLUGIN_FILE }} ${{ env.APPIMAGE_QT_FILE }}
           export APPIMAGE_EXTRACT_AND_RUN=1
-          QMAKE="$(find /nix/store -type f -path '*/bin/qmake' | head -n 1 || true)"
+          SKIP_LIB_REGEX='^(libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|libresolv\.so\.2|ld-linux-.*\.so\..*|libnss_.*|libutil\.so\..*|libanl\.so\..*)$'
+          QMAKE="$(find /nix/store -type f -path '*/bin/qmake' | sort | head -n 1 || true)"
           if [ -z "$QMAKE" ]; then
-            QMAKE="$(find /nix/store -type f -path '*/bin/qmake6' | head -n 1 || true)"
+            QMAKE="$(find /nix/store -type f -path '*/bin/qmake6' | sort | head -n 1 || true)"
           fi
           if [ -n "$QMAKE" ]; then
             export QMAKE
@@ -152,7 +152,7 @@ jobs:
               for dep in $(ldd "$elf" 2>/dev/null | awk '/=> \// { print $3 }'); do
                 [ -f "$dep" ] || continue
                 base="$(basename "$dep")"
-                if echo "$base" | grep -Eq '^(libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|libresolv\.so\.2|ld-linux-.*\.so\..*|libnss_.*|libutil\.so\..*|libanl\.so\..*)$'; then
+                if echo "$base" | grep -Eq "$SKIP_LIB_REGEX"; then
                   continue
                 fi
                 dest="AppDir/usr/lib/$base"
@@ -184,7 +184,7 @@ jobs:
           --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png \
           --appdir AppDir/ \
           --output appimage
-          APPIMAGE_OUT="$(find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' | head -n 1)"
+          APPIMAGE_OUT="$(find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' | sort | head -n 1)"
           if [ -z "$APPIMAGE_OUT" ]; then
             echo "No generated AppImage found in workspace root"
             ls -1 *.AppImage || true
