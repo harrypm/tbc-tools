@@ -22,6 +22,11 @@
 
 ************************************************************************/
 
+#ifdef _MSC_VER
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 #include "ezpwd/rs_base"
 #include "ezpwd/rs"
 #include "rspc.h"
