@@ -72,7 +72,19 @@ jobs:
           nix build .#
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/lib
-          cp -a result/bin/. AppDir/usr/bin/
+          for wrapped in result/bin/.*-wrapped; do
+            [ -f "$wrapped" ] || continue
+            base="$(basename "$wrapped")"
+            base="${base#.}"
+            base="${base%-wrapped}"
+            cp -a "$wrapped" "AppDir/usr/bin/$base"
+          done
+          for item in result/bin/*; do
+            [ -e "$item" ] || continue
+            base="$(basename "$item")"
+            [ -e "AppDir/usr/bin/$base" ] && continue
+            cp -a "$item" "AppDir/usr/bin/$base"
+          done
           cp -a result/lib/. AppDir/usr/lib/ || true
 
       - name: Download linuxdeploy and build AppImage
