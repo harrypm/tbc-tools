@@ -92,7 +92,7 @@ jobs:
             export PATH="$(dirname "$QMAKE"):$PATH"
           fi
 
-          EXTRA_QT_MODULES="core;gui;opengl;svg;widgets;sql" ./${{ env.APPIMAGE_QT_FILE }} --appdir AppDir
+          EXTRA_QT_MODULES="core;gui;opengl;widgets;sql" ./${{ env.APPIMAGE_QT_FILE }} --appdir AppDir
 
           # Create minimal desktop file
           mkdir -p AppDir/usr/share/applications
