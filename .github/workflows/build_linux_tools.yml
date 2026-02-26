@@ -120,6 +120,7 @@ jobs:
           # Provide application icon for desktop entry
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           cp src/ld-analyse/Graphics/256-analyse.png AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png
+          cp -a /usr/lib64/libGLX.so* /usr/lib64/libOpenGL.so* /usr/lib64/libEGL.so* /usr/lib64/libGLdispatch.so* AppDir/usr/lib/ 2>/dev/null || true
 
           ./${{ env.APPIMAGE_FILE }} \
           --desktop-file AppDir/usr/share/applications/tbc-tools.desktop \
