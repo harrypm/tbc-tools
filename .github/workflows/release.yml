@@ -35,12 +35,24 @@ jobs:
         with:
           name: tbc-tools_linux_x86_64
           path: ./artifacts/
+
+      - name: Download Linux ARM64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: tbc-tools_linux_arm64
+          path: ./artifacts/
           
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
           name: tbc-tools_windows_x86_64
           path: ./artifacts/windows/
+
+      - name: Download Windows ARM64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: tbc-tools_windows_arm64
+          path: ./artifacts/windows-arm/
           
       - name: Download macOS x86_64 artifacts
         uses: actions/download-artifact@v4
@@ -60,6 +72,12 @@ jobs:
           zip -r ../tbc-tools_windows_x86_64.zip .
           cd ../..
 
+      - name: Create Windows ARM64 release archive
+        run: |
+          cd artifacts/windows-arm
+          zip -r ../tbc-tools_windows_arm64.zip .
+          cd ../..
+
       - name: Upload Linux release asset
         uses: actions/upload-release-asset@v1
         env:
@@ -70,6 +88,16 @@ jobs:
           asset_name: tbc-tools_linux_x86_64.tar.xz
           asset_content_type: application/x-xz
 
+      - name: Upload Linux ARM64 release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./artifacts/tbc-tools_linux_arm64.tar.xz
+          asset_name: tbc-tools_linux_arm64.tar.xz
+          asset_content_type: application/x-xz
+
       - name: Upload Windows release asset
         uses: actions/upload-release-asset@v1
         env:
@@ -78,6 +106,16 @@ jobs:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: ./artifacts/tbc-tools_windows_x86_64.zip
           asset_name: tbc-tools_windows_x86_64.zip
+          asset_content_type: application/zip
+
+      - name: Upload Windows ARM64 release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./artifacts/tbc-tools_windows_arm64.zip
+          asset_name: tbc-tools_windows_arm64.zip
           asset_content_type: application/zip
 
       - name: Upload macOS x86_64 release asset

@@ -204,3 +204,76 @@ jobs:
           name: tbc-tools_linux_x86_64
           path: tbc-tools_linux_x86_64.tar.xz
           if-no-files-found: error
+  build-tbc-tools-arm64:
+    name: Build tbc-tools (arm64)
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Create release directory
+        run: mkdir -p release/bin release/lib
+
+      - name: Build with Nix
+        run: |
+          nix build .#
+          SKIP_LIB_REGEX='^(libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|libresolv\.so\.2|ld-linux-.*\.so\..*|libnss_.*|libutil\.so\..*|libanl\.so\..*)$'
+          for wrapped in result/bin/.*-wrapped; do
+            [ -f "$wrapped" ] || continue
+            base="$(basename "$wrapped")"
+            base="${base#.}"
+            base="${base%-wrapped}"
+            cp -a "$wrapped" "release/bin/$base"
+          done
+          for item in result/bin/*; do
+            [ -e "$item" ] || continue
+            base="$(basename "$item")"
+            [ -e "release/bin/$base" ] && continue
+            cp -a "$item" "release/bin/$base"
+          done
+          cp -a result/lib/. release/lib/ || true
+          LIBSTDCPP_PATH="$(ldd result/bin/.ld-analyse-wrapped | awk '$1 == "libstdc++.so.6" { print $3; exit }')"
+          LIBGCC_PATH="$(ldd result/bin/.ld-analyse-wrapped | awk '$1 == "libgcc_s.so.1" { print $3; exit }')"
+          [ -n "$LIBSTDCPP_PATH" ] && cp -L "$LIBSTDCPP_PATH" release/lib/libstdc++.so.6
+          [ -n "$LIBGCC_PATH" ] && cp -L "$LIBGCC_PATH" release/lib/libgcc_s.so.1
+          pending=1
+          while [ "$pending" -eq 1 ]; do
+            pending=0
+            for elf in release/bin/* release/lib/*; do
+              [ -f "$elf" ] || continue
+              for dep in $(ldd "$elf" 2>/dev/null | awk '/=> \/nix\/store/ { print $3 }'); do
+                [ -f "$dep" ] || continue
+                base="$(basename "$dep")"
+                if echo "$base" | grep -Eq "$SKIP_LIB_REGEX"; then
+                  continue
+                fi
+                dest="release/lib/$base"
+                if [ ! -e "$dest" ]; then
+                  cp -L "$dep" "$dest"
+                  pending=1
+                fi
+              done
+            done
+          done
+
+      - name: Copy scripts
+        run: find scripts -maxdepth 1 -type f -executable -exec cp {} release/ \; || true
+
+      - name: Create release archive
+        run: tar -cvJf tbc-tools_linux_arm64.tar.xz --transform s/release/tbc-tools/ release/
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tbc-tools_linux_arm64
+          path: tbc-tools_linux_arm64.tar.xz
+          if-no-files-found: error

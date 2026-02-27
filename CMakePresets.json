@@ -10,6 +10,15 @@
             "architecture": {
                 "value": "x64"
             }
+        },
+        {
+            "name": "vcpkg-arm64",
+            "displayName": "VCPKG Configuration (ARM64)",
+            "description": "Configuration using vcpkg for dependency management on ARM64",
+            "inherits": "vcpkg",
+            "architecture": {
+                "value": "arm64"
+            }
         }
     ],
     "buildPresets": [
@@ -18,6 +27,12 @@
             "displayName": "VCPKG Build",
             "description": "Build using vcpkg configuration",
             "configurePreset": "vcpkg"
+        },
+        {
+            "name": "vcpkg-arm64",
+            "displayName": "VCPKG Build (ARM64)",
+            "description": "Build using vcpkg ARM64 configuration",
+            "configurePreset": "vcpkg-arm64"
         }
     ]
 }

@@ -16,8 +16,28 @@ env:
 
 jobs:
   build-tbc-tools:
-    name: Build tbc-tools (x86_64)
-    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runs_on: windows-2022
+            vcpkg_triplet: x64-windows
+            configure_preset: vcpkg
+            build_preset: vcpkg
+            cache_subdir: windows-x64
+            artifact_name: tbc-tools_windows_x86_64
+            bundle_external_tools: true
+          - arch: arm64
+            runs_on: windows-11-arm
+            vcpkg_triplet: arm64-windows
+            configure_preset: vcpkg-arm64
+            build_preset: vcpkg-arm64
+            cache_subdir: windows-arm64
+            artifact_name: tbc-tools_windows_arm64
+            bundle_external_tools: false
+    name: Build tbc-tools (${{ matrix.arch }})
+    runs-on: ${{ matrix.runs_on }}
 
     steps:
       - uses: actions/checkout@v4
@@ -38,11 +58,11 @@ jobs:
           logCollectionRegExps: "a^"
       - name: Initialize repository-contained vcpkg cache
         run: |
-          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\ci\cache\vcpkg\windows-x64" | Out-Null
-          "VCPKG_BINARY_SOURCES=clear;files,${{ github.workspace }}\ci\cache\vcpkg\windows-x64,readwrite" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\ci\cache\vcpkg\${{ matrix.cache_subdir }}" | Out-Null
+          "VCPKG_BINARY_SOURCES=clear;files,${{ github.workspace }}\ci\cache\vcpkg\${{ matrix.cache_subdir }},readwrite" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Reassemble chunked repository cache archives
         run: |
-          $cacheRoot = "${{ github.workspace }}\ci\cache\vcpkg\windows-x64"
+          $cacheRoot = "${{ github.workspace }}\ci\cache\vcpkg\${{ matrix.cache_subdir }}"
           Get-ChildItem -Recurse -Path $cacheRoot -Filter "*.zip.part.001" | ForEach-Object {
             $zipPath = $_.FullName -replace '\.part\.001$',''
             if (Test-Path $zipPath) {
@@ -58,9 +78,9 @@ jobs:
       - name: Run CMake
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: vcpkg
-          configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release', '-DUSE_QT_VERSION=6', '-DBUILD_PYTHON=false', '-DVCPKG_APPLOCAL_DEPS=ON', '-DBUILD_TESTING=OFF',]"
-          buildPreset: vcpkg
+          configurePreset: ${{ matrix.configure_preset }}
+          configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release', '-DUSE_QT_VERSION=6', '-DBUILD_PYTHON=false', '-DVCPKG_TARGET_TRIPLET=${{ matrix.vcpkg_triplet }}', '-DVCPKG_APPLOCAL_DEPS=ON', '-DBUILD_TESTING=OFF',]"
+          buildPreset: ${{ matrix.build_preset }}
           buildPresetAdditionalArgs: "['--config Release']"
           # Prevent false-positive "File not found" warnings from broad default log regexes.
           logCollectionRegExps: "a^"
@@ -72,7 +92,7 @@ jobs:
         run: Get-ChildItem -Recurse -Path build\\bin\\* -Include *.exe, *.dll | Copy-Item -Destination release\\
 
       - name: Copy Qt plugins to release directory
-        run: Copy-Item -Recurse -Exclude *.pdb -Path build\\vcpkg_installed\\x64-windows\\Qt6\\plugins\\* -Destination release\\
+        run: Copy-Item -Recurse -Exclude *.pdb -Path build\\vcpkg_installed\\${{ matrix.vcpkg_triplet }}\\Qt6\\plugins\\* -Destination release\\
 
       - name: Copy license files to release directory
         run: |
@@ -92,7 +112,7 @@ jobs:
           "sqlite3", `
           "zlib", `
           "zstd" | ForEach-Object {
-            $copyright = "build\\vcpkg_installed\\x64-windows\\share\\$($_)\\copyright"
+            $copyright = "build\\vcpkg_installed\\${{ matrix.vcpkg_triplet }}\\share\\$($_)\\copyright"
             if (Test-Path $copyright) {
               Copy-Item -Path $copyright -Destination release\\LICENSES\\copyright-$($_)
             }
@@ -108,6 +128,7 @@ jobs:
           }
 
       - name: Download and copy FFmpeg to release directory
+        if: matrix.bundle_external_tools == true
         run: |
           Invoke-WebRequest "${{ env.FFMPEG_URL }}" -OutFile ffmpeg.zip
           Expand-Archive .\\ffmpeg.zip -DestinationPath .
@@ -115,6 +136,7 @@ jobs:
           Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\LICENSE -Destination release\\LICENSES\\copyright-ffmpeg
 
       - name: Download and copy FLAC to release directory
+        if: matrix.bundle_external_tools == true
         run: |
           Invoke-WebRequest "${{ env.FLAC_URL }}" -OutFile flac.zip
           Expand-Archive .\\flac.zip -DestinationPath .
@@ -126,7 +148,7 @@ jobs:
       - name: Split oversized repository cache archives for git compatibility
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         run: |
-          $cacheRoot = "${{ github.workspace }}\ci\cache\vcpkg\windows-x64"
+          $cacheRoot = "${{ github.workspace }}\ci\cache\vcpkg\${{ matrix.cache_subdir }}"
           $chunkSize = 95MB
           Get-ChildItem -Recurse -Path $cacheRoot -Filter "*.zip" | Where-Object { $_.Length -gt $chunkSize } | ForEach-Object {
             $zipPath = $_.FullName
@@ -158,7 +180,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config http.version HTTP/1.1
           git config http.postBuffer 524288000
-          git add ci/cache/vcpkg/windows-x64
+          git add ci/cache/vcpkg/${{ matrix.cache_subdir }}
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) {
             Write-Host "No repository cache updates to commit."
@@ -189,6 +211,6 @@ jobs:
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tbc-tools_windows_x86_64
+          name: ${{ matrix.artifact_name }}
           path: release
           if-no-files-found: error
