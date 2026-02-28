@@ -10,6 +10,8 @@
  ******************************************************************************/
 
 #include <limits>
+#include <QDir>
+#include <QStringList>
 
 #include "tbcsource.h"
 #include "tbc/logging.h"
@@ -31,9 +33,10 @@ TbcSource::TbcSource(QObject *parent) : QObject(parent)
 // Public methods -----------------------------------------------------------------------------------------------------
 
 // Method to load a TBC source file
-void TbcSource::loadSource(QString sourceFilename)
+void TbcSource::loadSource(QString sourceFilename, QString metadataFilename)
 {
     resetState();
+    requestedMetadataFilename = metadataFilename;
 
     // Set the current file name
     QFileInfo inFileInfo(sourceFilename);
@@ -48,6 +51,33 @@ void TbcSource::loadSource(QString sourceFilename)
     future = QtConcurrent::run(this, &TbcSource::startBackgroundLoad, sourceFilename);
 #else
     future = QtConcurrent::run(&TbcSource::startBackgroundLoad, this, sourceFilename);
+#endif
+    watcher.setFuture(future);
+}
+
+// Method to load a metadata file without a TBC source
+void TbcSource::loadMetadata(QString metadataFilename, QString displayFilename)
+{
+    resetState();
+    metadataOnly = true;
+
+    if (displayFilename.isEmpty()) {
+        displayFilename = metadataFilename;
+    }
+
+    // Set the current file name for display purposes
+    QFileInfo inFileInfo(displayFilename);
+    currentSourceFilename = inFileInfo.fileName();
+    tbcDebugStream() << "TbcSource::loadMetadata(): Opening metadata file:" << displayFilename;
+
+    // Set up and fire-off background loading thread
+    tbcDebugStream() << "TbcSource::loadMetadata(): Setting up background loader thread";
+    disconnect(&watcher, &QFutureWatcher<bool>::finished, nullptr, nullptr);
+    connect(&watcher, &QFutureWatcher<bool>::finished, this, &TbcSource::finishBackgroundLoad);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    future = QtConcurrent::run(this, &TbcSource::startBackgroundLoadMetadata, metadataFilename, displayFilename);
+#else
+    future = QtConcurrent::run(&TbcSource::startBackgroundLoadMetadata, this, metadataFilename, displayFilename);
 #endif
     watcher.setFuture(future);
 }
@@ -76,21 +106,31 @@ void TbcSource::saveSourceMetadata()
 }
 
 // Method returns true is a TBC source is loaded
-bool TbcSource::getIsSourceLoaded()
+bool TbcSource::getIsSourceLoaded() const
 {
     return sourceReady;
 }
 
+bool TbcSource::getIsMetadataOnly() const
+{
+    return metadataOnly;
+}
+
 // Method returns the filename of the current TBC source
-QString TbcSource::getCurrentSourceFilename()
+QString TbcSource::getCurrentSourceFilename() const
 {
     if (!sourceReady) return QString();
-
     return currentSourceFilename;
 }
 
+QString TbcSource::getCurrentMetadataFilename() const
+{
+    if (!sourceReady) return QString();
+    return currentMetadataFilename;
+}
+
 // Return a description of the last IO error
-QString TbcSource::getLastIOError()
+QString TbcSource::getLastIOError() const
 {
     return lastIOError;
 }
@@ -140,55 +180,55 @@ void TbcSource::setCombine(bool _state)
 }
 
 // Method to get the state of the highlight dropouts mode
-bool TbcSource::getHighlightDropouts()
+bool TbcSource::getHighlightDropouts() const
 {
     return dropoutsOn;
 }
 
 // Method to get the state of the chroma decoder mode
-bool TbcSource::getChromaDecoder()
+bool TbcSource::getChromaDecoder() const
 {
     return chromaOn;
 }
 
 // Method to get the view mode
-TbcSource::ViewMode TbcSource::getViewMode()
+TbcSource::ViewMode TbcSource::getViewMode() const
 {
     return viewMode;
 }
 
 // Method to determine if frame view is enabled
-bool TbcSource::getFrameViewEnabled()
+bool TbcSource::getFrameViewEnabled() const
 {
     return viewMode == ViewMode::FRAME_VIEW;
 }
 
 // Method to determine if field view is enabled
-bool TbcSource::getFieldViewEnabled()
+bool TbcSource::getFieldViewEnabled() const
 {
     return viewMode == ViewMode::FIELD_VIEW;
 }
 
 // Method to determine if split view is enabled
-bool TbcSource::getSplitViewEnabled()
+bool TbcSource::getSplitViewEnabled() const
 {
     return viewMode == ViewMode::SPLIT_VIEW;
 }
 
 // Method to get the state of the stretch field mode
-bool TbcSource::getStretchField()
+bool TbcSource::getStretchField() const
 {
     return stretchFieldOn;
 }
 
 // Method to get the field order
-bool TbcSource::getFieldOrder()
+bool TbcSource::getFieldOrder() const
 {
     return reverseFoOn;
 }
 
 // Return the source mode
-TbcSource::SourceMode TbcSource::getSourceMode()
+TbcSource::SourceMode TbcSource::getSourceMode() const
 {
     return sourceMode;
 }
@@ -239,6 +279,7 @@ void TbcSource::load(qint32 frameNumber, qint32 fieldNumber)
 // Method to get a QImage from a field or frame number
 QImage TbcSource::getImage()
 {
+    if (metadataOnly) return QImage();
     if ((getFieldViewEnabled() ? loadedFieldNumber : loadedFrameNumber) == -1) return QImage();
 
     // Check cached QImage
@@ -328,42 +369,42 @@ QImage TbcSource::getImage()
 }
 
 // Method to get the number of available frames
-qint32 TbcSource::getNumberOfFrames()
+qint32 TbcSource::getNumberOfFrames() const
 {
     if (!sourceReady) return 0;
     return ldDecodeMetaData.getNumberOfFrames();
 }
 
 // Method to get the number of available fields
-qint32 TbcSource::getNumberOfFields()
+qint32 TbcSource::getNumberOfFields() const
 {
     if (!sourceReady) return 0;
     return ldDecodeMetaData.getNumberOfFields();
 }
 
 // Method returns true if the TBC source is anamorphic (false for 4:3)
-bool TbcSource::getIsWidescreen()
+bool TbcSource::getIsWidescreen() const
 {
     if (!sourceReady) return false;
     return ldDecodeMetaData.getVideoParameters().isWidescreen;
 }
 
 // Return the source's VideoSystem
-VideoSystem TbcSource::getSystem()
+VideoSystem TbcSource::getSystem() const
 {
     if (!sourceReady) return NTSC;
     return ldDecodeMetaData.getVideoParameters().system;
 }
 
 // Return the source's VideoSystem description
-QString TbcSource::getSystemDescription()
+QString TbcSource::getSystemDescription() const
 {
     if (!sourceReady) return "None";
     return ldDecodeMetaData.getVideoSystemDescription();
 }
 
 // Method to get the frame height in scanlines
-qint32 TbcSource::getFrameHeight()
+qint32 TbcSource::getFrameHeight() const
 {
     if (!sourceReady) return 0;
 
@@ -375,7 +416,7 @@ qint32 TbcSource::getFrameHeight()
 }
 
 // Method to get the frame width in dots
-qint32 TbcSource::getFrameWidth()
+qint32 TbcSource::getFrameWidth() const
 {
     if (!sourceReady) return 0;
 
@@ -418,7 +459,7 @@ qint32 TbcSource::getGraphDataSize()
 }
 
 // Method returns true if frame contains dropouts
-bool TbcSource::getIsDropoutPresent()
+bool TbcSource::getIsDropoutPresent() const
 {
     if (loadedFrameNumber == -1) return false;
 
@@ -430,6 +471,7 @@ bool TbcSource::getIsDropoutPresent()
 // Get the decoded ComponentFrame for the current frame
 const ComponentFrame &TbcSource::getComponentFrame()
 {
+    if (metadataOnly) return metadataOnlyFrame;
     // Load and decode SourceFields for the current frame
     loadInputFields();
     decodeFrame();
@@ -438,7 +480,7 @@ const ComponentFrame &TbcSource::getComponentFrame()
 }
 
 // Get the VideoParameters for the current source
-const LdDecodeMetaData::VideoParameters &TbcSource::getVideoParameters()
+const LdDecodeMetaData::VideoParameters &TbcSource::getVideoParameters() const
 {
     return ldDecodeMetaData.getVideoParameters();
 }
@@ -458,6 +500,7 @@ void TbcSource::setVideoParameters(const LdDecodeMetaData::VideoParameters &vide
 // Get scan line data from the field/frame
 TbcSource::ScanLineData TbcSource::getScanLineData(qint32 scanLine)
 {
+    if (metadataOnly) return ScanLineData();
     if (loadedFrameNumber == -1) return ScanLineData();
 
     ScanLineData scanLineData;
@@ -639,20 +682,20 @@ bool TbcSource::getIsFrameVitcValid()
 }
 
 // Method to get the field number of the first field of the frame
-qint32 TbcSource::getFirstFieldNumber()
+qint32 TbcSource::getFirstFieldNumber() const
 {
     if (loadedFrameNumber == -1) return 0;
     return firstFieldNumber;
 }
 
 // Method to get the field number of the second field of the frame
-qint32 TbcSource::getSecondFieldNumber()
+qint32 TbcSource::getSecondFieldNumber() const
 {
     if (loadedFrameNumber == -1) return 0;
     return secondFieldNumber;
 }
 
-qint32 TbcSource::getCcData0()
+qint32 TbcSource::getCcData0() const
 {
     if (loadedFrameNumber == -1) return 0;
 
@@ -660,7 +703,7 @@ qint32 TbcSource::getCcData0()
     return secondField.closedCaption.data0;
 }
 
-qint32 TbcSource::getCcData1()
+qint32 TbcSource::getCcData1() const
 {
     if (loadedFrameNumber == -1) return 0;
 
@@ -681,22 +724,22 @@ void TbcSource::setChromaConfiguration(const PalColour::Configuration &_palConfi
     configureChromaDecoder();
 }
 
-const PalColour::Configuration &TbcSource::getPalConfiguration()
+const PalColour::Configuration &TbcSource::getPalConfiguration() const
 {
     return palConfiguration;
 }
 
-const Comb::Configuration &TbcSource::getNtscConfiguration()
+const Comb::Configuration &TbcSource::getNtscConfiguration() const
 {
     return ntscConfiguration;
 }
 
-const MonoDecoder::MonoConfiguration &TbcSource::getMonoConfiguration()
+const MonoDecoder::MonoConfiguration &TbcSource::getMonoConfiguration() const
 {
     return monoConfiguration;
 }
 
-const OutputWriter::Configuration &TbcSource::getOutputConfiguration()
+const OutputWriter::Configuration &TbcSource::getOutputConfiguration() const
 {
     return outputConfiguration;
 }
@@ -758,6 +801,8 @@ void TbcSource::resetState()
     reverseFoOn = false;
     sourceReady = false;
     sourceMode = ONE_SOURCE;
+    metadataOnly = false;
+    requestedMetadataFilename.clear();
 
     // Cache state
     loadedFrameNumber = -1;
@@ -797,9 +842,73 @@ void TbcSource::configureChromaDecoder()
     outputWriter.updateConfiguration(videoParameters, outputConfiguration);
 }
 
+void TbcSource::applyChromaSettingsFromMetadata(const LdDecodeMetaData::VideoParameters &videoParameters)
+{
+    if (videoParameters.chromaGain >= 0.0) {
+        palConfiguration.chromaGain = videoParameters.chromaGain;
+        ntscConfiguration.chromaGain = videoParameters.chromaGain;
+    }
+
+    if (videoParameters.chromaPhase != -1.0) {
+        palConfiguration.chromaPhase = videoParameters.chromaPhase;
+        ntscConfiguration.chromaPhase = videoParameters.chromaPhase;
+    }
+
+    if (videoParameters.lumaNR >= 0.0) {
+        palConfiguration.yNRLevel = videoParameters.lumaNR;
+        ntscConfiguration.yNRLevel = videoParameters.lumaNR;
+        monoConfiguration.yNRLevel = videoParameters.lumaNR;
+    }
+    if (videoParameters.ntscAdaptive != -1) {
+        ntscConfiguration.adaptive = (videoParameters.ntscAdaptive == 1);
+    }
+
+    if (videoParameters.ntscAdaptThreshold >= 0.0) {
+        ntscConfiguration.adaptThreshold = videoParameters.ntscAdaptThreshold;
+    }
+
+    if (videoParameters.ntscChromaWeight >= 0.0) {
+        ntscConfiguration.chromaWeight = videoParameters.ntscChromaWeight;
+    }
+
+    if (videoParameters.ntscPhaseCompensation != -1) {
+        ntscConfiguration.phaseCompensation = (videoParameters.ntscPhaseCompensation == 1);
+    }
+
+    if (videoParameters.palTransformThreshold >= 0.0) {
+        palConfiguration.transformThreshold = videoParameters.palTransformThreshold;
+    }
+
+    if (!videoParameters.chromaDecoder.isEmpty()) {
+        const QString decoder = videoParameters.chromaDecoder.toLower();
+        if (videoParameters.system == PAL || videoParameters.system == PAL_M) {
+            if (decoder == "pal2d") {
+                palConfiguration.chromaFilter = PalColour::palColourFilter;
+            } else if (decoder == "transform2d") {
+                palConfiguration.chromaFilter = PalColour::transform2DFilter;
+            } else if (decoder == "transform3d") {
+                palConfiguration.chromaFilter = PalColour::transform3DFilter;
+            } else if (decoder == "mono") {
+                palConfiguration.chromaFilter = PalColour::mono;
+            }
+        } else if (videoParameters.system == NTSC) {
+            if (decoder == "ntsc1d") {
+                ntscConfiguration.dimensions = 1;
+            } else if (decoder == "ntsc2d") {
+                ntscConfiguration.dimensions = 2;
+            } else if (decoder == "ntsc3d") {
+                ntscConfiguration.dimensions = 3;
+            } else if (decoder == "mono") {
+                ntscConfiguration.dimensions = 0;
+            }
+        }
+    }
+}
+
 // Ensure the SourceFields for the current frame are loaded
 void TbcSource::loadInputFields()
 {
+    if (metadataOnly) return;
     if (inputFieldsValid) return;
 
     // Work out how many frames ahead/behind we need to fetch
@@ -853,6 +962,7 @@ void TbcSource::loadInputFields()
 // Ensure the current frame has been decoded
 void TbcSource::decodeFrame()
 {
+    if (metadataOnly) return;
     if (decodedFrameValid) return;
 
     loadInputFields();
@@ -1194,40 +1304,138 @@ void TbcSource::generateData()
 bool TbcSource::startBackgroundLoad(QString sourceFilename)
 {
     // Open the TBC metadata file
-    tbcDebugStream() << "TbcSource::startBackgroundLoad(): Processing SQLite metadata...";
-    emit busy("Processing SQLite metadata...");
+    tbcDebugStream() << "TbcSource::startBackgroundLoad(): Processing metadata...";
+    emit busy("Processing metadata...");
 
-    QString metadataFileName = sourceFilename + ".db";
+    const QFileInfo sourceInfo(sourceFilename);
+    const QString sourceFileName = sourceInfo.fileName();
+    const QString sourceDir = sourceInfo.absolutePath();
+    const QString lowerSourceFileName = sourceFileName.toLower();
+    const bool isSuffixChroma = lowerSourceFileName.endsWith("_chroma.tbc");
+    const bool isPrefixChroma = lowerSourceFileName.startsWith("chroma_") && lowerSourceFileName.endsWith(".tbc");
+    const bool isYtbc = lowerSourceFileName.endsWith(".ytbc");
+    const bool isCtbc = lowerSourceFileName.endsWith(".ctbc");
+    const bool isTbcy = lowerSourceFileName.endsWith(".tbcy");
+    const bool isTbcc = lowerSourceFileName.endsWith(".tbcc");
+    const bool isAltChroma = isCtbc || isTbcc;
+    const bool isAltLuma = isYtbc || isTbcy;
+    const bool isChromaTbc = isSuffixChroma || isPrefixChroma || isAltChroma;
 
-    const bool isChromaTbc = sourceFilename.endsWith("_chroma.tbc");
-    if (isChromaTbc && !QFileInfo::exists(metadataFileName)) {
-        // The user specified a _chroma.tbc file, and it doesn't have a .db.
+    QString lumaFilename = sourceFilename;
+    QString chromaSourceFilename;
 
-        // The corresponding luma file should have a .db, so use that.
-        QString baseFilename = sourceFilename;
-        baseFilename.chop(11);
-        metadataFileName = baseFilename + ".tbc.db";
-
-        // But does the luma file itself exist?
-        QString lumaFilename = baseFilename + ".tbc";
-        if (QFileInfo::exists(lumaFilename)) {
-            // Yes. Open both of them, defaulting to the chroma view.
-            sourceFilename = lumaFilename;
+    if (isSuffixChroma) {
+        const QString baseName = sourceFileName.left(sourceFileName.size() - QString("_chroma.tbc").size());
+        lumaFilename = QDir(sourceDir).filePath(baseName + ".tbc");
+        chromaSourceFilename = sourceFilename;
+    } else if (isPrefixChroma) {
+        const QString lumaFileName = sourceFileName.mid(QString("chroma_").size());
+        lumaFilename = QDir(sourceDir).filePath(lumaFileName);
+        chromaSourceFilename = sourceFilename;
+    } else if (isAltChroma) {
+        const QString baseName = sourceInfo.completeBaseName();
+        const QString lumaExtension = isCtbc ? QStringLiteral(".ytbc") : QStringLiteral(".tbcy");
+        lumaFilename = QDir(sourceDir).filePath(baseName + lumaExtension);
+        chromaSourceFilename = sourceFilename;
+    } else {
+        const QString baseName = sourceInfo.completeBaseName();
+        if (isAltLuma) {
+            const QString chromaExtension = isYtbc ? QStringLiteral(".ctbc") : QStringLiteral(".tbcc");
+            const QString chromaCandidate = QDir(sourceDir).filePath(baseName + chromaExtension);
+            if (QFileInfo::exists(chromaCandidate)) {
+                chromaSourceFilename = chromaCandidate;
+            }
+        } else {
+            const QString suffixCandidate = QDir(sourceDir).filePath(baseName + "_chroma.tbc");
+            const QString prefixCandidate = QDir(sourceDir).filePath("chroma_" + baseName + ".tbc");
+            const QString ctbcCandidate = QDir(sourceDir).filePath(baseName + ".ctbc");
+            const QString tbccCandidate = QDir(sourceDir).filePath(baseName + ".tbcc");
+            if (QFileInfo::exists(suffixCandidate)) {
+                chromaSourceFilename = suffixCandidate;
+            } else if (QFileInfo::exists(prefixCandidate)) {
+                chromaSourceFilename = prefixCandidate;
+            } else if (QFileInfo::exists(ctbcCandidate)) {
+                chromaSourceFilename = ctbcCandidate;
+            } else if (QFileInfo::exists(tbccCandidate)) {
+                chromaSourceFilename = tbccCandidate;
+            }
         }
+    }
+    auto metadataCandidatesForFile = [](const QFileInfo &info) {
+        QStringList candidates;
+        candidates << (info.filePath() + QStringLiteral(".db"));
+        candidates << (info.filePath() + QStringLiteral(".json"));
+        const QString suffix = info.suffix().toLower();
+        if (suffix == QLatin1String("ytbc")
+            || suffix == QLatin1String("ctbc")
+            || suffix == QLatin1String("tbcy")
+            || suffix == QLatin1String("tbcc")) {
+            const QString altDbCandidate = QDir(info.absolutePath())
+                                               .filePath(info.completeBaseName() + QStringLiteral(".tbc.db"));
+            if (!candidates.contains(altDbCandidate)) {
+                candidates << altDbCandidate;
+            }
+            const QString altJsonCandidate = QDir(info.absolutePath())
+                                                 .filePath(info.completeBaseName() + QStringLiteral(".tbc.json"));
+            if (!candidates.contains(altJsonCandidate)) {
+                candidates << altJsonCandidate;
+            }
+        }
+        return candidates;
+    };
+
+    QString metadataFileName;
+    QStringList metadataCandidates = metadataCandidatesForFile(QFileInfo(sourceFilename));
+    if (isChromaTbc && lumaFilename != sourceFilename) {
+        const QStringList lumaCandidates = metadataCandidatesForFile(QFileInfo(lumaFilename));
+        for (const QString &candidate : lumaCandidates) {
+            if (!metadataCandidates.contains(candidate)) {
+                metadataCandidates << candidate;
+            }
+        }
+    }
+    if (!requestedMetadataFilename.isEmpty()) {
+        QFileInfo requestedInfo(requestedMetadataFilename);
+        QString requestedPath = requestedMetadataFilename;
+        if (requestedInfo.isRelative()) {
+            requestedPath = QDir(sourceDir).filePath(requestedMetadataFilename);
+        }
+        if (QFileInfo::exists(requestedPath)) {
+            metadataFileName = requestedPath;
+        }
+    }
+
+    if (metadataFileName.isEmpty()) {
+        for (const QString &candidate : metadataCandidates) {
+            if (QFileInfo::exists(candidate)) {
+                metadataFileName = candidate;
+                break;
+            }
+        }
+        if (metadataFileName.isEmpty()) {
+            metadataFileName = metadataCandidates.first();
+        }
+    }
+
+    if (isChromaTbc && QFileInfo::exists(lumaFilename)) {
+        // Open both of them, defaulting to the chroma view.
+        sourceFilename = lumaFilename;
     }
 
     if (!ldDecodeMetaData.read(metadataFileName)) {
         // Open failed
-        qWarning() << "Open TBC SQLite metadata failed for filename" << metadataFileName;
+        qWarning() << "Open TBC metadata failed for filename" << metadataFileName;
         currentSourceFilename.clear();
 
         // Show an error to the user and give up
-        lastIOError = "Could not load source TBC SQLite metadata file";
+        lastIOError = "Could not load source TBC metadata file";
         return false;
     }
 
     // Get the video parameters from the metadata
     LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    applyChromaSettingsFromMetadata(videoParameters);
+    metadataOnlyFrame.init(videoParameters);
 
     // Open the new source video
     tbcDebugStream() << "TbcSource::startBackgroundLoad(): Loading TBC file...";
@@ -1242,11 +1450,10 @@ bool TbcSource::startBackgroundLoad(QString sourceFilename)
         return false;
     }
 
-    // Is there a separate _chroma.tbc file?
-    QString chromaSourceFilename = sourceFilename;
-    chromaSourceFilename.chop(4);
-    chromaSourceFilename += "_chroma.tbc";
-    if (QFileInfo::exists(chromaSourceFilename)) {
+    // Is there a separate chroma TBC file?
+    if (!chromaSourceFilename.isEmpty()
+        && chromaSourceFilename != sourceFilename
+        && QFileInfo::exists(chromaSourceFilename)) {
         // Yes! Open it.
         tbcDebugStream() << "TbcSource::startBackgroundLoad(): Loading chroma TBC file...";
         emit busy("Loading chroma TBC file...");
@@ -1287,6 +1494,39 @@ bool TbcSource::startBackgroundLoad(QString sourceFilename)
     return true;
 }
 
+bool TbcSource::startBackgroundLoadMetadata(QString metadataFilename, QString displayFilename)
+{
+
+    // Open the metadata file
+    tbcDebugStream() << "TbcSource::startBackgroundLoadMetadata(): Processing metadata...";
+    emit busy("Processing metadata...");
+
+    if (!ldDecodeMetaData.read(metadataFilename)) {
+        qWarning() << "Open metadata failed for filename" << metadataFilename;
+        currentSourceFilename.clear();
+        lastIOError = "Could not load metadata file";
+        return false;
+    }
+
+    // Get the video parameters from the metadata
+    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    applyChromaSettingsFromMetadata(videoParameters);
+    metadataOnlyFrame.init(videoParameters);
+
+    sourceReady = true;
+    currentMetadataFilename = metadataFilename;
+    currentSourceFilename = displayFilename;
+    sourceMode = ONE_SOURCE;
+
+    configureChromaDecoder();
+
+    // Analyse the metadata
+    emit busy("Generating graph data and chapter map...");
+    generateData();
+
+    return true;
+}
+
 void TbcSource::finishBackgroundLoad()
 {
     // Send a finished loading message to the main window
@@ -1296,7 +1536,7 @@ void TbcSource::finishBackgroundLoad()
 bool TbcSource::startBackgroundSave(QString metadataFilename)
 {
     tbcDebugStream() << "TbcSource::startBackgroundSave(): Saving to" << metadataFilename;
-    emit busy("Saving SQLite metadata...");
+    emit busy("Saving metadata...");
 
     // The general idea here is that decoding takes a long time -- so we want
     // to be careful not to destroy the user's only copy of their metadata file if
@@ -1306,7 +1546,7 @@ bool TbcSource::startBackgroundSave(QString metadataFilename)
     QString newMetadataFilename = metadataFilename + ".new";
     if (!ldDecodeMetaData.write(newMetadataFilename)) {
         // Writing failed
-        lastIOError = "Could not write to new SQLite file";
+        lastIOError = "Could not write to new metadata file";
         return false;
     }
 
@@ -1316,14 +1556,14 @@ bool TbcSource::startBackgroundSave(QString metadataFilename)
     if (!QFile::exists(backupFilename)) {
         if (!QFile::rename(metadataFilename, metadataFilename + ".bup")) {
             // Renaming failed
-            lastIOError = "Could not rename existing SQLite file to backup";
+            lastIOError = "Could not rename existing metadata file to backup";
             return false;
         }
     } else {
         // There is a backup, so it's safe to remove the existing file
         if (!QFile::remove(metadataFilename)) {
             // Deleting failed
-            lastIOError = "Could not remove existing SQLite file";
+            lastIOError = "Could not remove existing metadata file";
             return false;
         }
     }
@@ -1331,7 +1571,7 @@ bool TbcSource::startBackgroundSave(QString metadataFilename)
     // Rename the new file to the target name
     if (!QFile::rename(newMetadataFilename, metadataFilename)) {
         // Renaming failed
-        lastIOError = "Could not rename new SQLite file to target name";
+        lastIOError = "Could not rename new metadata file to target name";
         return false;
     }
 

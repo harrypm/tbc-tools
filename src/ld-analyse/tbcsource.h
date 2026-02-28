@@ -54,21 +54,24 @@ public:
         bool isActiveLine;
     };
 
-    void loadSource(QString inputFileName);
+    void loadSource(QString inputFileName, QString metadataFilename = QString());
+    void loadMetadata(QString metadataFilename, QString displayFilename = QString());
     void unloadSource();
-    bool getIsSourceLoaded();
+    bool getIsSourceLoaded() const;
+    bool getIsMetadataOnly() const;
     void saveSourceMetadata();
-    QString getCurrentSourceFilename();
-    QString getLastIOError();
+    QString getCurrentSourceFilename() const;
+    QString getCurrentMetadataFilename() const;
+    QString getLastIOError() const;
 
     void setHighlightDropouts(bool _state);
     void setChromaDecoder(bool _state);
     void setFieldView(bool _state);
     void setFieldOrder(bool _state);
 	void setCombine(bool _state);
-    bool getHighlightDropouts();
-    bool getChromaDecoder();
-    bool getFieldOrder();
+    bool getHighlightDropouts() const;
+    bool getChromaDecoder() const;
+    bool getFieldOrder() const;
 
     enum ViewMode {
         FRAME_VIEW,
@@ -78,11 +81,11 @@ public:
     void setViewMode(ViewMode viewMode);
     void setStretchField(bool _stretch);
 
-    ViewMode getViewMode();
-    bool getFrameViewEnabled();
-    bool getFieldViewEnabled();
-    bool getSplitViewEnabled();
-    bool getStretchField();
+    ViewMode getViewMode() const;
+    bool getFrameViewEnabled() const;
+    bool getFieldViewEnabled() const;
+    bool getSplitViewEnabled() const;
+    bool getStretchField() const;
 
     enum SourceMode {
         ONE_SOURCE,
@@ -90,19 +93,19 @@ public:
         CHROMA_SOURCE,
         BOTH_SOURCES,
     };
-    SourceMode getSourceMode();
+    SourceMode getSourceMode() const;
     void setSourceMode(SourceMode sourceMode);
 
     void load(qint32 frameNumber, qint32 fieldNumber);
 
     QImage getImage();
-    qint32 getNumberOfFrames();
-    qint32 getNumberOfFields();
-    bool getIsWidescreen();
-    VideoSystem getSystem();
-    QString getSystemDescription();
-    qint32 getFrameHeight();
-    qint32 getFrameWidth();
+    qint32 getNumberOfFrames() const;
+    qint32 getNumberOfFields() const;
+    bool getIsWidescreen() const;
+    VideoSystem getSystem() const;
+    QString getSystemDescription() const;
+    qint32 getFrameHeight() const;
+    qint32 getFrameWidth() const;
 
     VbiDecoder::Vbi getFrameVbi();
     bool getIsFrameVbiValid();
@@ -117,26 +120,26 @@ public:
     QVector<double> getVisibleDropOutGraphData();
     qint32 getGraphDataSize();
 
-    bool getIsDropoutPresent();
+    bool getIsDropoutPresent() const;
 
-    const LdDecodeMetaData::VideoParameters &getVideoParameters();
+    const LdDecodeMetaData::VideoParameters &getVideoParameters() const;
     void setVideoParameters(const LdDecodeMetaData::VideoParameters &videoParameters);
 
     const ComponentFrame &getComponentFrame();
     ScanLineData getScanLineData(qint32 scanLine);
 
-    qint32 getFirstFieldNumber();
-    qint32 getSecondFieldNumber();
+    qint32 getFirstFieldNumber() const;
+    qint32 getSecondFieldNumber() const;
 
-    qint32 getCcData0();
-    qint32 getCcData1();
+    qint32 getCcData0() const;
+    qint32 getCcData1() const;
 
     void setChromaConfiguration(const PalColour::Configuration &palConfiguration, const Comb::Configuration &ntscConfiguration,
                                 const OutputWriter::Configuration &outputConfiguration);
-    const PalColour::Configuration &getPalConfiguration();
-    const Comb::Configuration &getNtscConfiguration();
-    const MonoDecoder::MonoConfiguration &getMonoConfiguration();
-    const OutputWriter::Configuration &getOutputConfiguration();
+    const PalColour::Configuration &getPalConfiguration() const;
+    const Comb::Configuration &getNtscConfiguration() const;
+    const MonoDecoder::MonoConfiguration &getMonoConfiguration() const;
+    const OutputWriter::Configuration &getOutputConfiguration() const;
 
     qint32 startOfNextChapter(qint32 currentFrameNumber);
     qint32 startOfChapter(qint32 currentFrameNumber);
@@ -173,6 +176,7 @@ private:
     LdDecodeMetaData ldDecodeMetaData;
     QString currentSourceFilename;
     QString currentMetadataFilename;
+    QString requestedMetadataFilename;
     QString lastIOError;
 
     // Chroma decoder objects
@@ -231,7 +235,12 @@ private:
     QImage generateMonoImage();
     void generateData();
     bool startBackgroundLoad(QString sourceFilename);
+    bool startBackgroundLoadMetadata(QString metadataFilename, QString displayFilename);
     bool startBackgroundSave(QString metadataFilename);
+    void applyChromaSettingsFromMetadata(const LdDecodeMetaData::VideoParameters &videoParameters);
+
+    bool metadataOnly;
+    ComponentFrame metadataOnlyFrame;
 };
 
 #endif // TBCSOURCE_H

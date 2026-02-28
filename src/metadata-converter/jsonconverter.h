@@ -1,6 +1,6 @@
 /******************************************************************************
  * jsonconverter.h
- * ld-json-converter - JSON converter tool for ld-decode
+ * tbc-metadata-converter - Metadata converter tool for ld-decode
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2025 Simon Inns
@@ -20,16 +20,24 @@
 class JsonConverter
 {
 public:
-    JsonConverter(const QString &inputJsonFilename, const QString &outputSqliteFilename);
+    enum class Direction {
+        JsonToSqlite,
+        SqliteToJson
+    };
+
+    JsonConverter(const QString &inputFilename, const QString &outputFilename, Direction direction);
     ~JsonConverter();
 
     bool process();
 
 private:
-    QString m_inputJsonFilename;
-    QString m_outputSqliteFilename;
+    Direction m_direction;
+    QString m_inputFilename;
+    QString m_outputFilename;
     QSqlDatabase m_database;
-
+    bool processJsonToSqlite();
+    bool processSqliteToJson();
+    void reportMetadataContents(LdDecodeMetaData &metaData);
     void reportJsonContents(LdDecodeMetaData &metaData);
     void countDropouts(const LdDecodeMetaData &metaData, qint32 &totalDropouts);
     bool createDatabase();

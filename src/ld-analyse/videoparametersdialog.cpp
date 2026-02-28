@@ -22,6 +22,17 @@ VideoParametersDialog::VideoParametersDialog(QWidget *parent) :
     updateDialog();
 }
 
+void VideoParametersDialog::setShowExportBoundary(bool enabled)
+{
+    if (!ui->exportBoundaryCheckBox) {
+        return;
+    }
+
+    ui->exportBoundaryCheckBox->blockSignals(true);
+    ui->exportBoundaryCheckBox->setChecked(enabled);
+    ui->exportBoundaryCheckBox->blockSignals(false);
+}
+
 VideoParametersDialog::~VideoParametersDialog()
 {
     delete ui;
@@ -164,4 +175,9 @@ void VideoParametersDialog::on_aspectRatioButtonGroup_buttonClicked(QAbstractBut
     videoParameters.isWidescreen = (button == ui->aspectRatio169RadioButton);
     updateDialog();
     emit videoParametersChanged(videoParameters);
+}
+
+void VideoParametersDialog::on_exportBoundaryCheckBox_toggled(bool checked)
+{
+    emit exportBoundaryToggled(checked);
 }

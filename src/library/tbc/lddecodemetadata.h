@@ -23,6 +23,8 @@
 
 class SqliteReader;
 class SqliteWriter;
+class JsonReader;
+class JsonWriter;
 
 // The video system (combination of a line standard and a colour standard)
 // Note: If you update this, be sure to update VIDEO_SYSTEM_DEFAULTS also
@@ -45,6 +47,8 @@ public:
 
         void read(SqliteReader &reader, int captureId, int fieldId);
         void write(SqliteWriter &writer, int captureId, int fieldId) const;
+        void read(JsonReader &reader);
+        void write(JsonWriter &writer) const;
     };
 
     // Video metadata definition
@@ -72,6 +76,15 @@ public:
 
         bool isMapped = false;
         QString tapeFormat = "";
+        QString chromaDecoder = "";
+        double chromaGain = -1.0;
+        double chromaPhase = -1.0;
+        double lumaNR = -1.0;
+        qint32 ntscAdaptive = -1;
+        double ntscAdaptThreshold = -1.0;
+        double ntscChromaWeight = -1.0;
+        qint32 ntscPhaseCompensation = -1;
+        double palTransformThreshold = -1.0;
 
         QString gitBranch;
         QString gitCommit;
@@ -97,6 +110,8 @@ public:
 
         void read(SqliteReader &reader, int captureId);
         void write(SqliteWriter &writer, int captureId) const;
+        void read(JsonReader &reader);
+        void write(JsonWriter &writer) const;
     };
 
     // Specification for customising the range of active lines in VideoParameters.
@@ -118,6 +133,8 @@ public:
 
         void read(SqliteReader &reader, int captureId, int fieldId);
         void write(SqliteWriter &writer, int captureId, int fieldId) const;
+        void read(JsonReader &reader);
+        void write(JsonWriter &writer) const;
     };
 
     // NTSC Specific metadata definition
@@ -133,6 +150,8 @@ public:
 
         void read(SqliteReader &reader, int captureId, int fieldId, ClosedCaption &closedCaption);
         void write(SqliteWriter &writer, int captureId, int fieldId) const;
+        void read(JsonReader &reader, ClosedCaption &closedCaption);
+        void write(JsonWriter &writer) const;
     };
 
     // VITC timecode definition
@@ -145,6 +164,8 @@ public:
 
         void read(SqliteReader &reader, int captureId, int fieldId);
         void write(SqliteWriter &writer, int captureId, int fieldId) const;
+        void read(JsonReader &reader);
+        void write(JsonWriter &writer) const;
     };
 
     // Closed Caption definition
@@ -156,6 +177,8 @@ public:
 
         void read(SqliteReader &reader, int captureId, int fieldId);
         void write(SqliteWriter &writer, int captureId, int fieldId) const;
+        void read(JsonReader &reader);
+        void write(JsonWriter &writer) const;
     };
 
     // PCM sound metadata definition
@@ -170,6 +193,8 @@ public:
 
         void read(SqliteReader &reader, int captureId);
         void write(SqliteWriter &writer, int captureId) const;
+        void read(JsonReader &reader);
+        void write(JsonWriter &writer) const;
     };
 
     // Field metadata definition
@@ -196,6 +221,8 @@ public:
 
         void read(SqliteReader &reader, int captureId);
         void write(SqliteWriter &writer, int captureId) const;
+        void read(JsonReader &reader);
+        void write(JsonWriter &writer) const;
     };
 
     // CLV timecode (used by frame number conversion methods)
@@ -215,26 +242,28 @@ public:
     void clear();
     bool read(QString fileName);
     bool write(QString fileName) const;
+    void readFields(JsonReader &reader);
+    void writeFields(JsonWriter &writer) const;
     void readFields(SqliteReader &reader, int captureId);
     void writeFields(SqliteWriter &writer, int captureId) const;
 
-    const VideoParameters &getVideoParameters();
+    const VideoParameters &getVideoParameters() const;
     void setVideoParameters(const VideoParameters &videoParameters);
 
-    const PcmAudioParameters &getPcmAudioParameters();
+    const PcmAudioParameters &getPcmAudioParameters() const;
     void setPcmAudioParameters(const PcmAudioParameters &pcmAudioParam);
 
     // Handle line parameters
     void processLineParameters(LdDecodeMetaData::LineParameters &_lineParameters);
 
     // Get field metadata
-    const Field &getField(qint32 sequentialFieldNumber);
-    const VitsMetrics &getFieldVitsMetrics(qint32 sequentialFieldNumber);
-    const Vbi &getFieldVbi(qint32 sequentialFieldNumber);
-    const Ntsc &getFieldNtsc(qint32 sequentialFieldNumber);
-    const Vitc &getFieldVitc(qint32 sequentialFieldNumber);
-    const ClosedCaption &getFieldClosedCaption(qint32 sequentialFieldNumber);
-    const DropOuts &getFieldDropOuts(qint32 sequentialFieldNumber);
+    const Field &getField(qint32 sequentialFieldNumber) const;
+    const VitsMetrics &getFieldVitsMetrics(qint32 sequentialFieldNumber) const;
+    const Vbi &getFieldVbi(qint32 sequentialFieldNumber) const;
+    const Ntsc &getFieldNtsc(qint32 sequentialFieldNumber) const;
+    const Vitc &getFieldVitc(qint32 sequentialFieldNumber) const;
+    const ClosedCaption &getFieldClosedCaption(qint32 sequentialFieldNumber) const;
+    const DropOuts &getFieldDropOuts(qint32 sequentialFieldNumber) const;
 
     // Set field metadata
     void updateField(const Field &field, qint32 sequentialFieldNumber);
@@ -249,20 +278,20 @@ public:
     void appendField(const Field &field);
 
     void setNumberOfFields(qint32 numberOfFields);
-    qint32 getNumberOfFields();
-    qint32 getNumberOfFrames();
-    qint32 getFirstFieldNumber(qint32 frameNumber);
-    qint32 getSecondFieldNumber(qint32 frameNumber);
+    qint32 getNumberOfFields() const;
+    qint32 getNumberOfFrames() const;
+    qint32 getFirstFieldNumber(qint32 frameNumber) const;
+    qint32 getSecondFieldNumber(qint32 frameNumber) const;
 
     void setIsFirstFieldFirst(bool flag);
-    bool getIsFirstFieldFirst();
+    bool getIsFirstFieldFirst() const;
 
     qint32 convertClvTimecodeToFrameNumber(LdDecodeMetaData::ClvTimecode clvTimeCode);
     LdDecodeMetaData::ClvTimecode convertFrameNumberToClvTimecode(qint32 clvFrameNumber);
 
     // PCM Analogue audio helper methods
-    qint32 getFieldPcmAudioStart(qint32 sequentialFieldNumber);
-    qint32 getFieldPcmAudioLength(qint32 sequentialFieldNumber);
+    qint32 getFieldPcmAudioStart(qint32 sequentialFieldNumber) const;
+    qint32 getFieldPcmAudioLength(qint32 sequentialFieldNumber) const;
 
     // Video system helper methods
     QString getVideoSystemDescription() const;
@@ -276,7 +305,7 @@ private:
     QVector<qint32> pcmAudioFieldLengthMap;
 
     void initialiseVideoSystemParameters();
-    qint32 getFieldNumber(qint32 frameNumber, qint32 field);
+    qint32 getFieldNumber(qint32 frameNumber, qint32 field) const;
     void generatePcmAudioMap();
 };
 

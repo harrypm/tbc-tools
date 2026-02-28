@@ -1,6 +1,7 @@
 add_library(lddecode-library STATIC
     tbc/dropouts.cpp
     tbc/filters.cpp
+    tbc/jsonio.cpp
     tbc/sqliteio.cpp
     tbc/lddecodemetadata.cpp
     tbc/logging.cpp

@@ -11,6 +11,7 @@
 #include "dropouts.h"
 
 #include "sqliteio.h"
+#include "jsonio.h"
 
 #include <cassert>
 #include <QSqlQuery>
@@ -146,6 +147,73 @@ void DropOuts::write(SqliteWriter &writer, int captureId, int fieldId) const
     for (int i = 0; i < size(); i++) {
         writer.writeFieldDropouts(captureId, fieldId, startx(i), endx(i), fieldLine(i));
     }
+}
+
+// Read DropOuts from JSON
+void DropOuts::read(JsonReader &reader)
+{
+    reader.beginObject();
+
+    std::string member;
+    while (reader.readMember(member)) {
+        if (member == "endx") readArray(reader, m_endx);
+        else if (member == "fieldLine") readArray(reader, m_fieldLine);
+        else if (member == "startx") readArray(reader, m_startx);
+        else reader.discard();
+    }
+
+    if (m_endx.size() != m_fieldLine.size() || m_endx.size() != m_startx.size()) {
+        reader.throwError("dropout array sizes do not match");
+    }
+
+    reader.endObject();
+}
+
+// Write DropOuts to JSON
+void DropOuts::write(JsonWriter &writer) const
+{
+    assert(!empty());
+
+    writer.beginObject();
+
+    // Keep members in alphabetical order
+    writer.writeMember("endx");
+    writeArray(writer, m_endx);
+    writer.writeMember("fieldLine");
+    writeArray(writer, m_fieldLine);
+    writer.writeMember("startx");
+    writeArray(writer, m_startx);
+
+    writer.endObject();
+}
+
+// Read an array of values from JSON
+void DropOuts::readArray(JsonReader &reader, QVector<qint32> &array)
+{
+    array.clear();
+
+    reader.beginArray();
+
+    while (reader.readElement()) {
+        qint32 value;
+        reader.read(value);
+        array.push_back(value);
+    }
+
+    reader.endArray();
+}
+
+// Write an array of values to JSON
+void DropOuts::writeArray(JsonWriter &writer, const QVector<qint32> &array) const
+{
+    writer.beginArray();
+
+    for (auto value : array) {
+        writer.writeElement();
+        writer.write(value);
+    }
+
+    writer.endArray();
 }
 
 

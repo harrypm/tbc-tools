@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>452</width>
-    <height>177</height>
+    <height>210</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -338,6 +338,13 @@
      </layout>
     </widget>
    </item>
+  <item row="5" column="0" colspan="4">
+   <widget class="QCheckBox" name="exportBoundaryCheckBox">
+    <property name="text">
+     <string>Show export boundary</string>
+    </property>
+   </widget>
+  </item>
   </layout>
  </widget>
  <resources/>

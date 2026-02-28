@@ -17,6 +17,8 @@
 
 class SqliteReader;
 class SqliteWriter;
+class JsonReader;
+class JsonWriter;
 
 class DropOuts
 {
@@ -58,11 +60,16 @@ public:
 
     void read(SqliteReader &reader, int captureId, int fieldId);
     void write(SqliteWriter &writer, int captureId, int fieldId) const;
+    void read(JsonReader &reader);
+    void write(JsonWriter &writer) const;
 
 private:
     QVector<qint32> m_startx;
     QVector<qint32> m_endx;
     QVector<qint32> m_fieldLine;
+
+    void readArray(JsonReader &reader, QVector<qint32> &array);
+    void writeArray(JsonWriter &writer, const QVector<qint32> &array) const;
 };
 
 #endif // DROPOUTS_H

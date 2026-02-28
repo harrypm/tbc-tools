@@ -29,6 +29,7 @@
 #include <QDebug>
 #include <QtGlobal>
 #include <QCommandLineParser>
+#include <QFileInfo>
 #include <QThread>
 #include <fstream>
 #include <memory>
@@ -133,9 +134,13 @@ int main(int argc, char *argv[])
 
     // Option to specify a different metadata input file
     QCommandLineOption inputMetadataOption(QStringList() << "input-metadata",
-                                       QCoreApplication::translate("main", "Specify the input metadata file (default input.db)"),
+                                       QCoreApplication::translate("main", "Specify the input metadata file (default input.db or input.json)"),
                                        QCoreApplication::translate("main", "filename"));
     parser.addOption(inputMetadataOption);
+    QCommandLineOption inputJsonOption(QStringList() << "input-json",
+                                       QCoreApplication::translate("main", "Specify the input metadata file (legacy alias for --input-metadata)"),
+                                       QCoreApplication::translate("main", "filename"));
+    parser.addOption(inputJsonOption);
 
     // Option to select start frame (sequential) (-s)
     QCommandLineOption startFrameOption(QStringList() << "s" << "start",
@@ -309,7 +314,7 @@ int main(int argc, char *argv[])
     }
 
     // Check filename arguments are reasonable
-    if (inputFileName == "-" && !parser.isSet(inputMetadataOption)) {
+    if (inputFileName == "-" && !parser.isSet(inputMetadataOption) && !parser.isSet(inputJsonOption)) {
         // Quit with error
         qCritical("With piped input, you must also specify the input metadata file");
         return -1;
@@ -462,9 +467,25 @@ int main(int argc, char *argv[])
     }
 
     // Work out the metadata filename
-    QString inputMetadataFileName = inputFileName + ".db";
+    QString inputMetadataFileName;
+    if (parser.isSet(inputMetadataOption) && parser.isSet(inputJsonOption)) {
+        qCritical("Specify only one of --input-metadata or --input-json");
+        return -1;
+    }
     if (parser.isSet(inputMetadataOption)) {
         inputMetadataFileName = parser.value(inputMetadataOption);
+    } else if (parser.isSet(inputJsonOption)) {
+        inputMetadataFileName = parser.value(inputJsonOption);
+    } else {
+        const QString dbCandidate = inputFileName + ".db";
+        const QString jsonCandidate = inputFileName + ".json";
+        const QFileInfo dbInfo(dbCandidate);
+        const QFileInfo jsonInfo(jsonCandidate);
+        if (jsonInfo.exists() && (!dbInfo.exists() || jsonInfo.lastModified() > dbInfo.lastModified())) {
+            inputMetadataFileName = jsonCandidate;
+        } else {
+            inputMetadataFileName = dbCandidate;
+        }
     }
 
     // Load the source video metadata
@@ -481,11 +502,48 @@ int main(int argc, char *argv[])
         qInfo() << "Expected field order is reversed to second field/first field";
         metaData.setIsFirstFieldFirst(false);
     }
+    const LdDecodeMetaData::VideoParameters &videoParameters = metaData.getVideoParameters();
+    if (!parser.isSet(chromaGainOption) && !bwMode && videoParameters.chromaGain >= 0.0) {
+        palConfig.chromaGain = videoParameters.chromaGain;
+        combConfig.chromaGain = videoParameters.chromaGain;
+    }
+    if (!parser.isSet(chromaPhaseOption) && videoParameters.chromaPhase != -1.0) {
+        palConfig.chromaPhase = videoParameters.chromaPhase;
+        combConfig.chromaPhase = videoParameters.chromaPhase;
+    }
+    if (!parser.isSet(lumaNROption) && videoParameters.lumaNR >= 0.0) {
+        palConfig.yNRLevel = videoParameters.lumaNR;
+        combConfig.yNRLevel = videoParameters.lumaNR;
+        monoConfig.yNRLevel = videoParameters.lumaNR;
+    }
+    if (!parser.isSet(ntscPhaseCompOption) && videoParameters.ntscPhaseCompensation != -1) {
+        combConfig.phaseCompensation = (videoParameters.ntscPhaseCompensation == 1);
+    }
+    if (!parser.isSet(adaptThresholdOption) && videoParameters.ntscAdaptThreshold >= 0.0) {
+        combConfig.adaptThreshold = videoParameters.ntscAdaptThreshold;
+    }
+    if (!parser.isSet(chromaWeightOption) && videoParameters.ntscChromaWeight >= 0.0) {
+        combConfig.chromaWeight = videoParameters.ntscChromaWeight;
+    }
+    if (!parser.isSet(decoderOption) && videoParameters.ntscAdaptive != -1) {
+        combConfig.adaptive = (videoParameters.ntscAdaptive == 1);
+    }
+    if (!parser.isSet(transformThresholdOption) && videoParameters.palTransformThreshold >= 0.0) {
+        palConfig.transformThreshold = videoParameters.palTransformThreshold;
+    }
 
     // Work out which decoder to use
     QString decoderName;
     if (parser.isSet(decoderOption)) {
         decoderName = parser.value(decoderOption);
+    } else if (!videoParameters.chromaDecoder.isEmpty()) {
+        const QString metadataDecoder = videoParameters.chromaDecoder.toLower();
+        const QStringList validDecoders = { "pal2d", "transform2d", "transform3d", "ntsc1d", "ntsc2d", "ntsc3d", "mono" };
+        if (validDecoders.contains(metadataDecoder)) {
+            decoderName = metadataDecoder;
+        } else {
+            qWarning() << "Unknown metadata chroma decoder value:" << videoParameters.chromaDecoder;
+        }
     } else {
         // Check if video parameters are valid before accessing them
         try {

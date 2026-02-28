@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ExportReadoutDialog</class>
+ <widget class="QDialog" name="ExportReadoutDialog">
+  <property name="windowTitle">
+   <string>Export readout</string>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>360</width>
+    <height>0</height>
+   </size>
+  </property>
+  <layout class="QVBoxLayout" name="exportReadoutLayout">
+   <item>
+    <layout class="QFormLayout" name="exportReadoutFormLayout">
+     <property name="labelAlignment">
+      <set>Qt::AlignRight|Qt::AlignVCenter</set>
+     </property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="exportReadoutInputLabel">
+       <property name="text">
+        <string>Input TBC:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="exportReadoutInputValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="textInteractionFlags">
+        <set>Qt::TextSelectableByMouse</set>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="exportReadoutOutputLabel">
+       <property name="text">
+        <string>Output base:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLabel" name="exportReadoutOutputValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="textInteractionFlags">
+        <set>Qt::TextSelectableByMouse</set>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="exportReadoutProfileLabel">
+       <property name="text">
+        <string>Profile:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QLabel" name="exportReadoutProfileValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="exportReadoutAudioLabel">
+       <property name="text">
+        <string>Audio tracks:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QLabel" name="exportReadoutAudioValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="textInteractionFlags">
+        <set>Qt::TextSelectableByMouse</set>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="exportReadoutSystemLabel">
+       <property name="text">
+        <string>Video system:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="1">
+      <widget class="QLabel" name="exportReadoutSystemValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="0">
+      <widget class="QLabel" name="exportReadoutChromaDecoderLabel">
+       <property name="text">
+        <string>Chroma decoder:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="1">
+      <widget class="QLabel" name="exportReadoutChromaDecoderValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="0">
+      <widget class="QLabel" name="exportReadoutChromaGainLabel">
+       <property name="text">
+        <string>Chroma gain:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="1">
+      <widget class="QLabel" name="exportReadoutChromaGainValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="0">
+      <widget class="QLabel" name="exportReadoutChromaPhaseLabel">
+       <property name="text">
+        <string>Chroma phase:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="1">
+      <widget class="QLabel" name="exportReadoutChromaPhaseValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="8" column="0">
+      <widget class="QLabel" name="exportReadoutLumaNrLabel">
+       <property name="text">
+        <string>Luma NR:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="8" column="1">
+      <widget class="QLabel" name="exportReadoutLumaNrValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="9" column="0">
+      <widget class="QLabel" name="exportReadoutNtscAdaptiveLabel">
+       <property name="text">
+        <string>NTSC adaptive:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="9" column="1">
+      <widget class="QLabel" name="exportReadoutNtscAdaptiveValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="0">
+      <widget class="QLabel" name="exportReadoutNtscAdaptThresholdLabel">
+       <property name="text">
+        <string>NTSC adapt threshold:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="1">
+      <widget class="QLabel" name="exportReadoutNtscAdaptThresholdValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="0">
+      <widget class="QLabel" name="exportReadoutNtscChromaWeightLabel">
+       <property name="text">
+        <string>NTSC chroma weight:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="1">
+      <widget class="QLabel" name="exportReadoutNtscChromaWeightValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="12" column="0">
+      <widget class="QLabel" name="exportReadoutNtscPhaseCompLabel">
+       <property name="text">
+        <string>NTSC phase comp:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="12" column="1">
+      <widget class="QLabel" name="exportReadoutNtscPhaseCompValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="13" column="0">
+      <widget class="QLabel" name="exportReadoutPalTransformThresholdLabel">
+       <property name="text">
+        <string>PAL transform thresh:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="13" column="1">
+      <widget class="QLabel" name="exportReadoutPalTransformThresholdValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="14" column="0">
+      <widget class="QLabel" name="exportReadoutActiveLinesLabel">
+       <property name="text">
+        <string>Active lines:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="14" column="1">
+      <widget class="QLabel" name="exportReadoutActiveLinesValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="15" column="0">
+      <widget class="QLabel" name="exportReadoutStatusLabel">
+       <property name="text">
+        <string>Status:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="15" column="1">
+      <widget class="QLabel" name="exportReadoutStatusValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="16" column="0">
+      <widget class="QLabel" name="exportReadoutLastMessageLabel">
+       <property name="text">
+        <string>Last update:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="16" column="1">
+      <widget class="QLabel" name="exportReadoutLastMessageValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="exportReadoutProcessLabel">
+     <property name="text">
+      <string>Process stats:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="exportReadoutProcessTable">
+     <property name="rowCount">
+      <number>0</number>
+     </property>
+     <property name="columnCount">
+      <number>7</number>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

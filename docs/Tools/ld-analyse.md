@@ -4,7 +4,7 @@ ld-analyse is a graphical application originally designed to assist with the ana
 
 The primary file-type is TBC (time-base corrected) video files containing the raw NTSC or PAL fields.
 
-TBC files are usually identified by the `.tbc` & `_chroma.tbc` file-extensions.
+TBC files are usually identified by the `.tbc` extension, with an optional chroma companion file named `_chroma.tbc` (suffix) or `chroma_*.tbc` (prefix, as used by vhs-decode).
 
 The application also presents source and tool-chain metadata (supplied by JSON files) that provide additional details about the TBC file's contents such as VBI data and TV System.
 
@@ -375,6 +375,10 @@ Note that the difference between the white and black levels is used to adjust th
 'Display aspect ratio' allows you to choose the aspect ratio at which the video is intended to be displayed.
 
 For most video, this should be set to 4:3. You should only change it to 16:9 if your video consists of anamorphic widescreen material, filling the whole screen and compressed horizontally (e.g. "Squeeze LD" LaserDiscs).
+
+### Show export boundary
+
+The 'Show export boundary' checkbox overlays a red 4‑pixel outline around the active video/export area in the viewer. This makes it easier to see exactly what region will be exported.
 
 ## Chroma decoder configuration
 

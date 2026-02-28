@@ -66,6 +66,8 @@ public:
     bool getToggleChromaDuringSeek(void);
     void setResizeFrameWithWindow(bool resizeFrameWithWindow);
     bool getResizeFrameWithWindow(void);
+    void setShowExportBoundary(bool showExportBoundary);
+    bool getShowExportBoundary(void);
 
 signals:
 
@@ -100,6 +102,7 @@ private:
     struct ViewOptions {
         bool toggleChromaDuringSeek;
         bool resizeFrameWithWindow;
+        bool showExportBoundary;
     };
 
     // Overall settings structure

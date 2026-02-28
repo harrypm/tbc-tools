@@ -14,6 +14,7 @@
 #include <QUuid>
 #include <QDebug>
 #include <QFileInfo>
+#include <QSet>
 #include <QThread>
 #include <QStringList>
 #include "tbc/logging.h"
@@ -48,7 +49,7 @@ namespace SqliteValue
 
 // SQL schema as per documentation
 static const QString SCHEMA_SQL = R"(
-PRAGMA user_version = 1;
+PRAGMA user_version = 3;
 
 CREATE TABLE IF NOT EXISTS capture (
     capture_id INTEGER PRIMARY KEY,
@@ -77,6 +78,15 @@ CREATE TABLE IF NOT EXISTS capture (
     white_16b_ire INTEGER,
     black_16b_ire INTEGER,
     blanking_16b_ire INTEGER,
+    chroma_decoder TEXT,
+    chroma_gain REAL,
+    chroma_phase REAL,
+    luma_nr REAL,
+    ntsc_adaptive INTEGER,
+    ntsc_adapt_threshold REAL,
+    ntsc_chroma_weight REAL,
+    ntsc_phase_compensation INTEGER,
+    pal_transform_threshold REAL,
 
     capture_notes TEXT
 );
@@ -222,10 +232,23 @@ bool SqliteReader::readCaptureMetadata(int &captureId, QString &system, QString 
                                      int &fieldWidth, int &fieldHeight, int &numberOfSequentialFields,
                                      int &colourBurstStart, int &colourBurstEnd,
                                      bool &isMapped, bool &isSubcarrierLocked, bool &isWidescreen,
-                                     int &white16bIre, int &black16bIre, int &blanking16bIre, QString &captureNotes)
+                                     int &white16bIre, int &black16bIre, int &blanking16bIre,
+                                     QString &chromaDecoder, double &chromaGain, double &chromaPhase, double &lumaNR,
+                                     int &ntscAdaptive, double &ntscAdaptThreshold, double &ntscChromaWeight,
+                                     int &ntscPhaseCompensation, double &palTransformThreshold,
+                                     QString &captureNotes)
 {
     // Check if blanking_16b_ire column exists (for backward compatibility)
     bool hasBlankingColumn = false;
+    bool hasChromaDecoderColumn = false;
+    bool hasChromaGainColumn = false;
+    bool hasChromaPhaseColumn = false;
+    bool hasLumaNrColumn = false;
+    bool hasNtscAdaptiveColumn = false;
+    bool hasNtscAdaptThresholdColumn = false;
+    bool hasNtscChromaWeightColumn = false;
+    bool hasNtscPhaseCompensationColumn = false;
+    bool hasPalTransformThresholdColumn = false;
     QSqlQuery checkQuery(db);
     checkQuery.prepare("PRAGMA table_info(capture)");
     if (checkQuery.exec()) {
@@ -233,7 +256,24 @@ bool SqliteReader::readCaptureMetadata(int &captureId, QString &system, QString 
             QString columnName = checkQuery.value("name").toString();
             if (columnName == "blanking_16b_ire") {
                 hasBlankingColumn = true;
-                break;
+            } else if (columnName == "chroma_decoder") {
+                hasChromaDecoderColumn = true;
+            } else if (columnName == "chroma_gain") {
+                hasChromaGainColumn = true;
+            } else if (columnName == "chroma_phase") {
+                hasChromaPhaseColumn = true;
+            } else if (columnName == "luma_nr") {
+                hasLumaNrColumn = true;
+            } else if (columnName == "ntsc_adaptive") {
+                hasNtscAdaptiveColumn = true;
+            } else if (columnName == "ntsc_adapt_threshold") {
+                hasNtscAdaptThresholdColumn = true;
+            } else if (columnName == "ntsc_chroma_weight") {
+                hasNtscChromaWeightColumn = true;
+            } else if (columnName == "ntsc_phase_compensation") {
+                hasNtscPhaseCompensationColumn = true;
+            } else if (columnName == "pal_transform_threshold") {
+                hasPalTransformThresholdColumn = true;
             }
         }
     }
@@ -246,6 +286,33 @@ bool SqliteReader::readCaptureMetadata(int &captureId, QString &system, QString 
                        "is_widescreen, white_16b_ire, black_16b_ire";
     if (hasBlankingColumn) {
         queryStr += ", blanking_16b_ire";
+    }
+    if (hasChromaDecoderColumn) {
+        queryStr += ", chroma_decoder";
+    }
+    if (hasChromaGainColumn) {
+        queryStr += ", chroma_gain";
+    }
+    if (hasChromaPhaseColumn) {
+        queryStr += ", chroma_phase";
+    }
+    if (hasLumaNrColumn) {
+        queryStr += ", luma_nr";
+    }
+    if (hasNtscAdaptiveColumn) {
+        queryStr += ", ntsc_adaptive";
+    }
+    if (hasNtscAdaptThresholdColumn) {
+        queryStr += ", ntsc_adapt_threshold";
+    }
+    if (hasNtscChromaWeightColumn) {
+        queryStr += ", ntsc_chroma_weight";
+    }
+    if (hasNtscPhaseCompensationColumn) {
+        queryStr += ", ntsc_phase_compensation";
+    }
+    if (hasPalTransformThresholdColumn) {
+        queryStr += ", pal_transform_threshold";
     }
     queryStr += ", capture_notes FROM capture LIMIT 1";
     
@@ -287,8 +354,116 @@ bool SqliteReader::readCaptureMetadata(int &captureId, QString &system, QString 
         qWarning() << "blanking_16b_ire field not found in metadata - using black_16b_ire value";
         blanking16bIre = black16bIre;
     }
+
+    if (hasChromaDecoderColumn) {
+        chromaDecoder = query.value("chroma_decoder").toString();
+    } else {
+        chromaDecoder.clear();
+    }
+
+    if (hasChromaGainColumn) {
+        chromaGain = SqliteValue::toDoubleOrDefault(query, "chroma_gain");
+    } else {
+        chromaGain = -1.0;
+    }
+
+    if (hasChromaPhaseColumn) {
+        chromaPhase = SqliteValue::toDoubleOrDefault(query, "chroma_phase");
+    } else {
+        chromaPhase = -1.0;
+    }
+
+    if (hasLumaNrColumn) {
+        lumaNR = SqliteValue::toDoubleOrDefault(query, "luma_nr");
+    } else {
+        lumaNR = -1.0;
+    }
+
+    if (hasNtscAdaptiveColumn) {
+        ntscAdaptive = SqliteValue::toIntOrDefault(query, "ntsc_adaptive");
+    } else {
+        ntscAdaptive = -1;
+    }
+
+    if (hasNtscAdaptThresholdColumn) {
+        ntscAdaptThreshold = SqliteValue::toDoubleOrDefault(query, "ntsc_adapt_threshold");
+    } else {
+        ntscAdaptThreshold = -1.0;
+    }
+
+    if (hasNtscChromaWeightColumn) {
+        ntscChromaWeight = SqliteValue::toDoubleOrDefault(query, "ntsc_chroma_weight");
+    } else {
+        ntscChromaWeight = -1.0;
+    }
+
+    if (hasNtscPhaseCompensationColumn) {
+        ntscPhaseCompensation = SqliteValue::toIntOrDefault(query, "ntsc_phase_compensation");
+    } else {
+        ntscPhaseCompensation = -1;
+    }
+
+    if (hasPalTransformThresholdColumn) {
+        palTransformThreshold = SqliteValue::toDoubleOrDefault(query, "pal_transform_threshold");
+    } else {
+        palTransformThreshold = -1.0;
+    }
     
     captureNotes = query.value("capture_notes").toString();
+
+    return true;
+}
+static bool ensureCaptureColumns(QSqlDatabase &db)
+{
+    QSqlQuery checkQuery(db);
+    if (!checkQuery.exec("PRAGMA table_info(capture)")) {
+        qCritical() << "Failed to query capture table columns:" << checkQuery.lastError().text();
+        return false;
+    }
+
+    QSet<QString> columns;
+    while (checkQuery.next()) {
+        columns.insert(checkQuery.value("name").toString());
+    }
+
+    struct ColumnDef {
+        const char *name;
+        const char *type;
+    };
+
+    const ColumnDef requiredColumns[] = {
+        {"chroma_decoder", "TEXT"},
+        {"chroma_gain", "REAL"},
+        {"chroma_phase", "REAL"},
+        {"luma_nr", "REAL"},
+        {"ntsc_adaptive", "INTEGER"},
+        {"ntsc_adapt_threshold", "REAL"},
+        {"ntsc_chroma_weight", "REAL"},
+        {"ntsc_phase_compensation", "INTEGER"},
+        {"pal_transform_threshold", "REAL"}
+    };
+
+    bool altered = false;
+    for (const auto &column : requiredColumns) {
+        if (!columns.contains(column.name)) {
+            QSqlQuery alterQuery(db);
+            const QString alterSql = QString("ALTER TABLE capture ADD COLUMN %1 %2")
+                                         .arg(column.name)
+                                         .arg(column.type);
+            if (!alterQuery.exec(alterSql)) {
+                qCritical() << "Failed to add capture column" << column.name << ":" << alterQuery.lastError().text();
+                return false;
+            }
+            altered = true;
+        }
+    }
+
+    if (altered) {
+        QSqlQuery versionQuery(db);
+        if (!versionQuery.exec("PRAGMA user_version = 3")) {
+            qWarning() << "Failed to update SQLite user_version to 3:" << versionQuery.lastError().text();
+        }
+    }
 
     return true;
 }
@@ -542,15 +717,22 @@ int SqliteWriter::writeCaptureMetadata(const QString &system, const QString &dec
                                      int fieldWidth, int fieldHeight, int numberOfSequentialFields,
                                      int colourBurstStart, int colourBurstEnd,
                                      bool isMapped, bool isSubcarrierLocked, bool isWidescreen,
-                                     int white16bIre, int black16bIre, int blanking16bIre, const QString &captureNotes)
+                                     int white16bIre, int black16bIre, int blanking16bIre,
+                                     const QString &chromaDecoder, double chromaGain, double chromaPhase, double lumaNR,
+                                     int ntscAdaptive, double ntscAdaptThreshold, double ntscChromaWeight,
+                                     int ntscPhaseCompensation, double palTransformThreshold,
+                                     const QString &captureNotes)
 {
     QSqlQuery query(db);
     query.prepare("INSERT INTO capture (system, decoder, git_branch, git_commit, "
                  "video_sample_rate, active_video_start, active_video_end, "
                  "field_width, field_height, number_of_sequential_fields, "
                  "colour_burst_start, colour_burst_end, is_mapped, is_subcarrier_locked, "
-                 "is_widescreen, white_16b_ire, black_16b_ire, blanking_16b_ire, capture_notes) "
-                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                 "is_widescreen, white_16b_ire, black_16b_ire, blanking_16b_ire, "
+                 "chroma_decoder, chroma_gain, chroma_phase, luma_nr, "
+                 "ntsc_adaptive, ntsc_adapt_threshold, ntsc_chroma_weight, ntsc_phase_compensation, "
+                 "pal_transform_threshold, capture_notes) "
+                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     query.addBindValue(system);
     query.addBindValue(decoder);
@@ -570,6 +752,15 @@ int SqliteWriter::writeCaptureMetadata(const QString &system, const QString &dec
     query.addBindValue(white16bIre);
     query.addBindValue(black16bIre);
     query.addBindValue(blanking16bIre);
+    query.addBindValue(chromaDecoder.isEmpty() ? QVariant() : chromaDecoder);
+    query.addBindValue(chromaGain);
+    query.addBindValue(chromaPhase);
+    query.addBindValue(lumaNR);
+    query.addBindValue(ntscAdaptive);
+    query.addBindValue(ntscAdaptThreshold);
+    query.addBindValue(ntscChromaWeight);
+    query.addBindValue(ntscPhaseCompensation);
+    query.addBindValue(palTransformThreshold);
     query.addBindValue(captureNotes.isEmpty() ? QVariant() : captureNotes);
 
     if (!query.exec()) {
@@ -586,14 +777,24 @@ bool SqliteWriter::updateCaptureMetadata(int captureId, const QString &system, c
                                        int fieldWidth, int fieldHeight, int numberOfSequentialFields,
                                        int colourBurstStart, int colourBurstEnd,
                                        bool isMapped, bool isSubcarrierLocked, bool isWidescreen,
-                                       int white16bIre, int black16bIre, int blanking16bIre, const QString &captureNotes)
+                                       int white16bIre, int black16bIre, int blanking16bIre,
+                                       const QString &chromaDecoder, double chromaGain, double chromaPhase, double lumaNR,
+                                       int ntscAdaptive, double ntscAdaptThreshold, double ntscChromaWeight,
+                                       int ntscPhaseCompensation, double palTransformThreshold,
+                                       const QString &captureNotes)
 {
+    if (!ensureCaptureColumns(db)) {
+        return false;
+    }
     QSqlQuery query(db);
     query.prepare("UPDATE capture SET system=?, decoder=?, git_branch=?, git_commit=?, "
                  "video_sample_rate=?, active_video_start=?, active_video_end=?, "
                  "field_width=?, field_height=?, number_of_sequential_fields=?, "
                  "colour_burst_start=?, colour_burst_end=?, is_mapped=?, is_subcarrier_locked=?, "
-                 "is_widescreen=?, white_16b_ire=?, black_16b_ire=?, blanking_16b_ire=?, capture_notes=? "
+                 "is_widescreen=?, white_16b_ire=?, black_16b_ire=?, blanking_16b_ire=?, "
+                 "chroma_decoder=?, chroma_gain=?, chroma_phase=?, luma_nr=?, "
+                 "ntsc_adaptive=?, ntsc_adapt_threshold=?, ntsc_chroma_weight=?, ntsc_phase_compensation=?, "
+                 "pal_transform_threshold=?, capture_notes=? "
                  "WHERE capture_id=?");
 
     query.addBindValue(system);
@@ -614,6 +815,15 @@ bool SqliteWriter::updateCaptureMetadata(int captureId, const QString &system, c
     query.addBindValue(white16bIre);
     query.addBindValue(black16bIre);
     query.addBindValue(blanking16bIre);
+    query.addBindValue(chromaDecoder.isEmpty() ? QVariant() : chromaDecoder);
+    query.addBindValue(chromaGain);
+    query.addBindValue(chromaPhase);
+    query.addBindValue(lumaNR);
+    query.addBindValue(ntscAdaptive);
+    query.addBindValue(ntscAdaptThreshold);
+    query.addBindValue(ntscChromaWeight);
+    query.addBindValue(ntscPhaseCompensation);
+    query.addBindValue(palTransformThreshold);
     query.addBindValue(captureNotes.isEmpty() ? QVariant() : captureNotes);
     query.addBindValue(captureId);
 

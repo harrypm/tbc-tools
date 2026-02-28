@@ -27,7 +27,7 @@ This is the complete suite of tools for processing LaserDisc captures and TBC (T
 ### Export and Conversion Tools
 - **ld-export-metadata** - Export TBC metadata to external formats
 - **ld-lds-converter** - Convert between 10-bit and 16-bit LaserDisc sample formats
-- **ld-json-converter** - Convert between old internal JSON and new internal SQLite metadata formats
+- **tbc-metadata-converter** - Convert between old internal JSON and new internal SQLite metadata formats
 
 ### Utility Scripts
 - **ld-compress** - Compress TBC files for storage (in scripts/)

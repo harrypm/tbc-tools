@@ -13,11 +13,118 @@
 #include "ui_mainwindow.h"
 #include "tbc/logging.h"
 
-MainWindow::MainWindow(QString inputFilenameParam, QWidget *parent) :
+#include <QAbstractButton>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QIcon>
+#include <QPainter>
+#include <QPen>
+#include <QPixmap>
+#include <QSvgRenderer>
+#include <QtMath>
+#include <QUuid>
+
+#include "metadataconverterutil.h"
+namespace {
+QString chromaDecoderNameFromConfig(VideoSystem system,
+                                    const PalColour::Configuration &palConfig,
+                                    const Comb::Configuration &ntscConfig)
+{
+    const bool isPal = (system == PAL || system == PAL_M);
+    if (isPal) {
+        switch (palConfig.chromaFilter) {
+        case PalColour::palColourFilter:
+            return QStringLiteral("pal2d");
+        case PalColour::transform2DFilter:
+            return QStringLiteral("transform2d");
+        case PalColour::transform3DFilter:
+            return QStringLiteral("transform3d");
+        case PalColour::mono:
+            return QStringLiteral("mono");
+        }
+    }
+
+    if (system == NTSC) {
+        if (ntscConfig.dimensions <= 0) {
+            return QStringLiteral("mono");
+        }
+        switch (ntscConfig.dimensions) {
+        case 1:
+            return QStringLiteral("ntsc1d");
+        case 2:
+            return QStringLiteral("ntsc2d");
+        case 3:
+            return QStringLiteral("ntsc3d");
+        default:
+            break;
+        }
+    }
+
+    return QString();
+}
+
+void ensureSvgButtonIcon(QAbstractButton *button, const QString &resourcePath)
+{
+    if (!button) {
+        return;
+    }
+
+    const QSize iconSize = button->iconSize().isValid() ? button->iconSize() : QSize(24, 24);
+    QIcon icon(resourcePath);
+    if (icon.isNull() || icon.availableSizes().isEmpty()) {
+        QSvgRenderer renderer(resourcePath);
+        if (renderer.isValid()) {
+            QPixmap pixmap(iconSize);
+            pixmap.fill(Qt::transparent);
+            QPainter painter(&pixmap);
+            renderer.render(&painter);
+            icon = QIcon(pixmap);
+        }
+    }
+
+    if (!icon.isNull()) {
+        button->setIcon(icon);
+        button->setIconSize(iconSize);
+    }
+}
+
+QString formatOptionalString(const QString &value)
+{
+    return value.isEmpty() ? QStringLiteral("—") : value;
+}
+
+QString formatOptionalDouble(double value, int precision = 3)
+{
+    if (value < 0.0) {
+        return QStringLiteral("—");
+    }
+    return QString::number(value, 'f', precision);
+}
+
+
+QString formatOptionalBoolFromInt(qint32 value)
+{
+    if (value < 0) {
+        return QStringLiteral("—");
+    }
+    return value != 0 ? QStringLiteral("Yes") : QStringLiteral("No");
+}
+} // namespace
+
+MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    ensureSvgButtonIcon(ui->startPushButton, QStringLiteral(":/icons/Graphics/start-frame.svg"));
+    ensureSvgButtonIcon(ui->previousPushButton, QStringLiteral(":/icons/Graphics/prev-frame.svg"));
+    ensureSvgButtonIcon(ui->nextPushButton, QStringLiteral(":/icons/Graphics/next-frame.svg"));
+    ensureSvgButtonIcon(ui->endPushButton, QStringLiteral(":/icons/Graphics/end-frame.svg"));
+    ensureSvgButtonIcon(ui->zoomInPushButton, QStringLiteral(":/icons/Graphics/zoom-in.svg"));
+    ensureSvgButtonIcon(ui->zoomOutPushButton, QStringLiteral(":/icons/Graphics/zoom-out.svg"));
+    ensureSvgButtonIcon(ui->originalSizePushButton, QStringLiteral(":/icons/Graphics/zoom-original.svg"));
+    ensureSvgButtonIcon(ui->mouseModePushButton, QStringLiteral(":/icons/Graphics/oscilloscope-target.svg"));
 
     // Set up dialogues
     oscilloscopeDialog = new OscilloscopeDialog(this);
@@ -32,6 +139,11 @@ MainWindow::MainWindow(QString inputFilenameParam, QWidget *parent) :
     closedCaptionDialog = new ClosedCaptionsDialog(this);
     videoParametersDialog = new VideoParametersDialog(this);
     chromaDecoderConfigDialog = new ChromaDecoderConfigDialog(this);
+    metadataConversionDialog = new MetadataConversionDialog(this);
+    metadataStatusDialog = new MetadataStatusDialog(this);
+    exportDialog = new ExportDialog(this);
+    ui->mainTabWidget->addTab(exportDialog, tr("Export"));
+    exportDialog->setSource(&tbcSource);
 
     // Add a status bar to show the state of the source video file
     ui->statusBar->addWidget(&sourceVideoStatus);
@@ -59,6 +171,10 @@ MainWindow::MainWindow(QString inputFilenameParam, QWidget *parent) :
 
     // Connect to the video parameters changed signal
     connect(videoParametersDialog, &VideoParametersDialog::videoParametersChanged, this, &MainWindow::videoParametersChangedSignalHandler);
+    connect(videoParametersDialog, &VideoParametersDialog::exportBoundaryToggled, this, &MainWindow::exportBoundaryToggledSignalHandler);
+
+    showExportBoundary = configuration.getShowExportBoundary();
+    videoParametersDialog->setShowExportBoundary(showExportBoundary);
 
     // Connect to the chroma decoder configuration changed signal
     connect(chromaDecoderConfigDialog, &ChromaDecoderConfigDialog::chromaDecoderConfigChanged, this, &MainWindow::chromaDecoderConfigChangedSignalHandler);
@@ -141,7 +257,7 @@ MainWindow::MainWindow(QString inputFilenameParam, QWidget *parent) :
     // Was a filename specified on the command line?
     if (!inputFilenameParam.isEmpty()) {
         lastFilename = inputFilenameParam;
-        tbcSource.loadSource(inputFilenameParam);
+        loadTbcFile(inputFilenameParam, metadataOnlyParam);
     } else {
         lastFilename.clear();
     }
@@ -168,6 +284,7 @@ MainWindow::~MainWindow()
     if (tbcSource.getIsSourceLoaded()) {
         tbcSource.unloadSource();
     }
+    cleanupTempMetadataFile();
 
     delete ui;
 }
@@ -281,6 +398,13 @@ void MainWindow::updateGuiLoaded()
 {
     // Enable the GUI controls
     setGuiEnabled(true);
+    const bool metadataOnly = tbcSource.getIsMetadataOnly();
+
+    if (metadataOnly) {
+        ui->actionSave_frame_as_PNG->setEnabled(false);
+        ui->actionLine_scope->setEnabled(false);
+        ui->actionVectorscope->setEnabled(false);
+    }
 
     // Update the status bar
     QString statusText;
@@ -288,7 +412,11 @@ void MainWindow::updateGuiLoaded()
 		statusText += (tbcSource.getVideoParameters().tapeFormat + " ");
 	}
     statusText += tbcSource.getSystemDescription();
-    statusText += tr(" source loaded with ");
+    if (metadataOnly) {
+        statusText += tr(" metadata loaded with ");
+    } else {
+        statusText += tr(" source loaded with ");
+    }
 
     if (tbcSource.getFieldViewEnabled()) {
         statusText += QString::number(tbcSource.getNumberOfFields());
@@ -330,6 +458,11 @@ void MainWindow::updateGuiLoaded()
 	if (resizeFrameWithWindow) {
 		resizeTimer->start();
 	}
+
+    updateMetadataStatusPanel();
+    if (exportDialog) {
+        exportDialog->setSource(&tbcSource);
+    }
 }
 
 // Method to update the GUI when a file is unloaded
@@ -376,6 +509,11 @@ void MainWindow::updateGuiUnloaded()
     // Hide configuration dialogues
     videoParametersDialog->hide();
     chromaDecoderConfigDialog->hide();
+
+    updateMetadataStatusPanel();
+    if (exportDialog) {
+        exportDialog->setSource(&tbcSource);
+    }
 }
 
 // Update the aspect ratio button
@@ -438,6 +576,61 @@ void MainWindow::updateSourcesPushButton()
 		}
 	}
 	chromaDecoderConfigDialog->updateSourceMode(tbcSource.getSourceMode());
+}
+
+void MainWindow::updateMetadataStatusPanel()
+{
+    if (!ui || !metadataStatusDialog) {
+        return;
+    }
+    MetadataStatusData data;
+
+    if (!tbcSource.getIsSourceLoaded()) {
+        data.dbPath = QStringLiteral("—");
+        data.jsonPath = QStringLiteral("—");
+        data.videoSystem = QStringLiteral("—");
+        data.chromaDecoder = QStringLiteral("—");
+        data.chromaGain = QStringLiteral("—");
+        data.chromaPhase = QStringLiteral("—");
+        data.lumaNr = QStringLiteral("—");
+        data.ntscAdaptive = QStringLiteral("—");
+        data.ntscAdaptThreshold = QStringLiteral("—");
+        data.ntscChromaWeight = QStringLiteral("—");
+        data.ntscPhaseComp = QStringLiteral("—");
+        data.palTransformThreshold = QStringLiteral("—");
+        data.savePending = QStringLiteral("No");
+        metadataStatusDialog->updateStatus(data);
+        return;
+    }
+
+    const LdDecodeMetaData::VideoParameters &videoParameters = tbcSource.getVideoParameters();
+
+    const QString metadataPath = tbcSource.getCurrentMetadataFilename();
+    const bool metadataIsJson = metadataPath.endsWith(".json", Qt::CaseInsensitive);
+    if (metadataIsJson) {
+        data.dbPath = QStringLiteral("—");
+        data.jsonPath = metadataPath;
+    } else {
+        data.dbPath = formatOptionalString(metadataPath);
+        if (metadataJsonLoaded && !metadataJsonFilename.isEmpty()) {
+            data.jsonPath = metadataJsonFilename;
+        } else {
+            data.jsonPath = QStringLiteral("—");
+        }
+    }
+    data.videoSystem = tbcSource.getSystemDescription();
+    data.chromaDecoder = formatOptionalString(videoParameters.chromaDecoder);
+    data.chromaGain = formatOptionalDouble(videoParameters.chromaGain);
+    data.chromaPhase = formatOptionalDouble(videoParameters.chromaPhase);
+    data.lumaNr = formatOptionalDouble(videoParameters.lumaNR);
+    data.ntscAdaptive = formatOptionalBoolFromInt(videoParameters.ntscAdaptive);
+    data.ntscAdaptThreshold = formatOptionalDouble(videoParameters.ntscAdaptThreshold);
+    data.ntscChromaWeight = formatOptionalDouble(videoParameters.ntscChromaWeight);
+    data.ntscPhaseComp = formatOptionalBoolFromInt(videoParameters.ntscPhaseCompensation);
+    data.palTransformThreshold = formatOptionalDouble(videoParameters.palTransformThreshold);
+    data.savePending = ui->actionSave_Metadata->isEnabled() ? QStringLiteral("Yes") : QStringLiteral("No");
+
+    metadataStatusDialog->updateStatus(data);
 }
 
 // Frame display methods ----------------------------------------------------------------------------------------------
@@ -565,6 +758,11 @@ qint32 MainWindow::getAspectAdjustment() {
 void MainWindow::updateImageViewer()
 {
     QImage image = tbcSource.getImage();
+    if (image.isNull() || image.width() == 0 || image.height() == 0) {
+        if (tbcSource.getIsMetadataOnly()) {
+            ui->imageViewerLabel->setText(tr("Metadata-only mode (no TBC image data)"));
+        }
+    }
 
     if (ui->mouseModePushButton->isChecked() && !image.isNull() && image.width() > 0 && image.height() > 0) {
         // Create a painter object
@@ -589,8 +787,38 @@ void MainWindow::updateImageViewer()
     if (!pixmap.isNull()) {
         const int width = static_cast<int>(scaleFactor * (pixmap.size().width() + adjustment));
         const int height = static_cast<int>(scaleFactor * pixmap.size().height());
-        ui->imageViewerLabel->setPixmap(pixmap.scaled(width, height,
-                                                      Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+        QPixmap scaledPixmap = pixmap.scaled(width, height,
+                                             Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+
+        if (showExportBoundary) {
+            const QVector<QRect> activeRects = getActiveVideoRects();
+            if (!activeRects.isEmpty() && pixmap.width() > 0 && pixmap.height() > 0) {
+                const double scaleX = static_cast<double>(scaledPixmap.width()) / static_cast<double>(pixmap.width());
+                const double scaleY = static_cast<double>(scaledPixmap.height()) / static_cast<double>(pixmap.height());
+                QPainter painter(&scaledPixmap);
+                painter.setRenderHint(QPainter::Antialiasing, false);
+
+                QPen pen(QColor(255, 0, 0));
+                pen.setWidth(4);
+                pen.setJoinStyle(Qt::MiterJoin);
+                painter.setPen(pen);
+                painter.setBrush(Qt::NoBrush);
+
+                const int inset = pen.width() / 2;
+                for (const QRect &rect : activeRects) {
+                    QRect scaledRect(qRound(rect.x() * scaleX),
+                                     qRound(rect.y() * scaleY),
+                                     qRound(rect.width() * scaleX),
+                                     qRound(rect.height() * scaleY));
+                    QRect borderRect = scaledRect.adjusted(inset, inset, -inset, -inset);
+                    if (borderRect.width() > 0 && borderRect.height() > 0) {
+                        painter.drawRect(borderRect);
+                    }
+                }
+            }
+        }
+
+        ui->imageViewerLabel->setPixmap(scaledPixmap);
     }
 
     // Update the current frame markers on the graphs
@@ -605,6 +833,84 @@ void MainWindow::updateImageViewer()
     #endif
 }
 
+QVector<QRect> MainWindow::getActiveVideoRects() const
+{
+    QVector<QRect> rects;
+
+    if (!tbcSource.getIsSourceLoaded()) {
+        return rects;
+    }
+
+    const LdDecodeMetaData::VideoParameters &videoParameters = tbcSource.getVideoParameters();
+    if (videoParameters.activeVideoStart < 0 || videoParameters.activeVideoEnd <= videoParameters.activeVideoStart) {
+        return rects;
+    }
+
+    const int frameWidth = tbcSource.getFrameWidth();
+    const int frameHeight = tbcSource.getFrameHeight();
+    if (frameWidth <= 0 || frameHeight <= 0) {
+        return rects;
+    }
+
+    const int rectWidth = videoParameters.activeVideoEnd - videoParameters.activeVideoStart;
+
+    auto appendRect = [&](int x, int y, int width, int height) {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        QRect rect(x, y, width, height);
+        rect = rect.intersected(QRect(0, 0, frameWidth, frameHeight));
+        if (rect.width() > 0 && rect.height() > 0) {
+            rects.append(rect);
+        }
+    };
+
+    switch (tbcSource.getViewMode()) {
+    case TbcSource::ViewMode::FRAME_VIEW: {
+        if (videoParameters.firstActiveFrameLine < 0 ||
+            videoParameters.lastActiveFrameLine <= videoParameters.firstActiveFrameLine) {
+            return rects;
+        }
+        const int height = videoParameters.lastActiveFrameLine - videoParameters.firstActiveFrameLine;
+        appendRect(videoParameters.activeVideoStart, videoParameters.firstActiveFrameLine, rectWidth, height);
+        break;
+    }
+    case TbcSource::ViewMode::SPLIT_VIEW: {
+        if (videoParameters.firstActiveFieldLine < 0 ||
+            videoParameters.lastActiveFieldLine <= videoParameters.firstActiveFieldLine) {
+            return rects;
+        }
+        const int fieldHeight = videoParameters.lastActiveFieldLine - videoParameters.firstActiveFieldLine;
+        appendRect(videoParameters.activeVideoStart, videoParameters.firstActiveFieldLine - 1, rectWidth, fieldHeight);
+        appendRect(videoParameters.activeVideoStart,
+                   videoParameters.firstActiveFieldLine + (frameHeight / 2),
+                   rectWidth,
+                   fieldHeight);
+        break;
+    }
+    case TbcSource::ViewMode::FIELD_VIEW: {
+        if (videoParameters.firstActiveFieldLine < 0 ||
+            videoParameters.lastActiveFieldLine <= videoParameters.firstActiveFieldLine) {
+            return rects;
+        }
+        const int fieldHeight = videoParameters.lastActiveFieldLine - videoParameters.firstActiveFieldLine;
+        if (tbcSource.getStretchField()) {
+            appendRect(videoParameters.activeVideoStart,
+                       (videoParameters.firstActiveFieldLine - 1) * 2,
+                       rectWidth,
+                       fieldHeight * 2);
+        } else {
+            appendRect(videoParameters.activeVideoStart,
+                       (videoParameters.firstActiveFieldLine - 1) + (frameHeight / 4),
+                       rectWidth,
+                       fieldHeight);
+        }
+        break;
+    }
+    }
+
+    return rects;
+}
 // Method to hide the current image
 void MainWindow::hideImage()
 {
@@ -614,18 +920,86 @@ void MainWindow::hideImage()
 // Misc private methods -----------------------------------------------------------------------------------------------
 
 // Load a TBC file based on the passed file name
-void MainWindow::loadTbcFile(QString inputFileName)
+void MainWindow::loadTbcFile(QString inputFileName, bool forceMetadataOnly)
 {
     // Update the GUI
     updateGuiUnloaded();
 
     // Close current source video (if loaded)
-    if (tbcSource.getIsSourceLoaded()) tbcSource.unloadSource();
+    if (tbcSource.getIsSourceLoaded()) {
+        tbcSource.unloadSource();
+    }
 
-    // Load the source
+    cleanupTempMetadataFile();
+    metadataJsonLoaded = false;
+    metadataJsonFilename.clear();
+    metadataTempSqliteFilename.clear();
+
+    QString resolvedInput = inputFileName;
+    QFileInfo inputInfo(resolvedInput);
+    QString suffix = inputInfo.suffix().toLower();
+    bool isJson = (suffix == "json");
+    bool isSqlite = (suffix == "db");
+    bool isMetadataOnly = forceMetadataOnly || isJson || isSqlite;
+
+    if (forceMetadataOnly && !isJson && !isSqlite) {
+        QString dbCandidate = resolvedInput;
+        if (!dbCandidate.endsWith(".db", Qt::CaseInsensitive)) {
+            dbCandidate += ".db";
+        }
+        QString jsonCandidate = resolvedInput;
+        if (!jsonCandidate.endsWith(".json", Qt::CaseInsensitive)) {
+            jsonCandidate += ".json";
+        }
+
+        QString metadataCandidate;
+        if (QFileInfo::exists(dbCandidate)) {
+            metadataCandidate = dbCandidate;
+        } else if (QFileInfo::exists(jsonCandidate)) {
+            metadataCandidate = jsonCandidate;
+        }
+
+        if (metadataCandidate.isEmpty()) {
+            QMessageBox messageBox;
+            messageBox.warning(this, tr("Error"),
+                               tr("Metadata-only mode requires a .db or .json file. '%1' and '%2' were not found.")
+                               .arg(dbCandidate, jsonCandidate));
+            return;
+        }
+
+        resolvedInput = metadataCandidate;
+        suffix = QFileInfo(resolvedInput).suffix().toLower();
+        isJson = (suffix == "json");
+        isSqlite = (suffix == "db");
+        isMetadataOnly = true;
+    }
+
+    if (isMetadataOnly) {
+        QString metadataDisplayName = resolvedInput;
+        if (isJson) {
+            metadataJsonLoaded = true;
+            metadataJsonFilename = resolvedInput;
+        }
+
+        lastFilename = metadataDisplayName;
+        tbcSource.loadMetadata(resolvedInput, metadataDisplayName);
+        return;
+    }
+
+    lastFilename = inputFileName;
     tbcSource.loadSource(inputFileName);
 
     // Note: loading continues in the background...
+}
+
+void MainWindow::cleanupTempMetadataFile()
+{
+    if (metadataTempSqliteFilename.isEmpty()) {
+        return;
+    }
+
+    QFile::remove(metadataTempSqliteFilename);
+    metadataTempSqliteFilename.clear();
 }
 
 // Method to update the line oscilloscope based on the frame number and scan line
@@ -766,9 +1140,11 @@ void MainWindow::on_actionOpen_TBC_file_triggered()
     tbcDebugStream() << "MainWindow::on_actionOpen_TBC_file_triggered(): Called";
 
     QString inputFileName = QFileDialog::getOpenFileName(this,
-                tr("Open TBC file"),
-                configuration.getSourceDirectory()+tr("/ldsample.tbc"),
-                tr("TBC output (*.tbc);;All Files (*)"));
+                tr("Open TBC/metadata file"),
+                configuration.getSourceDirectory(),
+                tr("TBC/Metadata (*.tbc *.ytbc *.ctbc *.tbcy *.tbcc *.db *.json);;"
+                   "TBC output (*.tbc *.ytbc *.ctbc *.tbcy *.tbcc);;"
+                   "Metadata (*.db *.json);;All Files (*)"));
 
     // Was a filename specified?
     if (!inputFileName.isEmpty() && !inputFileName.isNull()) {
@@ -784,6 +1160,65 @@ void MainWindow::on_actionReload_TBC_triggered()
     if (!lastFilename.isEmpty() && !lastFilename.isNull()) {
         loadTbcFile(lastFilename);
     }
+}
+
+void MainWindow::on_actionMetadata_Conversion_triggered()
+{
+    metadataConversionDialog->setSourceDirectory(configuration.getSourceDirectory());
+    QString defaultInput;
+    if (metadataJsonLoaded && !metadataJsonFilename.isEmpty()) {
+        defaultInput = metadataJsonFilename;
+    } else if (tbcSource.getIsSourceLoaded()) {
+        defaultInput = tbcSource.getCurrentMetadataFilename();
+    }
+    metadataConversionDialog->setDefaultInput(defaultInput);
+    metadataConversionDialog->show();
+    metadataConversionDialog->raise();
+    metadataConversionDialog->activateWindow();
+}
+
+void MainWindow::on_actionMetadata_Status_triggered()
+{
+    updateMetadataStatusPanel();
+    metadataStatusDialog->show();
+    metadataStatusDialog->raise();
+    metadataStatusDialog->activateWindow();
+}
+void MainWindow::on_actionExport_Decode_Metadata_triggered()
+{
+    QString defaultInput;
+    if (tbcSource.getIsSourceLoaded()) {
+        defaultInput = tbcSource.getCurrentMetadataFilename();
+    }
+    const QString startPath = defaultInput.isEmpty() ? configuration.getSourceDirectory() : defaultInput;
+    const QString inputFileName = QFileDialog::getOpenFileName(this,
+                                                               tr("Select metadata database"),
+                                                               startPath,
+                                                               tr("SQLite metadata (*.db);;All Files (*)"));
+    if (inputFileName.isEmpty()) {
+        return;
+    }
+
+    const QString defaultOutput = MetadataConverterUtil::defaultExportDecodeMetadataOutputPath(inputFileName);
+    const QString outputFileName = QFileDialog::getSaveFileName(this,
+                                                                tr("Select export JSON output"),
+                                                                defaultOutput,
+                                                                tr("Export JSON (*.json);;All Files (*)"));
+    if (outputFileName.isEmpty()) {
+        return;
+    }
+
+    QString errorMessage;
+    if (!MetadataConverterUtil::runExportDecodeMetadata(inputFileName, outputFileName, &errorMessage)) {
+        QMessageBox::warning(this, tr("Export failed"),
+                             errorMessage.isEmpty()
+                                 ? tr("ld-export-decode-metadata failed.")
+                                 : errorMessage);
+        return;
+    }
+
+    QMessageBox::information(this, tr("Export complete"),
+                             tr("Exported decode metadata to %1").arg(outputFileName));
 }
 
 // Start saving the modified metadata
@@ -1665,18 +2100,53 @@ void MainWindow::videoParametersChangedSignalHandler(const LdDecodeMetaData::Vid
 
     // Update the image viewer
     updateImage();
+
+    updateMetadataStatusPanel();
+}
+
+void MainWindow::exportBoundaryToggledSignalHandler(bool enabled)
+{
+    showExportBoundary = enabled;
+    configuration.setShowExportBoundary(enabled);
+    configuration.writeConfiguration();
+
+    updateImageViewer();
 }
 
 // Handle configuration changed signal from the chroma decoder configuration dialogue
 void MainWindow::chromaDecoderConfigChangedSignalHandler()
 {
+    const PalColour::Configuration &palConfig = chromaDecoderConfigDialog->getPalConfiguration();
+    const Comb::Configuration &ntscConfig = chromaDecoderConfigDialog->getNtscConfiguration();
     // Set the new configuration
-    tbcSource.setChromaConfiguration(chromaDecoderConfigDialog->getPalConfiguration(),
-                                     chromaDecoderConfigDialog->getNtscConfiguration(),
+    tbcSource.setChromaConfiguration(palConfig,
+                                     ntscConfig,
                                      chromaDecoderConfigDialog->getOutputConfiguration());
+
+    LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+    videoParameters.chromaGain = palConfig.chromaGain;
+    videoParameters.chromaPhase = palConfig.chromaPhase;
+    videoParameters.lumaNR = (tbcSource.getSystem() == NTSC) ? ntscConfig.yNRLevel : palConfig.yNRLevel;
+    videoParameters.ntscAdaptive = ntscConfig.adaptive ? 1 : 0;
+    videoParameters.ntscAdaptThreshold = ntscConfig.adaptThreshold;
+    videoParameters.ntscChromaWeight = ntscConfig.chromaWeight;
+    videoParameters.ntscPhaseCompensation = ntscConfig.phaseCompensation ? 1 : 0;
+    videoParameters.palTransformThreshold = palConfig.transformThreshold;
+
+    const QString decoderName = chromaDecoderNameFromConfig(tbcSource.getSystem(), palConfig, ntscConfig);
+    if (!decoderName.isEmpty()) {
+        videoParameters.chromaDecoder = decoderName;
+    }
+
+    tbcSource.setVideoParameters(videoParameters);
+
+    // Enable the \"Save Metadata\" action, since the metadata has been modified
+    ui->actionSave_Metadata->setEnabled(true);
 
     // Update the image viewer
     updateImage();
+
+    updateMetadataStatusPanel();
 }
 
 // TbcSource class signal handlers ------------------------------------------------------------------------------------
@@ -1772,6 +2242,8 @@ void MainWindow::on_finishedSaving(bool success)
         QMessageBox messageBox;
         messageBox.warning(this, tr("Error"), tbcSource.getLastIOError());
     }
+
+    updateMetadataStatusPanel();
 
     // Enable the main window
     this->setEnabled(true);

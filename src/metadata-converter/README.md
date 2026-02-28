@@ -1,10 +1,10 @@
-# ld-json-converter
+# tbc-metadata-converter
 
-**JSON to SQLite Metadata Converter**
+**JSON ↔ SQLite Metadata Converter**
 
 ## Overview
 
-ld-json-converter converts TBC JSON metadata files into a relational SQLite database for easier querying and analysis.
+tbc-metadata-converter converts TBC metadata between JSON and a relational SQLite database for easier querying and analysis.
 
 > [!WARNING]  
 > The SQLite metadata format is **internal to ld-decode tools only** and subject to change without notice. External tools and scripts should **not** access this database directly. Instead, use `ld-export-metadata` or similar tools to export metadata in stable, documented formats.
@@ -13,8 +13,15 @@ ld-json-converter converts TBC JSON metadata files into a relational SQLite data
 
 ### Basic Syntax
 ```bash
-ld-json-converter [options]
+tbc-metadata-converter [options]
 ```
+
+### GUI Mode
+```bash
+tbc-metadata-converter --gui
+```
+
+If you run `tbc-metadata-converter` with no arguments, it will launch the GUI by default.
 
 ## Options
 
@@ -25,8 +32,11 @@ ld-json-converter [options]
 - `-q, --quiet`: Suppress info and warning messages
 
 #### Input/Output
+- `--direction <json-to-sqlite|sqlite-to-json>`: Conversion direction (default `json-to-sqlite`)
 - `--input-json <filename>`: Specify the input JSON file
+- `--input-sqlite <filename>`: Specify the input SQLite file
 - `--output-sqlite <filename>`: Specify the output SQLite file (default same as input but with .db extension)
+- `--output-json <filename>`: Specify the output JSON file (default same as input but with .json extension)
 
 #### Standard Options
 - `-d, --debug`: Show debug messages
@@ -37,10 +47,12 @@ ld-json-converter [options]
 ## Input/Output
 
 ### Input Format
-- TBC JSON metadata files (`.tbc.json`)
+- TBC JSON metadata files (`.tbc.json`) when using `--direction json-to-sqlite`
+- SQLite database files (`.tbc.db`) when using `--direction sqlite-to-json`
 
 ### Output Format  
-- SQLite database files (`.tbc.db`)
+- SQLite database files (`.tbc.db`) when using `--direction json-to-sqlite`
+- JSON metadata files (`.tbc.json`) when using `--direction sqlite-to-json`
 
 ## SQLite Schema
 
@@ -48,7 +60,7 @@ ld-json-converter [options]
 ------------------------------------------------------------------
 -- Schema Versioning
 ------------------------------------------------------------------
-PRAGMA user_version = 1;
+PRAGMA user_version = 3;
 
 ------------------------------------------------------------------
 -- 1. Capture-level metadata (one per JSON file)
@@ -79,6 +91,16 @@ CREATE TABLE capture (
         CHECK (is_widescreen IN (0,1)),
     white_16b_ire INTEGER,
     black_16b_ire INTEGER,
+    blanking_16b_ire INTEGER,
+    chroma_decoder TEXT,
+    chroma_gain REAL,
+    chroma_phase REAL,
+    luma_nr REAL,
+    ntsc_adaptive INTEGER,
+    ntsc_adapt_threshold REAL,
+    ntsc_chroma_weight REAL,
+    ntsc_phase_compensation INTEGER,
+    pal_transform_threshold REAL,
 
     capture_notes TEXT -- was JSON tape_format
 );
@@ -244,12 +266,22 @@ Contains capture-level metadata and video system information:
 | `colourBurstEnd` | Integer | End position (pixels) of colour burst |
 | `white16bIre` | Integer | White level IRE in 16-bit scale |
 | `black16bIre` | Integer | Black level IRE in 16-bit scale |
+| `blanking16bIre` | Integer | Blanking level IRE in 16-bit scale |
 | `fieldWidth` | Integer | Width of each field in pixels |
 | `fieldHeight` | Integer | Height of each field in field-lines |
 | `sampleRate` | Double | Sample rate in Hz |
 | `isMapped` | Boolean | True if video mapped by ld-discmap |
 | `isSubcarrierLocked` | Boolean | True if samples are subcarrier-locked |
 | `isWidescreen` | Boolean | True if 16:9 anamorphic, false if 4:3 |
+| `chromaDecoder` | String | Chroma decoder preset name (optional) |
+| `chromaGain` | Double | Chroma gain multiplier (optional) |
+| `chromaPhase` | Double | Chroma phase adjustment in degrees (optional) |
+| `lumaNR` | Double | Luma noise reduction level (optional) |
+| `ntscAdaptive` | Boolean | NTSC: Enable adaptive 3D comb filter (optional) |
+| `ntscAdaptThreshold` | Double | NTSC: Adaptive filter threshold (optional) |
+| `ntscChromaWeight` | Double | NTSC: Chroma weight for adaptive filter (optional) |
+| `ntscPhaseCompensation` | Boolean | NTSC: Per-line phase compensation (optional) |
+| `palTransformThreshold` | Double | PAL: Transform filter threshold (optional) |
 | `gitBranch` | String | Git branch of ld-decode used (optional) |
 | `gitCommit` | String | Git commit of ld-decode used (optional) |
 | `tapeFormat` | String | Tape format description (optional) |
@@ -351,6 +383,8 @@ Based on code analysis, the following differences exist between the current impl
 
 3. **Additional Code Fields**: The code includes some fields not in the wiki:
    - `tapeFormat` in videoParameters (storing format description)
+   - `blanking16bIre`, `chromaDecoder`, `chromaGain`, `chromaPhase`, `lumaNR` in videoParameters
+   - `ntscAdaptive`, `ntscAdaptThreshold`, `ntscChromaWeight`, `ntscPhaseCompensation`, `palTransformThreshold` in videoParameters
    - Various conditional fields that are only written when valid
 
 4. **Field Numbering**: The code uses 1-based indexing for sequential field numbers as documented.
@@ -381,6 +415,16 @@ This section documents how JSON metadata elements map to the SQLite database sch
 | `colourBurstEnd` | `capture` | `colour_burst_end` | Direct copy |
 | `white16bIre` | `capture` | `white_16b_ire` | Direct copy |
 | `black16bIre` | `capture` | `black_16b_ire` | Direct copy |
+| `blanking16bIre` | `capture` | `blanking_16b_ire` | Direct copy |
+| `chromaDecoder` | `capture` | `chroma_decoder` | Direct copy |
+| `chromaGain` | `capture` | `chroma_gain` | Direct copy |
+| `chromaPhase` | `capture` | `chroma_phase` | Direct copy |
+| `lumaNR` | `capture` | `luma_nr` | Direct copy |
+| `ntscAdaptive` | `capture` | `ntsc_adaptive` | Boolean → Integer (0/1) |
+| `ntscAdaptThreshold` | `capture` | `ntsc_adapt_threshold` | Direct copy |
+| `ntscChromaWeight` | `capture` | `ntsc_chroma_weight` | Direct copy |
+| `ntscPhaseCompensation` | `capture` | `ntsc_phase_compensation` | Boolean → Integer (0/1) |
+| `palTransformThreshold` | `capture` | `pal_transform_threshold` | Direct copy |
 | `fieldWidth` | `capture` | `field_width` | Direct copy |
 | `fieldHeight` | `capture` | `field_height` | Direct copy |
 | `sampleRate` | `capture` | `video_sample_rate` | Direct copy |

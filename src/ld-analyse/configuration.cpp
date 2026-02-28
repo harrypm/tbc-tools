@@ -73,6 +73,7 @@ void Configuration::writeConfiguration(void)
     configuration->beginGroup("viewOptions");
     configuration->setValue("toggleChromaDuringSeek", settings.viewOptions.toggleChromaDuringSeek);
     configuration->setValue("resizeFrameWithWindow", settings.viewOptions.resizeFrameWithWindow);
+    configuration->setValue("showExportBoundary", settings.viewOptions.showExportBoundary);
     configuration->endGroup();
 
     // Sync the settings with disk
@@ -113,6 +114,7 @@ void Configuration::readConfiguration(void)
     configuration->beginGroup("viewOptions");
     settings.viewOptions.toggleChromaDuringSeek = configuration->value("toggleChromaDuringSeek", false).toBool();
     settings.viewOptions.resizeFrameWithWindow = configuration->value("resizeFrameWithWindow", true).toBool();
+    settings.viewOptions.showExportBoundary = configuration->value("showExportBoundary", false).toBool();
     configuration->endGroup();
 }
 
@@ -142,6 +144,7 @@ void Configuration::setDefault(void)
     // View options
     settings.viewOptions.toggleChromaDuringSeek = false;
     settings.viewOptions.resizeFrameWithWindow = true;
+    settings.viewOptions.showExportBoundary = false;
 
     // Write the configuration
     writeConfiguration();
@@ -310,4 +313,14 @@ void Configuration::setResizeFrameWithWindow(bool resizeFrameWithWindow)
 bool Configuration::getResizeFrameWithWindow(void)
 {
     return settings.viewOptions.resizeFrameWithWindow;
+}
+
+void Configuration::setShowExportBoundary(bool showExportBoundary)
+{
+    settings.viewOptions.showExportBoundary = showExportBoundary;
+}
+
+bool Configuration::getShowExportBoundary(void)
+{
+    return settings.viewOptions.showExportBoundary;
 }

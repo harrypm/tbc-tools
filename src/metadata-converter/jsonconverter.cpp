@@ -1,6 +1,6 @@
 /******************************************************************************
  * jsonconverter.cpp
- * ld-json-converter - JSON converter tool for ld-decode
+ * tbc-metadata-converter - Metadata converter tool for ld-decode
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2025 Simon Inns
@@ -16,8 +16,8 @@
 #include <QSqlError>
 #include <QDir>
 
-JsonConverter::JsonConverter(const QString &inputJsonFilename, const QString &outputSqliteFilename)
-    : m_inputJsonFilename(inputJsonFilename), m_outputSqliteFilename(outputSqliteFilename)
+JsonConverter::JsonConverter(const QString &inputFilename, const QString &outputFilename, Direction direction)
+    : m_direction(direction), m_inputFilename(inputFilename), m_outputFilename(outputFilename)
 {
 
 }
@@ -31,28 +31,41 @@ JsonConverter::~JsonConverter()
 
 bool JsonConverter::process()
 {
-    qInfo() << "Processing JSON file:" << m_inputJsonFilename;
+    switch (m_direction) {
+        case Direction::JsonToSqlite:
+            return processJsonToSqlite();
+        case Direction::SqliteToJson:
+            return processSqliteToJson();
+    }
+
+    qCritical() << "Unsupported conversion direction";
+    return false;
+}
+
+bool JsonConverter::processJsonToSqlite()
+{
+    qInfo() << "Processing JSON file:" << m_inputFilename;
     
     // Check if input file exists
-    QFileInfo inputFile(m_inputJsonFilename);
+    QFileInfo inputFile(m_inputFilename);
     if (!inputFile.exists()) {
-        qCritical() << "Input JSON file does not exist:" << m_inputJsonFilename;
+        qCritical() << "Input JSON file does not exist:" << m_inputFilename;
         return false;
     }
     
     // Load the JSON metadata using local TBC library
     LdDecodeMetaData metaData;
-    if (!metaData.read(m_inputJsonFilename)) {
-        qCritical() << "Failed to read JSON file:" << m_inputJsonFilename;
+    if (!metaData.read(m_inputFilename)) {
+        qCritical() << "Failed to read JSON file:" << m_inputFilename;
         return false;
     }
     
     qInfo() << "Successfully loaded JSON metadata";
     
     // Report on the contents
-    reportJsonContents(metaData);
+    reportMetadataContents(metaData);
     
-    qInfo() << "JSON analysis complete. Output SQLite file will be:" << m_outputSqliteFilename;
+    qInfo() << "Metadata analysis complete. Output SQLite file will be:" << m_outputFilename;
     
     // Create and setup the SQLite database
     if (!createDatabase()) {
@@ -72,14 +85,45 @@ bool JsonConverter::process()
         return false;
     }
     
-    qInfo() << "SQLite database created successfully:" << m_outputSqliteFilename;
+    qInfo() << "SQLite database created successfully:" << m_outputFilename;
     
     return true;
 }
 
-void JsonConverter::reportJsonContents(LdDecodeMetaData &metaData)
+bool JsonConverter::processSqliteToJson()
 {
-    qInfo() << "=== JSON Content Analysis ===";
+    qInfo() << "Processing SQLite file:" << m_inputFilename;
+
+    QFileInfo inputFile(m_inputFilename);
+    if (!inputFile.exists()) {
+        qCritical() << "Input SQLite file does not exist:" << m_inputFilename;
+        return false;
+    }
+
+    LdDecodeMetaData metaData;
+    if (!metaData.readSqlite(m_inputFilename)) {
+        qCritical() << "Failed to read SQLite file:" << m_inputFilename;
+        return false;
+    }
+
+    qInfo() << "Successfully loaded SQLite metadata";
+
+    reportMetadataContents(metaData);
+
+    qInfo() << "Metadata analysis complete. Output JSON file will be:" << m_outputFilename;
+
+    if (!metaData.write(m_outputFilename)) {
+        qCritical() << "Failed to write JSON file:" << m_outputFilename;
+        return false;
+    }
+
+    qInfo() << "JSON file created successfully:" << m_outputFilename;
+    return true;
+}
+
+void JsonConverter::reportMetadataContents(LdDecodeMetaData &metaData)
+{
+    qInfo() << "=== Metadata Content Analysis ===";
     
     // Basic information
     qInfo() << "Video System:" << metaData.getVideoSystemDescription();
@@ -101,6 +145,36 @@ void JsonConverter::reportJsonContents(LdDecodeMetaData &metaData)
     qInfo() << "  Colour Burst End:" << videoParams.colourBurstEnd;
     qInfo() << "  White 16b IRE:" << videoParams.white16bIre;
     qInfo() << "  Black 16b IRE:" << videoParams.black16bIre;
+    if (videoParams.blanking16bIre != -1) {
+        qInfo() << "  Blanking 16b IRE:" << videoParams.blanking16bIre;
+    }
+    if (!videoParams.chromaDecoder.isEmpty()) {
+        qInfo() << "  Chroma Decoder:" << videoParams.chromaDecoder;
+    }
+    if (videoParams.chromaGain != -1.0) {
+        qInfo() << "  Chroma Gain:" << videoParams.chromaGain;
+    }
+    if (videoParams.chromaPhase != -1.0) {
+        qInfo() << "  Chroma Phase:" << videoParams.chromaPhase;
+    }
+    if (videoParams.lumaNR != -1.0) {
+        qInfo() << "  Luma NR:" << videoParams.lumaNR;
+    }
+    if (videoParams.ntscAdaptive != -1) {
+        qInfo() << "  NTSC Adaptive:" << (videoParams.ntscAdaptive == 1 ? "Yes" : "No");
+    }
+    if (videoParams.ntscAdaptThreshold != -1.0) {
+        qInfo() << "  NTSC Adapt Threshold:" << videoParams.ntscAdaptThreshold;
+    }
+    if (videoParams.ntscChromaWeight != -1.0) {
+        qInfo() << "  NTSC Chroma Weight:" << videoParams.ntscChromaWeight;
+    }
+    if (videoParams.ntscPhaseCompensation != -1) {
+        qInfo() << "  NTSC Phase Compensation:" << (videoParams.ntscPhaseCompensation == 1 ? "Yes" : "No");
+    }
+    if (videoParams.palTransformThreshold != -1.0) {
+        qInfo() << "  PAL Transform Threshold:" << videoParams.palTransformThreshold;
+    }
     qInfo() << "  Is Mapped:" << (videoParams.isMapped ? "Yes" : "No");
     qInfo() << "  Is Subcarrier Locked:" << (videoParams.isSubcarrierLocked ? "Yes" : "No");
     qInfo() << "  Is Widescreen:" << (videoParams.isWidescreen ? "Yes" : "No");
@@ -116,7 +190,7 @@ void JsonConverter::reportJsonContents(LdDecodeMetaData &metaData)
     
     // PCM Audio parameters (if present)
     const LdDecodeMetaData::PcmAudioParameters &audioParams = metaData.getPcmAudioParameters();
-    if (audioParams.sampleRate > 0) {
+    if (audioParams.isValid) {
         qInfo() << "PCM Audio Parameters:";
         qInfo() << "  Sample Rate:" << audioParams.sampleRate << "Hz";
         qInfo() << "  Bits per Sample:" << audioParams.bits;
@@ -193,7 +267,7 @@ void JsonConverter::reportJsonContents(LdDecodeMetaData &metaData)
     // Summary for conversion planning
     qInfo() << "SQLite Conversion Planning:";
     qInfo() << "  Main capture record: 1 row";
-    qInfo() << "  PCM audio parameters:" << (audioParams.sampleRate > 0 ? "1 row" : "0 rows (no audio)");
+    qInfo() << "  PCM audio parameters:" << (audioParams.isValid ? "1 row" : "0 rows (no audio)");
     qInfo() << "  Field records:" << metaData.getNumberOfFields() << "rows";
     qInfo() << "  VBI rows:" << fieldsWithVbi;
     qInfo() << "  VITC rows:" << fieldsWithVitc;
@@ -207,17 +281,17 @@ void JsonConverter::reportJsonContents(LdDecodeMetaData &metaData)
 bool JsonConverter::createDatabase()
 {
     // Remove existing database file if it exists
-    QFileInfo dbFile(m_outputSqliteFilename);
+    QFileInfo dbFile(m_outputFilename);
     if (dbFile.exists()) {
-        if (!QDir().remove(m_outputSqliteFilename)) {
-            qCritical() << "Failed to remove existing database file:" << m_outputSqliteFilename;
+        if (!QDir().remove(m_outputFilename)) {
+            qCritical() << "Failed to remove existing database file:" << m_outputFilename;
             return false;
         }
     }
     
     // Create the database connection
     m_database = QSqlDatabase::addDatabase("QSQLITE");
-    m_database.setDatabaseName(m_outputSqliteFilename);
+    m_database.setDatabaseName(m_outputFilename);
     
     if (!m_database.open()) {
         qCritical() << "Failed to open SQLite database:" << m_database.lastError().text();
@@ -233,7 +307,7 @@ bool JsonConverter::createSchema()
     QSqlQuery query(m_database);
     
     // Set schema version
-    if (!query.exec("PRAGMA user_version = 1;")) {
+    if (!query.exec("PRAGMA user_version = 3;")) {
         qCritical() << "Failed to set schema version:" << query.lastError().text();
         return false;
     }
@@ -265,6 +339,15 @@ bool JsonConverter::createSchema()
         "    white_16b_ire INTEGER,"
         "    black_16b_ire INTEGER,"
         "    blanking_16b_ire INTEGER,"
+        "    chroma_decoder TEXT,"
+        "    chroma_gain REAL,"
+        "    chroma_phase REAL,"
+        "    luma_nr REAL,"
+        "    ntsc_adaptive INTEGER,"
+        "    ntsc_adapt_threshold REAL,"
+        "    ntsc_chroma_weight REAL,"
+        "    ntsc_phase_compensation INTEGER,"
+        "    pal_transform_threshold REAL,"
         "    capture_notes TEXT"
         ");"
     )) {
@@ -456,9 +539,11 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
             "field_width, field_height, number_of_sequential_fields, "
             "colour_burst_start, colour_burst_end, is_mapped, "
             "is_subcarrier_locked, is_widescreen, white_16b_ire, "
-            "black_16b_ire, blanking_16b_ire, capture_notes"
+            "black_16b_ire, blanking_16b_ire, chroma_decoder, chroma_gain, chroma_phase, luma_nr, "
+            "ntsc_adaptive, ntsc_adapt_threshold, ntsc_chroma_weight, ntsc_phase_compensation, "
+            "pal_transform_threshold, capture_notes"
             ") VALUES ("
-            "1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?"
+            "1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?"
             ")"
         );
         
@@ -479,8 +564,17 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
         query.bindValue(14, videoParams.isWidescreen ? 1 : 0);
         query.bindValue(15, videoParams.white16bIre);
         query.bindValue(16, videoParams.black16bIre);
-        query.bindValue(17, videoParams.black16bIre); // Legacy JSON doesn't have blanking_16b_ire, use black_16b_ire
-        query.bindValue(18, videoParams.tapeFormat.isEmpty() ? QVariant() : videoParams.tapeFormat);
+        query.bindValue(17, videoParams.blanking16bIre != -1 ? videoParams.blanking16bIre : videoParams.black16bIre);
+        query.bindValue(18, videoParams.chromaDecoder.isEmpty() ? QVariant() : videoParams.chromaDecoder);
+        query.bindValue(19, videoParams.chromaGain != -1.0 ? QVariant(videoParams.chromaGain) : QVariant());
+        query.bindValue(20, videoParams.chromaPhase != -1.0 ? QVariant(videoParams.chromaPhase) : QVariant());
+        query.bindValue(21, videoParams.lumaNR != -1.0 ? QVariant(videoParams.lumaNR) : QVariant());
+        query.bindValue(22, videoParams.ntscAdaptive != -1 ? QVariant(videoParams.ntscAdaptive) : QVariant());
+        query.bindValue(23, videoParams.ntscAdaptThreshold != -1.0 ? QVariant(videoParams.ntscAdaptThreshold) : QVariant());
+        query.bindValue(24, videoParams.ntscChromaWeight != -1.0 ? QVariant(videoParams.ntscChromaWeight) : QVariant());
+        query.bindValue(25, videoParams.ntscPhaseCompensation != -1 ? QVariant(videoParams.ntscPhaseCompensation) : QVariant());
+        query.bindValue(26, videoParams.palTransformThreshold != -1.0 ? QVariant(videoParams.palTransformThreshold) : QVariant());
+        query.bindValue(27, videoParams.tapeFormat.isEmpty() ? QVariant() : videoParams.tapeFormat);
         
         if (!query.exec()) {
             qCritical() << "Failed to insert capture record:" << query.lastError().text();
@@ -490,7 +584,7 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
         
         // Insert PCM audio parameters if present
         const LdDecodeMetaData::PcmAudioParameters &audioParams = metaData.getPcmAudioParameters();
-        if (audioParams.sampleRate > 0) {
+        if (audioParams.isValid) {
             query.prepare(
                 "INSERT INTO pcm_audio_parameters ("
                 "capture_id, bits, is_signed, is_little_endian, sample_rate"

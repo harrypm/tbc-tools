@@ -29,9 +29,11 @@ public:
     ~VideoParametersDialog();
 
     void setVideoParameters(const LdDecodeMetaData::VideoParameters &videoParameters);
+    void setShowExportBoundary(bool enabled);
 
 signals:
     void videoParametersChanged(const LdDecodeMetaData::VideoParameters &videoParameters);
+    void exportBoundaryToggled(bool enabled);
 
 public slots:
     void levelSelected(qint32 level);
@@ -49,6 +51,7 @@ private slots:
     void on_activeVideoWidthResetButton_clicked();
 
     void on_aspectRatioButtonGroup_buttonClicked(QAbstractButton *button);
+    void on_exportBoundaryCheckBox_toggled(bool checked);
 
 private:
     Ui::VideoParametersDialog *ui;

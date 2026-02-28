@@ -55,20 +55,18 @@
        <number>6</number>
       </property>
       <item>
-       <widget class="QScrollArea" name="scrollArea">
-        <property name="widgetResizable">
+       <widget class="QTabWidget" name="mainTabWidget">
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
+        <property name="tabBarAutoHide">
          <bool>true</bool>
         </property>
-        <widget class="QWidget" name="scrollAreaWidgetContents">
-         <property name="geometry">
-          <rect>
-           <x>0</x>
-           <y>0</y>
-           <width>969</width>
-           <height>586</height>
-          </rect>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_2">
+        <widget class="QWidget" name="viewerTab">
+         <attribute name="title">
+          <string>Viewer</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="viewerTabLayout">
           <property name="spacing">
            <number>0</number>
           </property>
@@ -85,13 +83,47 @@
            <number>0</number>
           </property>
           <item>
-           <widget class="QLabel" name="imageViewerLabel">
-            <property name="text">
-             <string>Image goes here</string>
+           <widget class="QScrollArea" name="scrollArea">
+            <property name="widgetResizable">
+             <bool>true</bool>
             </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
+            <widget class="QWidget" name="scrollAreaWidgetContents">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>0</y>
+               <width>969</width>
+               <height>586</height>
+              </rect>
+             </property>
+             <layout class="QVBoxLayout" name="verticalLayout_2">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <property name="leftMargin">
+               <number>0</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="imageViewerLabel">
+                <property name="text">
+                 <string>Image goes here</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
            </widget>
           </item>
          </layout>
@@ -689,9 +721,18 @@
     <addaction name="actionResizeFrameWithWindow"/>
     <addaction name="actionToggleChromaDuringSeek"/>
    </widget>
+   <widget class="QMenu" name="menuTools">
+    <property name="title">
+     <string>Metadata</string>
+    </property>
+    <addaction name="actionMetadata_Status"/>
+    <addaction name="actionMetadata_Conversion"/>
+    <addaction name="actionExport_Decode_Metadata"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuView"/>
    <addaction name="menuWindow"/>
+   <addaction name="menuTools"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
@@ -702,10 +743,25 @@
   </action>
   <action name="actionOpen_TBC_file">
    <property name="text">
-    <string>Open TBC file...</string>
+    <string>Open TBC/metadata file...</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="actionMetadata_Conversion">
+   <property name="text">
+    <string>Metadata conversion...</string>
+   </property>
+  </action>
+  <action name="actionMetadata_Status">
+   <property name="text">
+    <string>Metadata status...</string>
+   </property>
+  </action>
+  <action name="actionExport_Decode_Metadata">
+   <property name="text">
+    <string>ld-export-decode-metadata...</string>
    </property>
   </action>
   <action name="actionExit">

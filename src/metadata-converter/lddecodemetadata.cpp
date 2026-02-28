@@ -29,9 +29,15 @@
 #include "lddecodemetadata.h"
 
 #include "jsonio.h"
+#include "sqliteio.h"
 
 #include <cassert>
 #include <fstream>
+#include <QFileInfo>
+#include <QMap>
+#include <QMultiMap>
+#include <QSqlQuery>
+#include <QVariant>
 #include "tbc/logging.h"
 
 // Default values used when configuring VideoParameters for a particular video system.
@@ -90,6 +96,129 @@ static constexpr VideoSystemDefaults VIDEO_SYSTEM_DEFAULTS[] = {
 static const VideoSystemDefaults &getSystemDefaults(const LdDecodeMetaData::VideoParameters &videoParameters)
 {
     return VIDEO_SYSTEM_DEFAULTS[videoParameters.system];
+}
+
+// Read array of Fields from SQLite (optimized version)
+void LdDecodeMetaData::readFields(SqliteReader &reader, int captureId)
+{
+    QSqlQuery fieldsQuery;
+    if (!reader.readFields(captureId, fieldsQuery)) {
+        return;
+    }
+
+    QSqlQuery vitsQuery, vbiQuery, vitcQuery, ccQuery, dropoutsQuery;
+    reader.readAllFieldVitsMetrics(captureId, vitsQuery);
+    reader.readAllFieldVbi(captureId, vbiQuery);
+    reader.readAllFieldVitc(captureId, vitcQuery);
+    reader.readAllFieldClosedCaptions(captureId, ccQuery);
+    reader.readAllFieldDropouts(captureId, dropoutsQuery);
+
+    QMap<int, QPair<double, double>> vitsMap;
+    QMap<int, QVector<int>> vbiMap, vitcMap, ccMap;
+    QMultiMap<int, QVector<int>> dropoutsMap;
+
+    while (vitsQuery.next()) {
+        int fieldId = vitsQuery.value("field_id").toInt();
+        double wSnr = vitsQuery.value("w_snr").toDouble();
+        double bPsnr = vitsQuery.value("b_psnr").toDouble();
+        vitsMap[fieldId] = qMakePair(wSnr, bPsnr);
+    }
+
+    while (vbiQuery.next()) {
+        int fieldId = vbiQuery.value("field_id").toInt();
+        QVector<int> vbiData = {vbiQuery.value("vbi0").toInt(),
+                               vbiQuery.value("vbi1").toInt(),
+                               vbiQuery.value("vbi2").toInt()};
+        vbiMap[fieldId] = vbiData;
+    }
+
+    while (vitcQuery.next()) {
+        int fieldId = vitcQuery.value("field_id").toInt();
+        QVector<int> vitcData;
+        for (int i = 0; i < 8; i++) {
+            vitcData.append(vitcQuery.value(QString("vitc%1").arg(i)).toInt());
+        }
+        vitcMap[fieldId] = vitcData;
+    }
+
+    while (ccQuery.next()) {
+        int fieldId = ccQuery.value("field_id").toInt();
+        QVector<int> ccData = {ccQuery.value("data0").toInt(),
+                              ccQuery.value("data1").toInt()};
+        ccMap[fieldId] = ccData;
+    }
+
+    while (dropoutsQuery.next()) {
+        int fieldId = dropoutsQuery.value("field_id").toInt();
+        QVector<int> dropoutData = {dropoutsQuery.value("startx").toInt(),
+                                   dropoutsQuery.value("endx").toInt(),
+                                   dropoutsQuery.value("field_line").toInt()};
+        dropoutsMap.insert(fieldId, dropoutData);
+    }
+
+    while (fieldsQuery.next()) {
+        Field field;
+
+        int fieldId = fieldsQuery.value("field_id").toInt();
+        field.seqNo = fieldId + 1;
+        field.isFirstField = SqliteValue::toBoolOrDefault(fieldsQuery, "is_first_field");
+        field.syncConf = SqliteValue::toIntOrDefault(fieldsQuery, "sync_conf", 0);
+        field.medianBurstIRE = SqliteValue::toDoubleOrDefault(fieldsQuery, "median_burst_ire", 0.0);
+        field.fieldPhaseID = SqliteValue::toIntOrDefault(fieldsQuery, "field_phase_id");
+        field.audioSamples = SqliteValue::toIntOrDefault(fieldsQuery, "audio_samples");
+        field.diskLoc = SqliteValue::toDoubleOrDefault(fieldsQuery, "disk_loc");
+        field.fileLoc = SqliteValue::toLongLongOrDefault(fieldsQuery, "file_loc");
+        field.decodeFaults = SqliteValue::toIntOrDefault(fieldsQuery, "decode_faults");
+        field.efmTValues = SqliteValue::toIntOrDefault(fieldsQuery, "efm_t_values");
+        field.pad = SqliteValue::toBoolOrDefault(fieldsQuery, "pad");
+
+        field.ntsc.isFmCodeDataValid = fieldsQuery.value("ntsc_is_fm_code_data_valid").toInt() == 1;
+        field.ntsc.fmCodeData = fieldsQuery.value("ntsc_fm_code_data").toInt();
+        field.ntsc.fieldFlag = fieldsQuery.value("ntsc_field_flag").toInt() == 1;
+        field.ntsc.isVideoIdDataValid = fieldsQuery.value("ntsc_is_video_id_data_valid").toInt() == 1;
+        field.ntsc.videoIdData = fieldsQuery.value("ntsc_video_id_data").toInt();
+        field.ntsc.whiteFlag = fieldsQuery.value("ntsc_white_flag").toInt() == 1;
+        field.ntsc.inUse = field.ntsc.isFmCodeDataValid || field.ntsc.isVideoIdDataValid;
+
+        if (vitsMap.contains(fieldId)) {
+            field.vitsMetrics.wSNR = vitsMap[fieldId].first;
+            field.vitsMetrics.bPSNR = vitsMap[fieldId].second;
+            field.vitsMetrics.inUse = true;
+        }
+
+        if (vbiMap.contains(fieldId)) {
+            QVector<int> vbiData = vbiMap[fieldId];
+            field.vbi.vbiData[0] = vbiData[0];
+            field.vbi.vbiData[1] = vbiData[1];
+            field.vbi.vbiData[2] = vbiData[2];
+            field.vbi.inUse = true;
+        }
+
+        if (vitcMap.contains(fieldId)) {
+            QVector<int> vitcData = vitcMap[fieldId];
+            for (int i = 0; i < 8 && i < vitcData.size(); i++) {
+                field.vitc.vitcData[i] = vitcData[i];
+            }
+            field.vitc.inUse = true;
+        }
+
+        if (ccMap.contains(fieldId)) {
+            QVector<int> ccData = ccMap[fieldId];
+            field.closedCaption.data0 = ccData[0];
+            field.closedCaption.data1 = ccData[1];
+            field.closedCaption.inUse = true;
+        }
+
+        if (dropoutsMap.contains(fieldId)) {
+            field.dropOuts.clear();
+            auto dropouts = dropoutsMap.values(fieldId);
+            for (const auto &dropout : dropouts) {
+                field.dropOuts.append(dropout[0], dropout[1], dropout[2]);
+            }
+        }
+
+        fields.push_back(field);
+    }
 }
 
 // Look up a video system by name.
@@ -169,6 +298,10 @@ void LdDecodeMetaData::VideoParameters::read(JsonReader &reader)
         if (member == "activeVideoEnd") reader.read(activeVideoEnd);
         else if (member == "activeVideoStart") reader.read(activeVideoStart);
         else if (member == "black16bIre") reader.read(black16bIre);
+        else if (member == "blanking16bIre") reader.read(blanking16bIre);
+        else if (member == "chromaDecoder") reader.read(chromaDecoder);
+        else if (member == "chromaGain") reader.read(chromaGain);
+        else if (member == "chromaPhase") reader.read(chromaPhase);
         else if (member == "colourBurstEnd") reader.read(colourBurstEnd);
         else if (member == "colourBurstStart") reader.read(colourBurstStart);
         else if (member == "fieldHeight") reader.read(fieldHeight);
@@ -183,6 +316,20 @@ void LdDecodeMetaData::VideoParameters::read(JsonReader &reader)
         else if (member == "sampleRate") reader.read(sampleRate);
         else if (member == "system") reader.read(systemString);
         else if (member == "white16bIre") reader.read(white16bIre);
+        else if (member == "lumaNR") reader.read(lumaNR);
+        else if (member == "ntscAdaptThreshold") reader.read(ntscAdaptThreshold);
+        else if (member == "ntscAdaptive") {
+            bool value = false;
+            reader.read(value);
+            ntscAdaptive = value ? 1 : 0;
+        }
+        else if (member == "ntscChromaWeight") reader.read(ntscChromaWeight);
+        else if (member == "ntscPhaseCompensation") {
+            bool value = false;
+            reader.read(value);
+            ntscPhaseCompensation = value ? 1 : 0;
+        }
+        else if (member == "palTransformThreshold") reader.read(palTransformThreshold);
         else if (member == "tapeFormat") reader.read(tapeFormat);
         else reader.discard();
     }
@@ -200,6 +347,10 @@ void LdDecodeMetaData::VideoParameters::read(JsonReader &reader)
         reader.throwError("unknown value for videoParameters.system");
     }
 
+    if (blanking16bIre == -1) {
+        blanking16bIre = black16bIre;
+    }
+
     isValid = true;
 }
 
@@ -214,6 +365,18 @@ void LdDecodeMetaData::VideoParameters::write(JsonWriter &writer) const
     writer.writeMember("activeVideoEnd", activeVideoEnd);
     writer.writeMember("activeVideoStart", activeVideoStart);
     writer.writeMember("black16bIre", black16bIre);
+    if (blanking16bIre != -1) {
+        writer.writeMember("blanking16bIre", blanking16bIre);
+    }
+    if (!chromaDecoder.isEmpty()) {
+        writer.writeMember("chromaDecoder", chromaDecoder);
+    }
+    if (chromaGain != -1.0) {
+        writer.writeMember("chromaGain", chromaGain);
+    }
+    if (chromaPhase != -1.0) {
+        writer.writeMember("chromaPhase", chromaPhase);
+    }
     writer.writeMember("colourBurstEnd", colourBurstEnd);
     writer.writeMember("colourBurstStart", colourBurstStart);
     writer.writeMember("fieldHeight", fieldHeight);
@@ -231,6 +394,24 @@ void LdDecodeMetaData::VideoParameters::write(JsonWriter &writer) const
     writer.writeMember("sampleRate", sampleRate);
     writer.writeMember("system", VIDEO_SYSTEM_DEFAULTS[system].name);
     writer.writeMember("white16bIre", white16bIre);
+    if (lumaNR != -1.0) {
+        writer.writeMember("lumaNR", lumaNR);
+    }
+    if (ntscAdaptThreshold != -1.0) {
+        writer.writeMember("ntscAdaptThreshold", ntscAdaptThreshold);
+    }
+    if (ntscAdaptive != -1) {
+        writer.writeMember("ntscAdaptive", ntscAdaptive == 1);
+    }
+    if (ntscChromaWeight != -1.0) {
+        writer.writeMember("ntscChromaWeight", ntscChromaWeight);
+    }
+    if (ntscPhaseCompensation != -1) {
+        writer.writeMember("ntscPhaseCompensation", ntscPhaseCompensation == 1);
+    }
+    if (palTransformThreshold != -1.0) {
+        writer.writeMember("palTransformThreshold", palTransformThreshold);
+    }
 	if(tapeFormat != "") {
 		writer.writeMember("tapeFormat", tapeFormat);
 	}
@@ -633,6 +814,103 @@ bool LdDecodeMetaData::write(QString fileName) const
     return true;
 }
 
+// Read all metadata from an SQLite file
+bool LdDecodeMetaData::readSqlite(QString fileName)
+{
+    if (!QFileInfo::exists(fileName)) {
+        qCritical() << "SQLite input file does not exist:" << fileName;
+        return false;
+    }
+
+    clear();
+
+    try {
+        SqliteReader reader(fileName);
+
+        int captureId;
+        QString system, decoder, gitBranch, gitCommit, captureNotes;
+        QString chromaDecoder;
+        double videoSampleRate;
+        int activeVideoStart, activeVideoEnd, fieldWidth, fieldHeight, numberOfSequentialFields;
+        int colourBurstStart, colourBurstEnd, white16bIre, black16bIre, blanking16bIre;
+        double chromaGain = -1.0;
+        double chromaPhase = -1.0;
+        double lumaNR = -1.0;
+        int ntscAdaptive = -1;
+        double ntscAdaptThreshold = -1.0;
+        double ntscChromaWeight = -1.0;
+        int ntscPhaseCompensation = -1;
+        double palTransformThreshold = -1.0;
+        bool isMapped, isSubcarrierLocked, isWidescreen;
+
+        if (!reader.readCaptureMetadata(captureId, system, decoder, gitBranch, gitCommit,
+                                        videoSampleRate, activeVideoStart, activeVideoEnd,
+                                        fieldWidth, fieldHeight, numberOfSequentialFields,
+                                        colourBurstStart, colourBurstEnd, isMapped,
+                                        isSubcarrierLocked, isWidescreen, white16bIre,
+                                        black16bIre, blanking16bIre, chromaDecoder, chromaGain,
+                                        chromaPhase, lumaNR, ntscAdaptive, ntscAdaptThreshold,
+                                        ntscChromaWeight, ntscPhaseCompensation, palTransformThreshold,
+                                        captureNotes)) {
+            qCritical() << "Failed to read capture metadata from SQLite file";
+            return false;
+        }
+
+        videoParameters.numberOfSequentialFields = numberOfSequentialFields;
+        if (!parseVideoSystemName(system, videoParameters.system)) {
+            qCritical() << "Unknown video system:" << system;
+            return false;
+        }
+        videoParameters.isSubcarrierLocked = isSubcarrierLocked;
+        videoParameters.isWidescreen = isWidescreen;
+        videoParameters.colourBurstStart = colourBurstStart;
+        videoParameters.colourBurstEnd = colourBurstEnd;
+        videoParameters.activeVideoStart = activeVideoStart;
+        videoParameters.activeVideoEnd = activeVideoEnd;
+        videoParameters.white16bIre = white16bIre;
+        videoParameters.black16bIre = black16bIre;
+        videoParameters.blanking16bIre = blanking16bIre;
+        videoParameters.fieldWidth = fieldWidth;
+        videoParameters.fieldHeight = fieldHeight;
+        videoParameters.sampleRate = videoSampleRate;
+        videoParameters.isMapped = isMapped;
+        videoParameters.tapeFormat = captureNotes;
+        videoParameters.chromaDecoder = chromaDecoder;
+        videoParameters.chromaGain = chromaGain;
+        videoParameters.chromaPhase = chromaPhase;
+        videoParameters.lumaNR = lumaNR;
+        videoParameters.ntscAdaptive = ntscAdaptive;
+        videoParameters.ntscAdaptThreshold = ntscAdaptThreshold;
+        videoParameters.ntscChromaWeight = ntscChromaWeight;
+        videoParameters.ntscPhaseCompensation = ntscPhaseCompensation;
+        videoParameters.palTransformThreshold = palTransformThreshold;
+        videoParameters.gitBranch = gitBranch;
+        videoParameters.gitCommit = gitCommit;
+        videoParameters.isValid = true;
+
+        int bits;
+        bool isSigned, isLittleEndian;
+        double audioSampleRate;
+        if (reader.readPcmAudioParameters(captureId, bits, isSigned, isLittleEndian, audioSampleRate)) {
+            pcmAudioParameters.bits = bits;
+            pcmAudioParameters.isSigned = isSigned;
+            pcmAudioParameters.isLittleEndian = isLittleEndian;
+            pcmAudioParameters.sampleRate = audioSampleRate;
+            pcmAudioParameters.isValid = true;
+        }
+
+        readFields(reader, captureId);
+    } catch (SqliteReader::Error &error) {
+        qCritical() << "Reading SQLite file failed:" << error.what();
+        return false;
+    }
+
+    initialiseVideoSystemParameters();
+    generatePcmAudioMap();
+
+    return true;
+}
+
 // Read array of Fields from JSON
 void LdDecodeMetaData::readFields(JsonReader &reader)
 {
@@ -661,7 +939,7 @@ void LdDecodeMetaData::writeFields(JsonWriter &writer) const
 }
 
 // This method returns the videoParameters metadata
-const LdDecodeMetaData::VideoParameters &LdDecodeMetaData::getVideoParameters()
+const LdDecodeMetaData::VideoParameters &LdDecodeMetaData::getVideoParameters() const
 {
     assert(videoParameters.isValid);
     return videoParameters;
@@ -675,9 +953,8 @@ void LdDecodeMetaData::setVideoParameters(const LdDecodeMetaData::VideoParameter
 }
 
 // This method returns the pcmAudioParameters metadata
-const LdDecodeMetaData::PcmAudioParameters &LdDecodeMetaData::getPcmAudioParameters()
+const LdDecodeMetaData::PcmAudioParameters &LdDecodeMetaData::getPcmAudioParameters() const
 {
-    assert(pcmAudioParameters.isValid);
     return pcmAudioParameters;
 }
 
@@ -781,7 +1058,7 @@ void LdDecodeMetaData::LineParameters::applyTo(LdDecodeMetaData::VideoParameters
 }
 
 // This method gets the metadata for the specified sequential field number (indexed from 1 (not 0!))
-const LdDecodeMetaData::Field &LdDecodeMetaData::getField(qint32 sequentialFieldNumber)
+const LdDecodeMetaData::Field &LdDecodeMetaData::getField(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
@@ -792,7 +1069,7 @@ const LdDecodeMetaData::Field &LdDecodeMetaData::getField(qint32 sequentialField
 }
 
 // This method gets the VITS metrics metadata for the specified sequential field number
-const LdDecodeMetaData::VitsMetrics &LdDecodeMetaData::getFieldVitsMetrics(qint32 sequentialFieldNumber)
+const LdDecodeMetaData::VitsMetrics &LdDecodeMetaData::getFieldVitsMetrics(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
@@ -803,7 +1080,7 @@ const LdDecodeMetaData::VitsMetrics &LdDecodeMetaData::getFieldVitsMetrics(qint3
 }
 
 // This method gets the VBI metadata for the specified sequential field number
-const LdDecodeMetaData::Vbi &LdDecodeMetaData::getFieldVbi(qint32 sequentialFieldNumber)
+const LdDecodeMetaData::Vbi &LdDecodeMetaData::getFieldVbi(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
@@ -814,7 +1091,7 @@ const LdDecodeMetaData::Vbi &LdDecodeMetaData::getFieldVbi(qint32 sequentialFiel
 }
 
 // This method gets the NTSC metadata for the specified sequential field number
-const LdDecodeMetaData::Ntsc &LdDecodeMetaData::getFieldNtsc(qint32 sequentialFieldNumber)
+const LdDecodeMetaData::Ntsc &LdDecodeMetaData::getFieldNtsc(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
@@ -825,7 +1102,7 @@ const LdDecodeMetaData::Ntsc &LdDecodeMetaData::getFieldNtsc(qint32 sequentialFi
 }
 
 // This method gets the VITC metadata for the specified sequential field number
-const LdDecodeMetaData::Vitc &LdDecodeMetaData::getFieldVitc(qint32 sequentialFieldNumber)
+const LdDecodeMetaData::Vitc &LdDecodeMetaData::getFieldVitc(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
@@ -836,7 +1113,7 @@ const LdDecodeMetaData::Vitc &LdDecodeMetaData::getFieldVitc(qint32 sequentialFi
 }
 
 // This method gets the Closed Caption metadata for the specified sequential field number
-const LdDecodeMetaData::ClosedCaption &LdDecodeMetaData::getFieldClosedCaption(qint32 sequentialFieldNumber)
+const LdDecodeMetaData::ClosedCaption &LdDecodeMetaData::getFieldClosedCaption(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
@@ -847,7 +1124,7 @@ const LdDecodeMetaData::ClosedCaption &LdDecodeMetaData::getFieldClosedCaption(q
 }
 
 // This method gets the drop-out metadata for the specified sequential field number
-const DropOuts &LdDecodeMetaData::getFieldDropOuts(qint32 sequentialFieldNumber)
+const DropOuts &LdDecodeMetaData::getFieldDropOuts(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
@@ -957,7 +1234,7 @@ void LdDecodeMetaData::appendField(const LdDecodeMetaData::Field &field)
 }
 
 // Method to get the available number of fields (according to the metadata)
-qint32 LdDecodeMetaData::getNumberOfFields()
+qint32 LdDecodeMetaData::getNumberOfFields() const
 {
     return fields.size();
 }
@@ -1030,7 +1307,7 @@ void LdDecodeMetaData::setNumberOfFields(qint32 numberOfFields)
 // the shared-library scope.
 
 // Method to get the available number of still-frames
-qint32 LdDecodeMetaData::getNumberOfFrames()
+qint32 LdDecodeMetaData::getNumberOfFrames() const
 {
     qint32 frameOffset = 0;
 
@@ -1049,7 +1326,7 @@ qint32 LdDecodeMetaData::getNumberOfFrames()
 
 // Method to get the first and second field numbers based on the frame number
 // If field = 1 return the firstField, otherwise return second field
-qint32 LdDecodeMetaData::getFieldNumber(qint32 frameNumber, qint32 field)
+qint32 LdDecodeMetaData::getFieldNumber(qint32 frameNumber, qint32 field) const
 {
     qint32 firstFieldNumber = 0;
     qint32 secondFieldNumber = 0;
@@ -1110,13 +1387,13 @@ qint32 LdDecodeMetaData::getFieldNumber(qint32 frameNumber, qint32 field)
 }
 
 // Method to get the first field number based on the frame number
-qint32 LdDecodeMetaData::getFirstFieldNumber(qint32 frameNumber)
+qint32 LdDecodeMetaData::getFirstFieldNumber(qint32 frameNumber) const
 {
     return getFieldNumber(frameNumber, 1);
 }
 
 // Method to get the second field number based on the frame number
-qint32 LdDecodeMetaData::getSecondFieldNumber(qint32 frameNumber)
+qint32 LdDecodeMetaData::getSecondFieldNumber(qint32 frameNumber) const
 {
     return getFieldNumber(frameNumber, 2);
 }
@@ -1128,7 +1405,7 @@ void LdDecodeMetaData::setIsFirstFieldFirst(bool flag)
 }
 
 // Method to get the isFirstFieldFirst flag
-bool LdDecodeMetaData::getIsFirstFieldFirst()
+bool LdDecodeMetaData::getIsFirstFieldFirst() const
 {
     return isFirstFieldFirst;
 }
@@ -1241,7 +1518,7 @@ void LdDecodeMetaData::generatePcmAudioMap()
 }
 
 // Method to get the start sample location of the specified sequential field number
-qint32 LdDecodeMetaData::getFieldPcmAudioStart(qint32 sequentialFieldNumber)
+qint32 LdDecodeMetaData::getFieldPcmAudioStart(qint32 sequentialFieldNumber) const
 {
     if (pcmAudioFieldStartSampleMap.size() < sequentialFieldNumber) return -1;
     // Field numbers are 1 indexed, but our map is 0 indexed
@@ -1249,7 +1526,7 @@ qint32 LdDecodeMetaData::getFieldPcmAudioStart(qint32 sequentialFieldNumber)
 }
 
 // Method to get the sample length of the specified sequential field number
-qint32 LdDecodeMetaData::getFieldPcmAudioLength(qint32 sequentialFieldNumber)
+qint32 LdDecodeMetaData::getFieldPcmAudioLength(qint32 sequentialFieldNumber) const
 {
     if (pcmAudioFieldLengthMap.size() < sequentialFieldNumber) return -1;
     // Field numbers are 1 indexed, but our map is 0 indexed

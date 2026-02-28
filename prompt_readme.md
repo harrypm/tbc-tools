@@ -9,6 +9,83 @@ User: "No I ment test the build workflow and keep tinkering with it untill it pr
 ```bash
 gh run list --workflow "build_macos_tools.yml" --limit 5
 ```
+## 2026-02-27T17:56:56Z
+User input: "export should be in its own tab, its not loading the ffmleg profile list"
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.ui
+Output: [see tool output]
+
+Command: ripgrep (query: "QTabWidget|tabWidget|tab|Export|Metadata|export|actionExport") in /home/harry/tbc-tools/src/ld-analyse
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.ui (ranges 1-200, 631-830, 861-1060)
+Output: [see tool output]
+
+Command: ripgrep (query: "on_finishedLoading|updateGuiLoaded|updateGuiUnloaded") in /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp (ranges 1633-1832, 1953-2152)
+Output: [see tool output]
+
+Command: tbc-video-export --list-profiles
+Output: [see tool output]
+
+Command: apply_patch (update exportdialog.h to QWidget and remove close slot)
+Output: [see tool output]
+
+Command: apply_patch (update exportdialog.cpp: parser, constructor, source handling, profile listing, busy state)
+Output: [see tool output]
+
+Command: apply_patch (update exportdialog.cpp: remove close handler)
+Output: [see tool output]
+
+Command: apply_patch (update exportdialog.cpp: export control enablement)
+Output: [see tool output]
+
+Command: apply_patch (update exportdialog.cpp: add .local/bin and ~/bin search)
+Output: [see tool output]
+
+Command: apply_patch (update exportdialog.ui root to QWidget and resize constraints)
+Output: [see tool output]
+
+Command: apply_patch (remove close button from exportdialog.ui)
+Output: [see tool output]
+
+Command: apply_patch (add export tab in mainwindow.cpp constructor)
+Output: [see tool output]
+
+Command: apply_patch (refresh export tab state in updateGuiLoaded/updateGuiUnloaded)
+Output: [see tool output]
+
+Command: apply_patch (export action switches to export tab)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[20/20] Linking CXX executable bin/ld-analyse
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output: 2026-02-27T17:56:56Z
+
+Command: tail -n 20 /home/harry/tbc-tools/prompt_readme.md
+Output: [see tool output]
 
 ### Output
 ```
@@ -974,6 +1051,45 @@ Build tbc-tools (x86_64)	Post Run actions/checkout@v4	2026-02-26T03:41:14.639645
 Build tbc-tools (x86_64)	Post Run actions/checkout@v4	2026-02-26T03:41:14.7272160Z [command]/usr/local/bin/git config --file /Users/runner/work/tbc-tools/tbc-tools/.git/modules/src/efm-decoder/libs/ezpwd/config --name-only --get-regexp ^includeIf\\.gitdir:
 Build tbc-tools (x86_64)	Complete job	2026-02-26T03:41:14.7357320Z Cleaning up orphan processes
 ```
+---
+
+# Prompt Log - Metadata Improvements
+
+## Prompt Input
+User: "Start a new branch \"metadata-improvements\" ... Add back JSON support ... add back vhs-decode style Y/C support ... Expand the metadata format ..."
+User: "Also ensure to re-use old code as examles from older version commits but keep in-line to the current code"
+
+## Commands Run and Output
+
+### Command
+```bash
+git --no-pager checkout -b metadata-improvements
+```
+
+### Output
+```
+Switched to a new branch 'metadata-improvements'
+```
+
+## Tool Outputs (Context)
+### codebase_semantic_search
+- Query: "JSON converter metadata format"
+  - Matches: `src/ld-json-converter/lddecodemetadata.h`, `src/ld-export-decode-metadata/metadataconverter.h`, `src/ld-export-decode-metadata/exportmetadata.h`, `src/ld-export-decode-metadata/main.cpp`, `src/ld-export-decode-metadata/metadataconverter.cpp`, `src/ld-export-decode-metadata/jsonio.h`
+- Query: "ChromaDecoder ChromaGain ChromaPhase LumaNR metadata"
+  - Matches: `src/ld-chroma-decoder/palcolour.h`, `src/ld-analyse/chromadecoderconfigdialog.cpp`, `src/ld-chroma-decoder/componentframe.h`, `src/ld-chroma-decoder/palcolour.cpp`, `src/ld-chroma-decoder/encoder/ntscencoder.h`, `src/ld-chroma-decoder/encoder/ntscencoder.cpp`, `src/ld-analyse/chromadecoderconfigdialog.h`
+- Query: "vhs-decode chroma_.tbc Y/C support"
+  - Matches: `src/ld-chroma-decoder/encoder/ntscencoder.h`, `docs/How-to-guides/Creating-video-from-NTSC-decodes.md`, `docs/Tools/ld-chroma-decoder.md`, `src/ld-chroma-decoder/README.md`, `docs/How-to-guides/Creating-video-from-PAL-decodes.md`
+
+### ripgrep
+- Query: "ld-json-converter"
+  - Matches: `src/ld-json-converter/CMakeLists.txt`, `src/ld-json-converter/main.cpp`, `src/ld-json-converter/README.md`, `src/ld-json-converter/jsonconverter.cpp`, `src/ld-json-converter/jsonconverter.h`, `AGENTS.md`, `README.md`
+- Query: "chroma_.tbc", "ChromaDecoder", "ChromaGain", "ChromaPhase", "LumaNR"
+  - Matches: `src/ld-analyse/chromadecoderconfigdialog.h`, `src/ld-analyse/tbcsource.h`, `src/ld-analyse/chromadecoderconfigdialog.cpp`, `src/ld-analyse/mainwindow.cpp`, `src/ld-analyse/configuration.h`, `src/ld-analyse/mainwindow.h`, `src/ld-analyse/chromadecoderconfigdialog.ui`, `src/ld-analyse/configuration.cpp`, `src/ld-dropout-correct/dropoutcorrect.cpp`, `src/ld-analyse/tbcsource.cpp`, `src/ld-dropout-correct/dropoutcorrect.h`
+
+### read_files
+- Read: `src/ld-json-converter/main.cpp`, `src/ld-json-converter/jsonconverter.h`, `src/ld-json-converter/jsonconverter.cpp`
+- Read: `src/library/tbc/lddecodemetadata.h`, `src/ld-chroma-decoder/main.cpp`
+- Read: `src/ld-analyse/chromadecoderconfigdialog.h`, `src/ld-analyse/chromadecoderconfigdialog.cpp`, `src/library/tbc/sqliteio.h`, `src/library/tbc/sqliteio.cpp`, `src/library/tbc/lddecodemetadata.cpp`, `src/ld-json-converter/lddecodemetadata.cpp`
 
 ### Command
 ```bash
@@ -1631,3 +1747,2412 @@ Critical details (verbatim if present in output):
 
 ## Files Modified (Iteration 2)
 - `.github/workflows/build_macos_tools.yml` (removed `install_options: --no-daemon`; added env overrides: `NIX_FIRST_BUILD_UID`, `NIX_BUILD_USER_NAME_TEMPLATE`)
+
+## Session 2026-02-27T05:44:01Z
+
+### User Input
+```
+locally build for testing
+```
+
+### Commands
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+Output:
+```
+2026-02-27T05:44:01Z
+```
+
+```bash
+wc -l /home/harry/tbc-tools/prompt_readme.md
+```
+
+Output:
+```
+1672 /home/harry/tbc-tools/prompt_readme.md
+```
+
+```bash
+nix develop -c cmake -S /home/harry/tbc-tools -B /home/harry/tbc-tools/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+```
+
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+-- Qt Version: 
+-- Configuring done (0.4s)
+-- Generating done (0.2s)
+-- Build files have been written to: /home/harry/tbc-tools/build
+```
+
+```bash
+nix develop -c ninja -C /home/harry/tbc-tools/build
+```
+
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[4/126] Building CXX object ...ir/tbc/lddecodemetadata.cpp.
+FAILED: [code=1] src/library/CMakeFiles/lddecode-library.dir/tbc/lddecodemetadata.cpp.o 
+/nix/store/a245z3cvf9x9sn0xlk6k8j9xhxbhda1z-gcc-wrapper-15.2.0/bin/g++ -DAPP_BRANCH=\"nix\" -DAPP_COMMIT=\"0.0.0\" -DQT_CORE_LIB -DQT_NO_DEBUG -DQT_SQL_LIB -I/home/harry/tbc-tools/build/src/library/lddecode-library_autogen/include -I/home/harry/tbc-tools/src/library/filter -I/home/harry/tbc-tools/src/library/tbc -I/home/harry/tbc-tools/src/library -isystem /nix/store/kavwy4v9p1jhf952dzipkjj5l1hjx110-qtbase-6.10.1/include/QtCore -isystem /nix/store/kavwy4v9p1jhf952dzipkjj5l1hjx110-qtbase-6.10.1/mkspecs/linux-g++ -isystem /nix/store/kavwy4v9p1jhf952dzipkjj5l1hjx110-qtbase-6.10.1/include/QtSql -O3 -DNDEBUG -std=c++17 -fPIC -MD -MT src/library/CMakeFiles/lddecode-library.dir/tbc/lddecodemetadata.cpp.o -MF src/library/CMakeFiles/lddecode-library.dir/tbc/lddecodemetadata.cpp.o.d -o src/library/CMakeFiles/lddecode-library.dir/tbc/lddecodemetadata.cpp.o -c /home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:429:70: error: stray ‘\’ in program
+  429 |             if (!writer.updateCaptureMetadata(captureId, systemName, \"ld-decode\", // TODO: make decoder configurable
+      |                                                                      ^
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:429:71: warning: missing terminating " character
+  429 |             if (!writer.updateCaptureMetadata(captureId, systemName, \"ld-decode\", // TODO: make decoder configurable
+      |                                                                       ^
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:429:71: error: missing terminating " character
+  429 |             if (!writer.updateCaptureMetadata(captureId, systemName, \"ld-decode\", // TODO: make decoder configurable
+      |                                                                       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:447:29: error: stray ‘\’ in program
+  447 |                 systemName, \"ld-decode\", // TODO: make decoder configurable
+      |                             ^
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:447:30: warning: missing terminating " character
+  447 |                 systemName, \"ld-decode\", // TODO: make decoder configurable
+      |                              ^
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:447:30: error: missing terminating " character
+  447 |                 systemName, \"ld-decode\", // TODO: make decoder configurable
+      |                              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp: In member function ‘bool LdDecodeMetaData::write(QString) const’:
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:429:46: error: no matching function for call to ‘SqliteWriter::updateCaptureMetadata(int&, QString&, const QString&, const QString&, const double&, const qint32&, const qint32&, const qint32&, const qint32&, const qint32&, const qint32&, const qint32&, const bool&, const bool&, const bool&, const qint32&, const qint32&, const qint32&, const QString&, const double&, const double&, const double&, const QString&)’
+  429 |             if (!writer.updateCaptureMetadata(captureId, systemName, \"ld-decode\", // TODO: make decoder configurable
+      |                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  430 |                                             videoParameters.gitBranch, videoParameters.gitCommit,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  431 |                                             videoParameters.sampleRate, videoParameters.activeVideoStart,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  432 |                                             videoParameters.activeVideoEnd, videoParameters.fieldWidth,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  433 |                                             videoParameters.fieldHeight, videoParameters.numberOfSequentialFields,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  434 |                                             videoParameters.colourBurstStart, videoParameters.colourBurstEnd,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  435 |                                             videoParameters.isMapped, videoParameters.isSubcarrierLocked,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  436 |                                             videoParameters.isWidescreen, videoParameters.white16bIre,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  437 |                                             videoParameters.black16bIre, videoParameters.blanking16bIre,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  438 |                                             videoParameters.chromaDecoder, videoParameters.chromaGain,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  439 |                                             videoParameters.chromaPhase, videoParameters.lumaNR,
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  440 |                                             videoParameters.tapeFormat)) {
+      |                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:429:46: note: there is 1 candidate
+In file included from /home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:15:
+/home/harry/tbc-tools/src/library/tbc/sqliteio.h:123:10: note: candidate 1: ‘bool SqliteWriter::updateCaptureMetadata(int, const QString&, const QString&, const QString&, const QString&, double, int, int, int, int, int, int, int, bool, bool, bool, int, int, int, const QString&, double, double, double, const QString&)’
+  123 |     bool updateCaptureMetadata(int captureId, const QString &system, const QString &decoder,
+      |          ^~~~~~~~~~~~~~~~~~~~~
+/home/harry/tbc-tools/src/library/tbc/sqliteio.h:123:10: note: candidate expects 24 arguments, 23 provided
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:446:52: error: no matching function for call to ‘SqliteWriter::writeCaptureMetadata(QString&, const QString&, const QString&, const double&, const qint32&, const qint32&, const qint32&, const qint32&, const qint32&, const qint32&, const qint32&, const bool&, const bool&, const bool&, const qint32&, const qint32&, const qint32&, const QString&, const double&, const double&, const double&, const QString&)’
+  446 |             captureId = writer.writeCaptureMetadata(
+      |                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+  447 |                 systemName, \"ld-decode\", // TODO: make decoder configurable
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  448 |                 videoParameters.gitBranch, videoParameters.gitCommit,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  449 |                 videoParameters.sampleRate, videoParameters.activeVideoStart,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  450 |                 videoParameters.activeVideoEnd, videoParameters.fieldWidth,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  451 |                 videoParameters.fieldHeight, videoParameters.numberOfSequentialFields,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  452 |                 videoParameters.colourBurstStart, videoParameters.colourBurstEnd,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  453 |                 videoParameters.isMapped, videoParameters.isSubcarrierLocked,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  454 |                 videoParameters.isWidescreen, videoParameters.white16bIre,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  455 |                 videoParameters.black16bIre, videoParameters.blanking16bIre,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  456 |                 videoParameters.chromaDecoder, videoParameters.chromaGain,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  457 |                 videoParameters.chromaPhase, videoParameters.lumaNR,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  458 |                 videoParameters.tapeFormat);
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~         
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:446:52: note: there is 1 candidate
+/home/harry/tbc-tools/src/library/tbc/sqliteio.h:112:9: note: candidate 1: ‘int SqliteWriter::writeCaptureMetadata(const QString&, const QString&, const QString&, const QString&, double, int, int, int, int, int, int, int, bool, bool, bool, int, int, int, const QString&, double, double, double, const QString&)’
+  112 |     int writeCaptureMetadata(const QString &system, const QString &decoder,
+      |         ^~~~~~~~~~~~~~~~~~~~
+/home/harry/tbc-tools/src/library/tbc/sqliteio.h:112:9: note: candidate expects 23 arguments, 22 provided
+[7/126] Building CXX object ...ibrary.dir/tbc/sqliteio.cpp.
+ninja: build stopped: subcommand failed.
+```
+
+## Session 2026-02-27T05:50:03Z
+
+### User Input
+```
+continue#
+```
+
+### Commands
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+Output:
+```
+2026-02-27T05:50:03Z
+```
+
+```bash
+tail -n 20 /home/harry/tbc-tools/prompt_readme.md
+```
+
+Output:
+```
+  453 |                 videoParameters.isMapped, videoParameters.isSubcarrierLocked,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  454 |                 videoParameters.isWidescreen, videoParameters.white16bIre,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  455 |                 videoParameters.black16bIre, videoParameters.blanking16bIre,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  456 |                 videoParameters.chromaDecoder, videoParameters.chromaGain,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  457 |                 videoParameters.chromaPhase, videoParameters.lumaNR,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  458 |                 videoParameters.tapeFormat);
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~         
+/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp:446:52: note: there is 1 candidate
+/home/harry/tbc-tools/src/library/tbc/sqliteio.h:112:9: note: candidate 1: ‘int SqliteWriter::writeCaptureMetadata(const QString&, const QString&, const QString&, const QString&, double, int, int, int, int, int, int, int, bool, bool, bool, int, int, int, const QString&, double, double, double, const QString&)’
+  112 |     int writeCaptureMetadata(const QString &system, const QString &decoder,
+      |         ^~~~~~~~~~~~~~~~~~~~
+/home/harry/tbc-tools/src/library/tbc/sqliteio.h:112:9: note: candidate expects 23 arguments, 22 provided
+[7/126] Building CXX object ...ibrary.dir/tbc/sqliteio.cpp.
+ninja: build stopped: subcommand failed.
+```
+
+```bash
+nix develop -c ninja -C /home/harry/tbc-tools/build
+```
+
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[120/120] Linking CXX executable bin/ld-analyse
+```
+
+## Session 2026-02-27T06:00:37Z
+
+### User Input
+```
+continue#
+```
+
+### Commands
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+Output:
+```
+2026-02-27T06:00:37Z
+```
+
+### Tool Outputs (Context)
+#### read_plans
+```
+# Metadata Improvements Implementation Plan
+## Problem Statement
+Implement comprehensive metadata improvements to support:
+1. Bidirectional JSON support for all tools (with `ld-json-converter` renamed to `metadata-converter`)
+2. Y/C support with "chroma_.tbc" naming convention from vhs-decode
+3. Extended metadata format with ChromaDecoder, ChromaGain, ChromaPhase, and LumaNR fields
+4. JSON/SQLite-only reading mode for ld-analyse
+5. A metadata conversion tab inside ld-analyse for JSON↔SQLite conversion
+## Current State Analysis
+Based on code analysis:
+* `ld-json-converter` currently only converts JSON → SQLite (unidirectional)
+* Metadata format uses SQLite as primary storage, JSON as legacy import
+* `ld-analyse` has ChromaDecoder configuration dialog with gain/phase/NR controls
+* Current SQLite schema in `sqliteio.h/cpp` and `lddecodemetadata.h`
+* No Y/C file support currently implemented
+* ChromaDecoder settings exist in UI but not persisted to metadata
+## Proposed Changes
+### 1. Bidirectional JSON Converter (Rename to metadata-converter)
+Extend the converter to support:
+* `--direction` parameter: `json-to-sqlite` (default) or `sqlite-to-json`
+* SQLite → JSON export functionality
+* Maintain format compatibility with existing JSON schema
+* Rename tool and build target to `metadata-converter`
+### 2. Extended Metadata Schema
+Add new fields to SQLite schema and `LdDecodeMetaData` structures:
+* `ChromaDecoder` (string): decoder type ("pal2d", "transform2d", "transform3d", "ntsc1d", "ntsc2d", "ntsc3d", "mono")
+* `ChromaGain` (double): chroma gain multiplier
+* `ChromaPhase` (double): chroma phase adjustment in degrees
+* `LumaNR` (double): luma noise reduction level
+### 3. Y/C File Support
+Implement vhs-decode style Y/C support:
+* Detect "chroma_.tbc" files alongside main TBC files
+* Load and process Y/C pairs properly
+* Update file I/O routines in `SourceVideo` class
+* Add Y/C mode detection and handling
+### 4. ld-analyse Metadata-Only Mode
+Add JSON/SQLite-only viewing mode:
+* `--metadata-only` command line option
+* Skip TBC file loading requirements
+* Focus UI on metadata inspection and editing
+* Allow ChromaDecoder settings to be saved to metadata
+### 5. ld-analyse Metadata Conversion Tab
+Add a metadata tab that can invoke JSON↔SQLite conversion:
+* UI controls for selecting input/output files
+* Run conversion using `metadata-converter`
+* Show success/failure status
+### 6. ChromaDecoder Settings Integration
+Connect `ld-analyse` ChromaDecoder dialog to metadata storage:
+* Save/load ChromaDecoder settings from metadata
+* Export settings for `ld-chroma-decoder` consumption
+* Update `ld-chroma-decoder` to read metadata settings as defaults
+## Implementation Steps
+### Phase 1: Schema Extension
+1. Update SQLite schema in `sqliteio.cpp` to add new ChromaDecoder fields
+2. Extend `LdDecodeMetaData::VideoParameters` structure
+3. Update read/write methods in SqliteReader/SqliteWriter
+4. Increment schema version and add migration logic
+### Phase 2: JSON Converter Enhancement + Rename
+1. Add bidirectional conversion support to `ld-json-converter`
+2. Implement SQLite → JSON export functionality
+3. Update JSON schema documentation
+4. Add command-line options for conversion direction
+5. Rename the tool, build target, and docs to `metadata-converter`
+### Phase 3: Y/C File Support
+1. Update `SourceVideo` class to detect and load chroma_.tbc files
+2. Modify file detection logic throughout codebase
+3. Update command-line tools to handle Y/C file pairs
+4. Add Y/C mode indicators to metadata
+### Phase 4: ld-analyse Integration
+1. Add metadata-only mode to ld-analyse
+2. Connect ChromaDecoder dialog to metadata persistence
+3. Implement settings save/load functionality
+4. Update UI to show metadata-sourced defaults
+5. Add metadata conversion tab wiring to run `metadata-converter`
+### Phase 5: ld-chroma-decoder Integration
+1. Update ld-chroma-decoder to read ChromaDecoder settings from metadata
+2. Use metadata values as defaults when no CLI options provided
+3. Maintain CLI option precedence over metadata defaults
+## File Modifications Required
+* `src/library/tbc/lddecodemetadata.h` - Add new fields to VideoParameters
+* `src/library/tbc/sqliteio.h/cpp` - Update schema and I/O methods
+* `src/metadata-converter/` - Add bidirectional conversion and rename from `ld-json-converter`
+* `src/library/tbc/sourcevideo.h/cpp` - Y/C file support
+* `src/ld-analyse/` - Metadata-only mode, settings persistence, and conversion UI
+* `src/ld-chroma-decoder/main.cpp` - Read metadata defaults
+* SQLite schema migration logic
+## Testing Strategy
+* Create test files with both JSON and SQLite metadata
+* Test bidirectional JSON ↔ SQLite conversion
+* Verify Y/C file detection and loading
+* Test metadata-only mode in ld-analyse
+* Confirm ChromaDecoder settings persistence and application
+* Regression testing with existing TBC files
+```
+
+## 2026-02-27T16:50:33Z
+User input: "JSON is the metadata..."
+
+Command: tbc-video-export --help
+Output (summarized by tool):
+I ran `tbc-video-export --help` and got exit code 0 in /home/harry/tbc-tools.
+
+Key outcomes
+- Displayed full help/usage for tbc-video-export, including:
+  - Basic usage: usage: tbc-video-export [options] input_file [output_file]
+  - Help reference: See --help or https://github.com/JuniorIsAJitterbug/tbc-video-export/wiki/Command-List
+- Detailed option categories with many flags under:
+  - general (input_file, output_file, --version, --config-file, --dump-default-config, etc.)
+  - verbosity (quiet, debug, no-progress, show-process-output, log-process-output)
+  - decoder (threads, start/length, chroma-decoder options, luma/nr, transform thresholds, etc.)
+  - decoder (NTSC/PAL) specific options
+  - dropout correction
+  - process vbi
+  - export metadata
+  - luma, ffmpeg, profile
+  - Output/profile customization (Pixel Formats, Bit Depths)
+- Notable exact lines for reference:
+  - "usage: tbc-video-export [options] input_file [output_file]"
+  - "See --help or https://github.com/JuniorIsAJitterbug/tbc-video-export/wiki/Command-List"
+  - Many exact option names and defaults, e.g., "--overwrite Set to overwrite existing video files. (default: no)", "--debug Do not suppress INFO, WARNING, or DEBUG messages. (default: no)"
+  - "Output/profile customization:" with "Pixel Formats:" and "Bit Depths:"
+
+Critical details
+- This is a help dump; no runtime behavior or file I/O occurred beyond displaying options.
+- No specific test names, error messages, or file paths were produced in this run.
+
+Errors and warnings
+- None (exit code 0). No errors or warnings were reported.
+
+Command: tbc-video-export --help
+Output:
+usage: tbc-video-export [options] input_file [output_file]
+
+See --help or https://github.com/JuniorIsAJitterbug/tbc-video-export/wiki/Command-List
+---
+
+Tool for exporting S-Video and CVBS-type TBCs to video files.
+
+Credits:
+  Jitterbug	Development (https://github.com/JuniorIsAJitterbug)
+  Harry Munday	Project Management (https://github.com/harrypm)
+
+options:
+  -h, --help            show this help message and exit
+
+general:
+  input_file            Path to the TBC file.
+                        
+  output_file           Path to export to. (default: input_file.X)
+                          - If no argument is provided, the output file will be placed in the
+                            same directory as the input_file.
+                          - Do not specify a file extension, as this is set by the profile.
+                        
+  --version             Show the program's version number and exit.
+                        
+  -t int, --threads int
+                        Specify the number of threads each process can use.
+                          - Setting this to 0 uses process defaults.
+                        
+  --appimage appimage file
+                        Run the tools from an AppImage file.
+                        
+  --two-step            Enables two-step mode. (default: no)
+                          - Enabling this will export Luma to a file before merging with Chroma.
+                          - If you have issues using named pipes, this may be useful as a
+                            fallback.
+                          - This is generally not required, will take longer, and will require
+                            more disk space.
+                          - Useful only with export modes that merge luma and chroma.
+                        
+  --video-system format
+                        Force a video system format. (default: from input.tbc.json)
+                        
+                        Available formats:
+                          pal
+                          pal-m
+                          ntsc
+                        
+  --input-tbc-json tbc_json_file
+                        Specify a .tbc.json file.
+                          - This is generally not needed and should be auto-detected.
+                        
+  --overwrite           Set to overwrite existing video files. (default: no)
+                        
+  --dry-run             Show what would be run without running. (default: no)
+                          - This is useful for debugging and validating opts.
+                        
+  --config-file config_file
+                        Load configuration from file. (default: use embedded config)
+                        
+  --dump-default-config
+                        Dump the default configuration json to tbc-video-export.json.
+                        
+
+verbosity:
+  -q, --quiet           Only show ERROR messages. (default: no)
+                        
+  -d, --debug           Do not suppress INFO, WARNING, or DEBUG messages. (default: no)
+                          - If progress is enabled, this will not log to the console.
+                          - End-users do not need this unless providing logs to developers.
+                        
+  --no-progress         Hide the real-time progress display. (default: no)
+                        
+  --show-process-output
+                        Show process output. (default: no)
+                          - This sets --no-progress.
+                        
+  --log-process-output  Log process output. (default: no)
+                          - This will log all process output to separate files.
+                        
+
+decoder:
+  --decoder-threads int
+                        Specify the number of ld-chroma-decoder threads.
+                          - This overrides --threads, and setting to 0 uses process defaults.
+                        
+  -s int, --start int   Specify the start frame number.
+                        
+  -l int, --length int  Specify the number of frames to process.
+                        
+  --reverse             Reverse the field order to second/first.
+                          - This requires --no-dropout-correct to be set.
+                        
+  --output-padding int  Pad the output frame to a multiple of these many pixels.
+                          - Compatibility with all video codecs is not guaranteed.
+                        
+  --vbi                 Show the VBI segment in the output video.
+                          - Compatibility with all codecs is not guaranteed due to padding.
+                          - Set --output-padding to 8 if export fails.
+                        
+  --full-vertical       Adjust FFLL/LFLL/FFRL/LFRL for full vertical export.
+                        
+  --letterbox           Adjust FFLL/LFLL/FFRL/LFRL for letterbox crop.
+                          - Compatibility with all codecs is not guaranteed due to padding.
+                          - Set --output-padding to 8 if export fails.
+                        
+  --first-active-field-line int, --ffll int
+                        The first visible line of a field.
+                          Range 1-259 for NTSC (default: 20)
+                                2-308 for PAL  (default: 22)
+                        
+  --last-active-field-line int, --lfll int
+                        The last visible line of a field.
+                          Range 1-259 for NTSC (default: 259)
+                                2-308 for PAL  (default: 308)
+                        
+  --first-active-frame-line int, --ffrl int
+                        The first visible line of a field.
+                          Range 1-525 for NTSC (default: 40)
+                                1-620 for PAL  (default: 44)
+                        
+  --last-active-frame-line int, --lfrl int
+                        The last visible line of a field.
+                          Range 1-525 for NTSC (default: 525)
+                                1-620 for PAL  (default: 620)
+                        
+  --chroma-decoder decoder
+                        Set the chroma decoder to be used.
+                        
+                        Available decoders:
+                          MONO (default for LUMA)
+                        
+                          PAL2D (default for PAL/PAL-M S-Video)
+                          TRANSFORM2D
+                          TRANSFORM3D (default for PAL/PAL-M CVBS)
+                        
+                          NTSC1D
+                          NTSC2D (default for NTSC S-Video and CVBS)
+                          NTSC3D (default for NTSC CVBS LD)
+                          NTSC3DNOADAPT
+                        
+  --chroma-decoder-luma decoder
+                        Set the chroma decoder to be used for luma.
+                          - You likely do not need to change this.
+                        
+                        Available decoders:
+                          MONO (default)
+                        
+                          PAL2D
+                          TRANSFORM2D
+                          TRANSFORM3D
+                        
+                          NTSC1D
+                          NTSC2D
+                          NTSC3D
+                          NTSC3DNOADAPT
+                        
+  --chroma-gain float   Gain factor applied to chroma components.
+                          - This does not apply to the luma decoder for Y/C-separated TBCs.
+                        
+  --chroma-phase float  Phase rotation applied to chroma components in degrees.
+                          - This does not apply to the luma decoder for Y/C-separated TBCs.
+                        
+  --luma-nr float       Luma noise reduction level in dB.
+                          - You likely do not need to change this and should instead apply any
+                            noise reduction in post.
+                        For Y/C-separated TBCs:
+                          - This will only apply to the luma instance.
+                          - Requires the luma decoder to be set to something other than mono.
+                        
+  --transform-threshold float
+                        Transform: Uniform similarity threshold in 'threshold' mode.
+                        
+  --transform-thresholds file_name
+                        Transform: File containing per-bin similarity thresholds in 'threshold' mode.
+                        
+
+decoder (NTSC):
+  --chroma-nr float     Chroma noise reduction level in dB.
+                          - This does not apply to the luma decoder for Y/C-separated TBCs.
+                          - You likely do not need to change this and should instead apply any
+                            noise reduction in post.
+                        
+  --ntsc-phase-comp, --no-ntsc-phase-comp
+                        Enable or disable adjusting phase per line using burst phase.
+                          - S-Video and CVBS have this option enabled by default.
+                          - CVBS LD has this option disabled by default.
+                        
+  --oftest              Overlay the adaptive filter map (only used for testing).
+                        
+
+decoder (PAL):
+  --simple-pal          Transform: Use 1D UV filter.
+                          - Only available with Transform decoders.
+                        
+
+dropout correction:
+  --no-dropout-correct  Disable dropout correction. (default: no)
+                          - This will run ld-chroma-decoder without dropout correction.
+                        
+  --dropout-correct-threads int
+                        Specify the number of ld-dropout-correct threads.
+                          - This overrides --threads, and setting to 0 uses process defaults.
+                        
+
+process vbi:
+  --process-vbi         Run ld-process-vbi before exporting. (default: no)
+                          - The generated JSON file will be used for decoding.
+                        
+  --process-vbi-keep-going
+                        Keep going on errors. (default: no)
+                        
+  --process-vbi-threads int
+                        Specify the number of ld-process-vbi threads.
+                          - This overrides --threads, and setting to 0 uses process defaults.
+                        
+
+export metadata:
+  --export-metadata     Run ld-export-metadata before exporting. (default: no)
+                        
+                          - The generated subtitles and ffmetadata will be muxed when encoding.
+                        
+  --export-metadata-keep-going
+                        Keep going on errors. (default: no)
+                        
+
+luma:
+  --luma-only           Only output a luma video. (default: no)
+                          - For Y/C-separated TBCs, this is direct.
+                          - For combined TBCs, filtering is applied to strip the color carrier
+                            signal out.
+                        
+  --luma-4fsc           This uses luma data from the TBC to produce a full signal frame export. (default: no)
+                          - For combined TBCs, this does not filter out the chroma and thus has
+                            crosshatching.
+                        
+
+ffmpeg:
+  --ffmpeg-threads int  Specify the number of FFmpeg threads.
+                          - This overrides --threads, and setting to 0 uses process defaults.
+                        
+  --audio-track file_name
+                        Audio track to mux.
+                          - You can use this option multiple times.
+                        
+  --metadata key value  Add metadata to output the file.
+                          - You can use this option multiple times.
+                        
+                        Example:
+                          --metadata Title foo --metadata Year 2024
+                        
+  --metadata-file filename
+                        Add metadata to the output of the file using ffmetadata files.
+                          - You can use this option multiple times.
+                          - See https://ffmpeg.org/ffmpeg-formats.html#Metadata-1 for details.
+                          - When using --export-metadata the generated file is also used.
+                          - Files defined here are used before any generated metadata and take
+                            priority.
+                        
+  --field-order order   Set a field order. (default: tff)
+                        
+                        Available formats:
+                          auto  Auto
+                          tff   Interlaced (Top Field First)
+                          bff   Interlaced (Bottom Field First)
+                          prog  Progressive
+                        
+  --force-anamorphic    Force widescreen aspect ratio.
+                          - This is not allowed when letterbox is used.
+                        
+  --force-black-level R[,G,B]
+                        Force black levels using the colorlevels filter.
+                          - Use comma-separated numbers.
+                          - If a single number is provided, it is used for all 3.
+                        
+  --hwaccel-device HWACCEL_DEVICE
+                        Hardware acceleration device.
+                          - Specify a hardware device when a supported video profile is selected.
+                        
+  --no-attach-json      Disable embedding the TBC json in the video file. (default: no).
+                        
+  --thread-queue-size int
+                        Set the thread queue size for FFmpeg. (default: 1024)
+                          - Reduce this if you are having out-of-memory issues as a higher value
+                            will allow the decoder to consume more memory.
+                        
+  --checksum            Enable SHA256 checksumming on the output streams. (default: no)
+                          - This will create a .sha256 file next to your output file.
+                          - This may reduce export FPS slightly.
+                          - FFmpeg must be used to verify checksums.
+                        
+
+profile:
+  --profile profile_name
+                        Specify an FFmpeg profile to use. (default: ffv1)
+                          - Use --list-profiles to see the available profiles.
+                          - These are also accessible directly, e.g. --x264
+                        
+  --list-profiles       Show available profiles.
+                          - You can view this in the browser here:
+                            https://github.com/JuniorIsAJitterbug/tbc-video-export/wiki/FFmpeg-Profiles
+                        
+  --profile-container profile_container, --container profile_container
+                        Override an FFmpeg profile to use a specific container.
+                          - Compatibility with profile is not guaranteed.
+                        
+  --profile-add-filter filter_name, --add-filter filter_name
+                        Use an additional filter profile when encoding.
+                          - Compatibility with profile is not guaranteed.
+                          - You can use this option muiltiple times.
+                        
+  --append-video-filter filter, --append-vf filter
+                        Add a custom filter to the video segment of the complex filter.
+                          - Compatibility with profile is not guaranteed.
+                          - Use --dry-run to ensure your filter looks correct before encoding.
+                        
+                        Examples:
+                          --append-video-filter "scale=3480x2160:flags=lanczos,setdar=4/3"
+                        
+  --append-other-filter filter, --append-of filter
+                        Add a custom filter to the end of the complex filter.
+                          - Compatibility with profile is not guaranteed.
+                          - Use --dry-run to ensure your filter looks correct before encoding.
+                        
+                        Examples:
+                          --append-other-filter "[2:a]loudnorm=i=-14"
+                        
+
+Output/profile customization:
+  Pixel Formats:
+    --gray, --yuv420, --yuv422, --yuv444
+
+  Bit Depths:
+    --8bit, --10bit, --16bit
+
+Command: file /home/harry/.local/bin/tbc-video-export
+Output:
+/home/harry/.local/bin/tbc-video-export: symbolic link to /home/harry/.local/pipx/venvs/tbc-video-export/bin/tbc-video-export
+
+Command: file /home/harry/.local/pipx/venvs/tbc-video-export/bin/tbc-video-export
+Output:
+/home/harry/.local/pipx/venvs/tbc-video-export/bin/tbc-video-export: a /home/harry/.local/pipx/venvs/tbc-video-export/bin/python script, ASCII text executable
+
+Command: ls /home/harry/.local/pipx/venvs/tbc-video-export/lib
+Output:
+python3.10
+
+Command: ls /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages
+Output:
+pipx_shared.pth   tbc_video_export-0.1.7.dist-info
+__pycache__       typing_extensions-4.12.2.dist-info
+tbc_video_export  typing_extensions.py
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/bin/tbc-video-export
+Output:
+#!/home/harry/.local/pipx/venvs/tbc-video-export/bin/python
+# -*- coding: utf-8 -*-
+import re
+import sys
+from tbc_video_export.__main__ import main
+if __name__ == '__main__':
+    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+    sys.exit(main())
+
+Command: ripgrep (query: "input-tbc-json|tbc\\.json|metadata") in /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export
+Output:
+{"matched_files":[{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/wrapper/wrapper_group.py","matched_lines":[29]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/wrapper/wrapper_ffmpeg.py","matched_lines":[58,149,230,231,233,240,243,244,246,247,361,369,371,372,373,376,377,448,452,459,460,461,462,463,469,472,475,479,483,488]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/utils/metadata.py","matched_lines":[3,5,8,13]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/video_system.py","matched_lines":[16]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts.py","matched_lines":[94,95,96,101,102]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/file_helper.py","matched_lines":[75,76,77,112,269]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/parser/parser_ld_export_metadata.py","matched_lines":[15]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_ffmpeg.py","matched_lines":[69,75,79,85,86,91,94,95]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_parser.py","matched_lines":[126,133,137]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_ldtools.py","matched_lines":[372,373,375,376,380,381,386,387]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_validators.py","matched_lines":[39,40]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/consts.py","matched_lines":[3,9,14,19,20,26,27,28,29,30]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/parser/parser_factory.py","matched_lines":[13]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/wrapper/wrapper_ld_export_metadata.py","matched_lines":[17,31,32]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/process_handler.py","matched_lines":[93,94]}]}
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_ldtools.py (ranges 276-475)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/file_helper.py (ranges 1-380)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/utils/metadata.py (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/consts.py (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts.py (ranges 1-200)
+Output: [see tool output]
+
+Command: ripgrep (query: "LD_CHROMA_DECODER|ld-chroma-decoder|chroma-decoder") in /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export
+Output:
+{"matched_files":[{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/process_handler.py","matched_lines":[110]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_validators.py","matched_lines":[183,189]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_ldtools.py","matched_lines":[19,149,170,299]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/wrapper/wrapper_ld_chroma_decoder.py","matched_lines":[54,171,213]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/parser/parser_factory.py","matched_lines":[33]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/enums.py","matched_lines":[123]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/wrapper/wrapper_group.py","matched_lines":[114,133,135,137,142,159,173]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_types.py","matched_lines":[84]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/parser/parser_ld_chroma_decoder.py","matched_lines":[15]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/video_system.py","matched_lines":[19]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/file_helper.py","matched_lines":[255,256]}]}
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/wrapper/wrapper_ld_chroma_decoder.py (ranges 1-260)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/parser/parser_ld_chroma_decoder.py (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/process_handler.py (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/wrapper/wrapper_group.py (ranges 1-220)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_ldtools.py (ranges 1-220)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_validators.py (ranges 91-290)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/video_system.py (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/enums.py (ranges 41-240)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_parser.py (ranges 1-200)
+Output: [see tool output]
+
+Command: file_glob (patterns: ["*.json"]) in /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export
+Output:
+"" (no matches)
+
+Command: ripgrep (query: "default config|dump_default_config|EXPORT_CONFIG_FILE_NAME|config json|config_file") in /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export
+Output:
+{"matched_files":[{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/config/config.py","matched_lines":[36,42,52,65,75,85,116,119,133,166,172,173,187,190,195,313]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/program_state.py","matched_lines":[249]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/consts.py","matched_lines":[36]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_actions.py","matched_lines":[38]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_parser.py","matched_lines":[165,175,176]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/__main__.py","matched_lines":[32]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts.py","matched_lines":[36,37]}]}
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/config/config.py (ranges 1-260)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/program_state.py (ranges 171-370)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_actions.py (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/__main__.py (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/config/default.py (ranges 1-260)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/program_state.py (ranges 1-200)
+Output: [see tool output]
+
+Command: ripgrep (query: "chroma_gain|chroma_phase|luma_nr|chroma_nr|--chroma-gain|--chroma-phase|--luma-nr") in /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export
+Output:
+{"matched_files":[{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/process/wrapper/wrapper_ld_chroma_decoder.py","matched_lines":[58,63,64,65,72,75]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts.py","matched_lines":[62,63,64,71]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_validators.py","matched_lines":[142,201,203]},{"file_path":"/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_ldtools.py","matched_lines":[192,203,214]}]}
+
+Command: ripgrep (query: "input-json|input-metadata|metadata") in /home/harry/tbc-tools
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-chroma-decoder/main.cpp (ranges 1-220, 300-580)
+Output: [see tool output]
+
+Command: read_plans (plan_id: a647c3c5-e5a9-41b4-a57a-17b857c52537)
+Output: [see tool output]
+
+## 2026-02-27T17:07:40Z
+User input: "1. they are the same thing... 2. always pefer values from JSON/SQL metadata as intended export like it does for video level and frameing adjustet values. There should be an export tab that forwards to tbc-video-export the current values, this pop out window should have profile selection, and upto 4 tracks of audio input via file selection."
+User input: "export tab is for ld-analyse"
+
+Command: ripgrep (query: "Export|export|tbc-video-export|video-export|profile|audio track|audio|metadata") in /home/harry/tbc-tools/src/ld-analyse
+Output:
+{"matched_files":[{"file_path":"/home/harry/tbc-tools/src/ld-analyse/dropoutanalysisdialog.h","matched_lines":[18]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/zoom-out.svg","matched_lines":[2]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/vbidialog.h","matched_lines":[16]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/oscilloscope-target.svg","matched_lines":[2]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/README.md","matched_lines":[7,64,68]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/zoom-original.svg","matched_lines":[2]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/metadataconverterutil.cpp","matched_lines":[1,13,68,87,98]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.h","matched_lines":[36,37,50,142,143,161,162,163]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.cpp","matched_lines":[1,2,18,19,20,21,22,23,24,25,26,27,28,29,30]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/tbcsource.h","matched_lines":[23,58,237,238,241,242]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/start-frame.svg","matched_lines":[2]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/vbidialog.cpp","matched_lines":[34,35,36,37,38,39,40,41,43,44,45,46,47,48,49,50,51,53,54,55,56,57,58,59,144,174,198,199,200,201,202]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.cpp","matched_lines":[2,11,12,14,67,68,70,91,92,99]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/zoom-in.svg","matched_lines":[2]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp","matched_lines":[57,58,61,64,70,77,79,92,115,244,273,281,297,410,422,473,492,502,803,909,963,1025,1150,1304,1305,1306,1362,1385,1386,1388,1390,1391,1396,1398,1402,1403,1411,1413,1417,1421,1424,1460,1463,1476,1483,1486,1487,1488,1490,1491,1493,1497,1500,1503,1509,1522,1524,1525,1528,1531,1532,1535,1541,1543,1545,1550,1552,1558,1560]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/vectorscopedialog.h","matched_lines":[19]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.h","matched_lines":[2]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/main.cpp","matched_lines":[136,139,174,177]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp","matched_lines":[26,113,140,141,251,302,392,394,406,407,442,568,587,593,594,595,597,599,600,601,618,811,812,813,832,834,836,839,847,855,857,858,861,862,874,878,879,1020,1044,1046,1047,1051,1052,1053,1054,1060,1061,1062,1065,1936,1975,2070]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/end-frame.svg","matched_lines":[2]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/blacksnranalysisdialog.h","matched_lines":[20]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/CMakeLists.txt","matched_lines":[8,9,12]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/videoparametersdialog.h","matched_lines":[17]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/next-frame.svg","matched_lines":[2]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/prev-frame.svg","matched_lines":[2]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.ui","matched_lines":[745,801,803]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.ui","matched_lines":[14,16,21,28,41,48,61,68,75,82,89,96,103,110,117,124,131,138,145,152,159,166,173,180,187,194,201,208]}]}
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.h (ranges 1-260)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp (ranges 1-240, 520-760, 1860-2140)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.ui (ranges 700-920)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.h (ranges 1-260)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp (ranges 791-990, 1100-1360, 1421-1620)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/configuration.h (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/configuration.cpp (ranges 1-400)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.h (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.cpp (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.h (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.cpp (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/README.md (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp (ranges 760-1200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp (ranges 200-760)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/CMakeLists.txt (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconverterutil.h (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconverterutil.cpp (ranges 1-200)
+Output: [see tool output]
+
+## 2026-02-27T17:37:58Z
+User input: "1. what dialog? values changed inside ld-analyse should be absolute unless unchnaged frome metadata files."
+User input: "2. base name is fine."
+User input: "3. it should be assumed within the same directory if not globally in path"
+User input: "4. no this will change on every new file load."
+User input: "5. the JSON/SQL data is the metadata... so this is a confusing  question."
+
+Command: read_plans (plan_id: a647c3c5-e5a9-41b4-a57a-17b857c52537)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp (ranges 760-1040, 1200-1560)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp (ranges 1200-1400, 1860-2100)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/chromadecoderconfigdialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/chromadecoderconfigdialog.cpp (ranges 1-220, 300-520)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/CMakeLists.txt
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.ui (ranges 711-910)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.cpp (ranges 1-220)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconverterutil.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconverterutil.cpp (ranges 1-220)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/library/tbc/lddecodemetadata.h (ranges 1-240)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_validators.py (ranges 76-275)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_types.py (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/enums.py (ranges 46-245)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/config/config.py (ranges 221-420)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_actions.py (ranges 1-200)
+Output: [see tool output]
+
+Command: create_todo_list (export dialog tasks)
+Output: [see tool output]
+
+Command: apply_patch (add src/ld-analyse/exportdialog.h)
+Output: [see tool output]
+
+Command: apply_patch (add src/ld-analyse/exportdialog.cpp)
+Output: [see tool output]
+
+Command: apply_patch (add src/ld-analyse/exportdialog.ui)
+Output: [see tool output]
+
+Command: apply_patch (update src/ld-analyse/CMakeLists.txt)
+Output: [see tool output]
+
+Command: apply_patch (update src/ld-analyse/mainwindow.h)
+Output: [see tool output]
+
+Command: apply_patch (update src/ld-analyse/mainwindow.cpp)
+Output: [see tool output]
+
+Command: apply_patch (update src/ld-analyse/mainwindow.ui)
+Output: [see tool output]
+
+Command: apply_patch (fix exportdialog.cpp, stripAnsiSequences)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output: build failed (see tool output for error details)
+
+Command: apply_patch (fix stripAnsiSequences const QString)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output: [see tool output]
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output: 2026-02-27T17:37:58Z
+
+## Session 2026-02-27T16:29:36Z
+
+### User Input
+```
+Here is some context about my environment that could be useful:
+{
+  "directory_state": {
+    "pwd": "/home/harry/tbc-tools",
+    "home": "/home/harry"
+  },
+  "operating_system": {
+    "platform": "Linux",
+    "distribution": "Linux Mint"
+  },
+  "current_time": "2026-02-27T16:28:30Z",
+  "shell": {
+    "name": "bash",
+    "version": "5.1.16(1)-release"
+  },
+  "git_head": "metadata-improvements"
+}
+
+
+
+
+<system-reminder>Do NOT refer to the environment context or external context unless it is directly relevant to the question at hand.</system-reminder>
+```
+
+```
+There should be an either or for metadata support, as for values unless manually changed the metadata value should be the priority for export config or is the issue that tbc-video-export is overriding the values?
+```
+
+### Commands
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+Output:
+```
+2026-02-27T16:29:36Z
+```
+
+### Tool Outputs (Context)
+#### ripgrep
+Queries: tbc-video-export, video-export, export config, export-config, ld-export, export metadata, metadata override, chromaGain, chromaPhase, lumaNR, chromaDecoder
+```
+{"matched_files":[{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/README.md","matched_lines":[1,7,39,64,69,74,79,84,177,184]},{"file_path":"/home/harry/tbc-tools/scripts/test-decode-pretbc","matched_lines":[188,193,194,203,216,217,482,483]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.h","matched_lines":[15,16,17]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp","matched_lines":[320,321,322,337,389,390,392,393,395,396,415,416,810,814,815,816,830,831,858,859,860,861,1008,1009,1029,1030]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/sqliteio.cpp","matched_lines":[236,359,361,365,367,371,373,377,379,721,755,756,757,758,781,818,819,820,821]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp","matched_lines":[28,139,171,191,271,379,432,499,525,563,577,578,579,607,608,609,610,1267,1949,1951,1952,1956,1959,1960,1961,1968,1970]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/README.md","matched_lines":[10,269,270,271,272,379,412,413,414,415]},{"file_path":"/home/harry/tbc-tools/src/ld-export-decode-metadata/main.cpp","matched_lines":[3,32,39]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/lddecodemetadata.h","matched_lines":[92,93,94,95]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp","matched_lines":[845,846,847,850,851,852,855,856,857,858,880,881]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/chromadecoderconfigdialog.h","matched_lines":[46,52,53]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/csv.h","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/sqliteio.h","matched_lines":[58,121,134]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/configuration.cpp","matched_lines":[69,109,140,284,286,291]},{"file_path":"/home/harry/tbc-tools/docs/How-to-guides/Working-with-subtitles.md","matched_lines":[21]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/chromadecoderconfigdialog.cpp","matched_lines":[53,54,56,57,103,104,114,115,126,170,172,173,175,177,178,204,205,209,210,214,215,219,220,256,257,262,263,268,269,274,275,309,311,312,313,314,317,319,320,321,322,344,359,366,372,378,393,399,405,411,418,425,432,442,462]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/comb.h","matched_lines":[49,50,110]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/palcolour.cpp","matched_lines":[299,300,301]},{"file_path":"/home/harry/tbc-tools/src/ld-lds-converter/README.md","matched_lines":[201]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/lddecodemetadata.cpp","matched_lines":[302,303,304,319,371,372,374,375,377,378,397,398,832,836,837,838,851,852,878,879,880,881]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/palcolour.h","matched_lines":[60,61]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/configuration.h","matched_lines":[61,96]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/main.cpp","matched_lines":[159,162,165,168,237,240,362,363,364,365,374,375,376,377,382,383,400,401,402,403,496,497,498,500,501,502,504,505,506,507,529,530,535]},{"file_path":"/home/harry/tbc-tools/src/library/README.md","matched_lines":[289]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/audacity.cpp","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/ld-export-decode-metadata/CMakeLists.txt","matched_lines":[1,9,11]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/chromadecoderconfigdialog.ui","matched_lines":[21,28,50,60,67,77]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/closedcaptions.h","matched_lines":[5,11]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/audacity.h","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/docs/Tools/ld-chroma-decoder.md","matched_lines":[13]},{"file_path":"/home/harry/tbc-tools/CMakeLists.txt","matched_lines":[146,147]},{"file_path":"/home/harry/tbc-tools/development-logs/prompt_readme.md","matched_lines":[153,154,222,332,407,408,476,489,502,505,508,521,534,541,673,674,682,683,684,685,686,728,741,742,743,744,754,799,812,823,832,845,855,1237,1238,1365,1410]},{"file_path":"/home/harry/tbc-tools/docs/Tools/.pages","matched_lines":[10]},{"file_path":"/home/harry/tbc-tools/src/ld-export-decode-metadata/metadataconverter.h","matched_lines":[3]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/ffmetadata.h","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/closedcaptions.cpp","matched_lines":[5,11]},{"file_path":"/home/harry/tbc-tools/src/ld-export-decode-metadata/README.md","matched_lines":[1,7,10,11,17]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/comb.cpp","matched_lines":[207,802,805,806,807]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/CMakeLists.txt","matched_lines":[1,9,11]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.h","matched_lines":[116,141]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.h","matched_lines":[79,80,81,82]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/jsonconverter.cpp","matched_lines":[151,152,154,155,157,158,160,161,568,569,570,571]},{"file_path":"/home/harry/tbc-tools/docs/How-to-guides/Creating-video-from-PAL-decodes.md","matched_lines":[42,46,145,219,435]},{"file_path":"/home/harry/tbc-tools/prompt_readme.md","matched_lines":[1000,1762,1764,1795,1797,1839,1841,2164,2300,2373]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/csv.cpp","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/ffmetadata.cpp","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/README.md","matched_lines":[28,35,43,53]},{"file_path":"/home/harry/tbc-tools/docs/Tools/ld-export-metadata.md","matched_lines":[1,12]},{"file_path":"/home/harry/tbc-tools/src/ld-export-metadata/main.cpp","matched_lines":[5,11,51,58]},{"file_path":"/home/harry/tbc-tools/docs/Tools/ld-analyse.md","matched_lines":[349]},{"file_path":"/home/harry/tbc-tools/log_note_windows_workflow_fixed_2026-02-26.md","matched_lines":[29,30]},{"file_path":"/home/harry/tbc-tools/src/ld-export-decode-metadata/metadataconverter.cpp","matched_lines":[3,64,68]},{"file_path":"/home/harry/tbc-tools/docs/How-to-guides/Creating-video-from-NTSC-decodes.md","matched_lines":[47,51]},{"file_path":"/home/harry/tbc-tools/AGENTS.md","matched_lines":[61,86]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.cpp","matched_lines":[21,22,23]}]}
+```
+
+#### read_files
+Read (ranges):
+- `src/ld-chroma-decoder/main.cpp` (81-615)
+- `src/ld-analyse/configuration.cpp` (196-313)
+- `src/ld-analyse/configuration.h` (1-116)
+
+#### ripgrep
+Queries: ensureCaptureColumns, SqliteValue, capture columns, ensureCaptureColumn, chroma_decoder, luma_nr
+```
+{"matched_files":[{"file_path":"/home/harry/tbc-tools/src/library/tbc/sqliteio.cpp","matched_lines":[22,81,84,247,253,269,278,299,300,301,302,303,304,305,306,307,308,309,310,311,315,322,328,334,340,349,368,371,411,412,413,414,658,703,712]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/jsonconverter.cpp","matched_lines":[327,330,522]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/lddecodemetadata.cpp","matched_lines":[565,566,567,568,569,570,571,572,573,574]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/README.md","matched_lines":[88,91,401,404]},{"file_path":"/home/harry/tbc-tools/scripts/test-decode-pretbc","matched_lines":[386,521]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/lddecodemetadata.cpp","matched_lines":[164,165,166,167,168,169,170,171,172,173]},{"file_path":"/home/harry/tbc-tools/metadata_improvements_readme.md","matched_lines":[45,48]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/sqliteio.h","matched_lines":[21]}]}
+```
+
+#### ripgrep
+Queries: user_version, schema version, SCHEMA_VERSION, metadata version, ensureCaptureColumns, blanking_16b_ire
+```
+{"matched_files":[{"file_path":"/home/harry/tbc-tools/src/library/tbc/sqliteio.cpp","matched_lines":[52,80,234,245,266,313,315,317,349,391,392,657,703,711]}]}
+```
+
+#### ripgrep
+Queries: chroma_\.tbc, chroma_, YC, Y/C, chroma, sourcevideo, SourceVideo
+```
+{"matched_files":[{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal2d.h","matched_lines":[5,13,68,71,87]},{"file_path":"/home/harry/tbc-tools/src/ld-discmap/discmapper.h","matched_lines":[34]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/testvbidecoder/testvbidecoder.cpp","matched_lines":[10]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/comb.h","matched_lines":[5,13,49,50,62,110,125,131]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/CMakeLists.txt","matched_lines":[14,44]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/encoder.cpp","matched_lines":[5,11,51,53,144,146,174]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/ntscencoder.cpp","matched_lines":[5,11,43,44,45,46,208,269,286,298,300,315,316,317,319,322,327,329]},{"file_path":"/home/harry/tbc-tools/src/ld-disc-stacker/main.cpp","matched_lines":[35,363,367]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/README.md","matched_lines":[174]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/ntscencoder.h","matched_lines":[5,11,45,46,56]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/decoderpool.h","matched_lines":[33,46,64]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/fmcode.h","matched_lines":[28,36]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.h","matched_lines":[35,112,137,164]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/oscilloscopedialog.cpp","matched_lines":[144,196,197,204,207,212,214,218,221,226,228,229,233,238,320]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/ld-analyse logo.ai","matched_lines":[34,792,959,1566,2077,2452,2511,2661,2962,3139,3298,3303,3498,3556,3586,3857,3928,4065,4799,4958,5028,5102,5808]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/videoid.h","matched_lines":[28,34]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/chromadecoderconfigdialog.h","matched_lines":[2,46,52,53,55,67]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/oscilloscopedialog.h","matched_lines":[45]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/comb.cpp","matched_lines":[5,13,171,174,184,192,207,290,293,313,315,317,321,329,344,381,382,385,396,400,526,594,598,696,801,802,805,806,807]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/ntscdecoder.cpp","matched_lines":[5,12]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/vbilinedecoder.cpp","matched_lines":[47,113,119]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vits/processingpool.h","matched_lines":[33,45,63]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/paldecoder.cpp","matched_lines":[5,11]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vits/vitsanalyser.h","matched_lines":[36,60]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/tbcsource.h","matched_lines":[22,45,163,170,171,200]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal.h","matched_lines":[5,13,51,59]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/filters.cpp","matched_lines":[53,68,76,91,99,107]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/configuration.h","matched_lines":[61,96]},{"file_path":"/home/harry/tbc-tools/src/ld-dropout-correct/dropoutcorrect.h","matched_lines":[35,92,108,109]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/outputwriter.cpp","matched_lines":[5,12,239]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vits/vitsanalyser.cpp","matched_lines":[41,113]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/decoderpool.cpp","matched_lines":[5,12]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/jsonconverter.cpp","matched_lines":[151,152,154,155,157,158,327,328,329,522,546,547,548]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/CMakeLists.txt","matched_lines":[5,12,14]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/closedcaption.h","matched_lines":[28,34]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/vitccode.h","matched_lines":[28,36]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/decoder.cpp","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/ld-disc-stacker/stackingpool.h","matched_lines":[34,43,50,51,57,85,91,92,112,114]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/closedcaption.cpp","matched_lines":[44]},{"file_path":"/home/harry/tbc-tools/src/ld-dropout-correct/main.cpp","matched_lines":[256,260]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/main.cpp","matched_lines":[5,11,51,58,91,92,94,95,112,117,118,119,171,172,173,174,175,176,177,178,179,180,183,193,199,203,234,235,236,237,244,249]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/ntscdecoder.h","matched_lines":[5,12,37]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/whiteflag.h","matched_lines":[28,36]},{"file_path":"/home/harry/tbc-tools/src/library/filter/iirfilter.h","matched_lines":[12]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.ui","matched_lines":[452,807,810]},{"file_path":"/home/harry/tbc-tools/src/library/filter/testfilter/testfilter.cpp","matched_lines":[11]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/testvitcdecoder/testvitcdecoder.cpp","matched_lines":[10]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/whiteflag.cpp","matched_lines":[30]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/monodecoder.h","matched_lines":[5,10,35]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/sourcevideo.h","matched_lines":[3,33,42,43,46,47,65]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/framecanvas.cpp","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/palcolour.cpp","matched_lines":[14,77,79,88,97,119,121,141,143,170,176,182,184,188,189,262,263,264,265,272,273,276,284,299,300,301,303,304,307,308,428,429,430,432,443,444,445,446,447,448,449,511,588,591,601]},{"file_path":"/home/harry/tbc-tools/src/efm-decoder/libs/ezpwd/rskey_test.C","matched_lines":[403,455,462]},{"file_path":"/home/harry/tbc-tools/src/ld-disc-stacker/stackingpool.cpp","matched_lines":[30,64,133,134,285,451,515]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/chromadecoderconfigdialog.ui","matched_lines":[21,28,50,60,67,77,118,120,426,433,440]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/framecanvas.h","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/monodecoder.cpp","matched_lines":[5,10,75]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp","matched_lines":[34,63,64,84,114,115,123,125,132,164,270,271,275,312,313,317,378,402,419,436,440,887,988,991,994,1008,1028,1045,1054,1063,1072,1307,1310,1311,1318,1321,1325,1326,1670,1671,1674,1675,1676]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/palcolour.h","matched_lines":[5,11,47,60,61,64,94,100,103,118]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/sourcefield.h","matched_lines":[5,10,29,34,40]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/README.md","matched_lines":[74]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/palencoder.cpp","matched_lines":[5,10,42,44,111,210,308,309,313,315]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal.cpp","matched_lines":[5,13]},{"file_path":"/home/harry/tbc-tools/src/ld-discmap/discmapper.cpp","matched_lines":[644,688,696,697]},{"file_path":"/home/harry/tbc-tools/src/ld-dropout-correct/correctorpool.h","matched_lines":[35,44,51,52,57,84,90,91,120]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/fmcode.cpp","matched_lines":[31]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal3d.h","matched_lines":[5,13,80,84,100]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/vbilinedecoder.h","matched_lines":[34,56]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/vitccode.cpp","matched_lines":[49]},{"file_path":"/home/harry/tbc-tools/src/library/CMakeLists.txt","matched_lines":[9]},{"file_path":"/home/harry/tbc-tools/src/library/README.md","matched_lines":[55,92,96,98,211]},{"file_path":"/home/harry/tbc-tools/src/ld-disc-stacker/stacker.h","matched_lines":[34,54,56,57]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/main.cpp","matched_lines":[5,13,110,117,157,158,159,161,163,164,165,167,229,230,233,252,253,256,361,362,363,364,373,374,375,376,381,382,389,390,424,425,427,520,526]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/componentframe.h","matched_lines":[5,10,34,36,38]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/oscilloscopedialog.ui","matched_lines":[214,216]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/decoder.h","matched_lines":[5,10,42,44,88]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/palencoder.h","matched_lines":[5,10,38]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal2d.cpp","matched_lines":[5,13,38,55,69,70,90,106,107,108,109,111,119,170,180,181,203,204,214,218,236,262]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/outputwriter.h","matched_lines":[5,11]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/biphasecode.cpp","matched_lines":[31,32,53,66]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/sqliteio.cpp","matched_lines":[81,82,83,231,247,249,251,269,272,275,322,324,328,330,334,336,368,369,370,649,658,679,680,681,700,712,733,734,735]}]}
+```
+
+#### ripgrep
+Queries: _chroma.tbc, chroma_.tbc, chroma_
+```
+{"matched_files":[{"file_path":"/home/harry/tbc-tools/docs/Tools/ld-analyse.md","matched_lines":[7]},{"file_path":"/home/harry/tbc-tools/scripts/test-decode-pretbc","matched_lines":[386,521]},{"file_path":"/home/harry/tbc-tools/docs/Tools/ld-chroma-encoder.md","matched_lines":[29,39]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp","matched_lines":[887]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/README.md","matched_lines":[88,89,90,401,402,403]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/jsonconverter.cpp","matched_lines":[327,328,329,522]},{"file_path":"/home/harry/tbc-tools/prompt_readme.md","matched_lines":[1003,1009]},{"file_path":"/home/harry/tbc-tools/metadata_improvements_readme.md","matched_lines":[7,26,45,46,47]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp","matched_lines":[834,1202,1204,1245,1248]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/sqliteio.cpp","matched_lines":[81,82,83,247,249,251,269,272,275,322,328,334,368,369,370,658,712]}]}
+```
+
+#### read_files
+Read (ranges):
+- `src/library/tbc/sqliteio.cpp` (1-200, 201-550, 591-790, 1-200, 81-280)
+- `src/library/tbc/sqliteio.h` (1-220)
+- `src/library/tbc/lddecodemetadata.h` (1-520)
+- `src/library/tbc/lddecodemetadata.cpp` (1-760)
+- `src/library/tbc/sourcevideo.h` (1-260)
+- `src/library/tbc/sourcevideo.cpp` (1-260)
+- `src/ld-analyse/tbcsource.h` (1-260)
+- `src/ld-analyse/tbcsource.cpp` (1-260, 430-660, 720-920, 1133-1332)
+- `docs/Tools/ld-analyse.md` (1-200)
+- `docs/Tools/ld-chroma-encoder.md` (1-200)
+- `src/ld-chroma-decoder/main.cpp` (1-240)
+- `src/ld-chroma-decoder/decoderpool.h` (1-200)
+- `src/ld-chroma-decoder/decoderpool.cpp` (1-220)
+- `src/ld-dropout-correct/dropoutcorrect.h` (1-200)
+- `src/ld-dropout-correct/dropoutcorrect.cpp` (1-220)
+- `src/ld-analyse/README.md` (1-200)
+
+#### apply_patch
+Updated:
+- `src/ld-analyse/tbcsource.cpp` (add chroma_*.tbc prefix support and pairing logic)
+- `docs/Tools/ld-analyse.md` (mention chroma_*.tbc prefix naming)
+
+#### mark_todo_as_done
+```
+{"pending_todos":[{"id":"a8f4c595-dc51-4192-b27e-ef6e7d5f5dcf","title":"Phase 4: ld-analyse Integration","details":"Add metadata-only mode and connect ChromaDecoder dialog to metadata persistence for saving/loading settings."},{"id":"72b0a446-3fe2-4af3-be4f-10a968963068","title":"Phase 5: ld-chroma-decoder Integration","details":"Update ld-chroma-decoder to read ChromaDecoder settings from metadata as defaults while maintaining CLI precedence."},{"id":"5f09dc52-3560-4d54-944d-ce98d1b4cdf7","title":"Add metadata conversion tab in ld-analyse","details":"Extend mainwindow.ui and mainwindow.cpp/h to add a metadata conversion tab that runs JSON↔SQLite via metadata-converter."}],"completed_todos":[{"id":"0ed072be-63a2-4011-b82c-26a95b788819","title":"Phase 2: JSON Converter Enhancement","details":"Add bidirectional conversion support to ld-json-converter with --direction parameter and SQLite → JSON export functionality."},{"id":"588c25f8-0260-4d48-ba8d-cb4d44b18fa4","title":"Rename ld-json-converter to metadata-converter","details":"Move src/ld-json-converter to src/metadata-converter and update CMake targets, app name strings, and docs references."},{"id":"6a8c9535-1b01-429a-84b3-309d3ae19ba1","title":"Configure build with CMake via nix develop","details":"Run cmake -S /home/harry/tbc-tools -B /home/harry/tbc-tools/build -G Ninja -DCMAKE_BUILD_TYPE=Release via nix develop."},{"id":"a94d626c-016c-442c-964a-19417b0f9784","title":"Run ninja build via nix develop","details":"Run nix develop -c ninja -C /home/harry/tbc-tools/build and capture output."},{"id":"e6dc6e35-a39e-475a-9a61-6524adb39377","title":"Log build request and commands in prompt_readme.md","details":"Append entry for user request to build locally and capture command output."},{"id":"9618dd04-4026-4304-869a-be2b9cc8450a","title":"Phase 1: Schema Extension","details":"Update SQLite schema and LdDecodeMetaData structures to add ChromaDecoder, ChromaGain, ChromaPhase, and LumaNR fields. Increment schema version and add migration logic."},{"id":"885e02b8-2391-40e1-a63c-7709b567604f","title":"Phase 3: Y/C File Support","details":"Update SourceVideo class and file detection logic to support vhs-decode style chroma_.tbc Y/C file pairs."}]}
+```
+
+## Session 2026-02-27T16:03:59Z
+
+### User Input
+```
+rebuid
+```
+
+### Commands
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+Output:
+```
+2026-02-27T16:03:59Z
+```
+
+```bash
+tail -n 40 /home/harry/tbc-tools/prompt_readme.md
+```
+
+Output:
+````text
+#### ripgrep
+Queries: chroma_\.tbc, chroma_, YC, Y/C, chroma, sourcevideo, SourceVideo
+```
+{"matched_files":[{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal2d.h","matched_lines":[5,13,68,71,87]},{"file_path":"/home/harry/tbc-tools/src/ld-discmap/discmapper.h","matched_lines":[34]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/testvbidecoder/testvbidecoder.cpp","matched_lines":[10]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/comb.h","matched_lines":[5,13,49,50,62,110,125,131]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/CMakeLists.txt","matched_lines":[14,44]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/encoder.cpp","matched_lines":[5,11,51,53,144,146,174]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/ntscencoder.cpp","matched_lines":[5,11,43,44,45,46,208,269,286,298,300,315,316,317,319,322,327,329]},{"file_path":"/home/harry/tbc-tools/src/ld-disc-stacker/main.cpp","matched_lines":[35,363,367]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/README.md","matched_lines":[174]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/ntscencoder.h","matched_lines":[5,11,45,46,56]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/decoderpool.h","matched_lines":[33,46,64]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/fmcode.h","matched_lines":[28,36]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.h","matched_lines":[35,112,137,164]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/oscilloscopedialog.cpp","matched_lines":[144,196,197,204,207,212,214,218,221,226,228,229,233,238,320]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/Graphics/ld-analyse logo.ai","matched_lines":[34,792,959,1566,2077,2452,2511,2661,2962,3139,3298,3303,3498,3556,3586,3857,3928,4065,4799,4958,5028,5102,5808]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/videoid.h","matched_lines":[28,34]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/chromadecoderconfigdialog.h","matched_lines":[2,46,52,53,55,67]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/oscilloscopedialog.h","matched_lines":[45]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/comb.cpp","matched_lines":[5,13,171,174,184,192,207,290,293,313,315,317,321,329,344,381,382,385,396,400,526,594,598,696,801,802,805,806,807]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/ntscdecoder.cpp","matched_lines":[5,12]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/vbilinedecoder.cpp","matched_lines":[47,113,119]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vits/processingpool.h","matched_lines":[33,45,63]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/paldecoder.cpp","matched_lines":[5,11]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vits/vitsanalyser.h","matched_lines":[36,60]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/tbcsource.h","matched_lines":[22,45,163,170,171,200]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal.h","matched_lines":[5,13,51,59]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/filters.cpp","matched_lines":[53,68,76,91,99,107]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/configuration.h","matched_lines":[61,96]},{"file_path":"/home/harry/tbc-tools/src/ld-dropout-correct/dropoutcorrect.h","matched_lines":[35,92,108,109]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/outputwriter.cpp","matched_lines":[5,12,239]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vits/vitsanalyser.cpp","matched_lines":[41,113]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/decoderpool.cpp","matched_lines":[5,12]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/jsonconverter.cpp","matched_lines":[151,152,154,155,157,158,327,328,329,522,546,547,548]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/CMakeLists.txt","matched_lines":[5,12,14]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/closedcaption.h","matched_lines":[28,34]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/vitccode.h","matched_lines":[28,36]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/decoder.cpp","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/ld-disc-stacker/stackingpool.h","matched_lines":[34,43,50,51,57,85,91,92,112,114]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/closedcaption.cpp","matched_lines":[44]},{"file_path":"/home/harry/tbc-tools/src/ld-dropout-correct/main.cpp","matched_lines":[256,260]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/main.cpp","matched_lines":[5,11,51,58,91,92,94,95,112,117,118,119,171,172,173,174,175,176,177,178,179,180,183,193,199,203,234,235,236,237,244,249]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/ntscdecoder.h","matched_lines":[5,12,37]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/whiteflag.h","matched_lines":[28,36]},{"file_path":"/home/harry/tbc-tools/src/library/filter/iirfilter.h","matched_lines":[12]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.ui","matched_lines":[452,807,810]},{"file_path":"/home/harry/tbc-tools/src/library/filter/testfilter/testfilter.cpp","matched_lines":[11]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/testvitcdecoder/testvitcdecoder.cpp","matched_lines":[10]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/whiteflag.cpp","matched_lines":[30]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/monodecoder.h","matched_lines":[5,10,35]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/sourcevideo.h","matched_lines":[3,33,42,43,46,47,65]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/framecanvas.cpp","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/palcolour.cpp","matched_lines":[14,77,79,88,97,119,121,141,143,170,176,182,184,188,189,262,263,264,265,272,273,276,284,299,300,301,303,304,307,308,428,429,430,432,443,444,445,446,447,448,449,511,588,591,601]},{"file_path":"/home/harry/tbc-tools/src/efm-decoder/libs/ezpwd/rskey_test.C","matched_lines":[403,455,462]},{"file_path":"/home/harry/tbc-tools/src/ld-disc-stacker/stackingpool.cpp","matched_lines":[30,64,133,134,285,451,515]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/chromadecoderconfigdialog.ui","matched_lines":[21,28,50,60,67,77,118,120,426,433,440]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/framecanvas.h","matched_lines":[5,10]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/monodecoder.cpp","matched_lines":[5,10,75]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp","matched_lines":[34,63,64,84,114,115,123,125,132,164,270,271,275,312,313,317,378,402,419,436,440,887,988,991,994,1008,1028,1045,1054,1063,1072,1307,1310,1311,1318,1321,1325,1326,1670,1671,1674,1675,1676]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/palcolour.h","matched_lines":[5,11,47,60,61,64,94,100,103,118]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/sourcefield.h","matched_lines":[5,10,29,34,40]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/README.md","matched_lines":[74]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/palencoder.cpp","matched_lines":[5,10,42,44,111,210,308,309,313,315]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal.cpp","matched_lines":[5,13]},{"file_path":"/home/harry/tbc-tools/src/ld-discmap/discmapper.cpp","matched_lines":[644,688,696,697]},{"file_path":"/home/harry/tbc-tools/src/ld-dropout-correct/correctorpool.h","matched_lines":[35,44,51,52,57,84,90,91,120]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/fmcode.cpp","matched_lines":[31]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal3d.h","matched_lines":[5,13,80,84,100]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/vbilinedecoder.h","matched_lines":[34,56]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/vitccode.cpp","matched_lines":[49]},{"file_path":"/home/harry/tbc-tools/src/library/CMakeLists.txt","matched_lines":[9]},{"file_path":"/home/harry/tbc-tools/src/library/README.md","matched_lines":[55,92,96,98,211]},{"file_path":"/home/harry/tbc-tools/src/ld-disc-stacker/stacker.h","matched_lines":[34,54,56,57]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/main.cpp","matched_lines":[5,13,110,117,157,158,159,161,163,164,165,167,229,230,233,252,253,256,361,362,363,364,373,374,375,376,381,382,389,390,424,425,427,520,526]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/componentframe.h","matched_lines":[5,10,34,36,38]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/oscilloscopedialog.ui","matched_lines":[214,216]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/decoder.h","matched_lines":[5,10,42,44,88]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/palencoder.h","matched_lines":[5,10,38]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal2d.cpp","matched_lines":[5,13,38,55,69,70,90,106,107,108,109,111,119,170,180,181,203,204,214,218,236,262]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/outputwriter.h","matched_lines":[5,11]},{"file_path":"/home/harry/tbc-tools/src/ld-process-vbi/biphasecode.cpp","matched_lines":[31,32,53,66]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/sqliteio.cpp","matched_lines":[81,82,83,231,247,249,251,269,272,275,322,324,328,330,334,336,368,369,370,649,658,679,680,681,700,712,733,734,735]}]}
+```
+
+#### ripgrep
+Queries: _chroma.tbc, chroma_.tbc, chroma_
+```
+{"matched_files":[{"file_path":"/home/harry/tbc-tools/docs/Tools/ld-analyse.md","matched_lines":[7]},{"file_path":"/home/harry/tbc-tools/scripts/test-decode-pretbc","matched_lines":[386,521]},{"file_path":"/home/harry/tbc-tools/docs/Tools/ld-chroma-encoder.md","matched_lines":[29,39]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp","matched_lines":[887]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/README.md","matched_lines":[88,89,90,401,402,403]},{"file_path":"/home/harry/tbc-tools/src/metadata-converter/jsonconverter.cpp","matched_lines":[327,328,329,522]},{"file_path":"/home/harry/tbc-tools/prompt_readme.md","matched_lines":[1003,1009]},{"file_path":"/home/harry/tbc-tools/metadata_improvements_readme.md","matched_lines":[7,26,45,46,47]},{"file_path":"/home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp","matched_lines":[834,1202,1204,1245,1248]},{"file_path":"/home/harry/tbc-tools/src/library/tbc/sqliteio.cpp","matched_lines":[81,82,83,247,249,251,269,272,275,322,328,334,368,369,370,658,712]}]}
+```
+
+#### read_files
+Read (ranges):
+- `src/library/tbc/sqliteio.cpp` (1-200, 201-550, 591-790, 1-200, 81-280)
+- `src/library/tbc/sqliteio.h` (1-220)
+- `src/library/tbc/lddecodemetadata.h` (1-520)
+- `src/library/tbc/lddecodemetadata.cpp` (1-760)
+- `src/library/tbc/sourcevideo.h` (1-260)
+- `src/library/tbc/sourcevideo.cpp` (1-260)
+- `src/ld-analyse/tbcsource.h` (1-260)
+- `src/ld-analyse/tbcsource.cpp` (1-260, 430-660, 720-920, 1133-1332)
+- `docs/Tools/ld-analyse.md` (1-200)
+- `docs/Tools/ld-chroma-encoder.md` (1-200)
+- `src/ld-chroma-decoder/main.cpp` (1-240)
+- `src/ld-chroma-decoder/decoderpool.h` (1-200)
+- `src/ld-chroma-decoder/decoderpool.cpp` (1-220)
+- `src/ld-dropout-correct/dropoutcorrect.h` (1-200)
+- `src/ld-dropout-correct/dropoutcorrect.cpp` (1-220)
+- `src/ld-analyse/README.md` (1-200)
+
+#### apply_patch
+Updated:
+- `src/ld-analyse/tbcsource.cpp` (add chroma_*.tbc prefix support and pairing logic)
+- `docs/Tools/ld-analyse.md` (mention chroma_*.tbc prefix naming)
+
+#### mark_todo_as_done
+```
+{"pending_todos":[{"id":"a8f4c595-dc51-4192-b27e-ef6e7d5f5dcf","title":"Phase 4: ld-analyse Integration","details":"Add metadata-only mode and connect ChromaDecoder dialog to metadata persistence for saving/loading settings."},{"id":"72b0a446-3fe2-4af3-be4f-10a968963068","title":"Phase 5: ld-chroma-decoder Integration","details":"Update ld-chroma-decoder to read ChromaDecoder settings from metadata as defaults while maintaining CLI precedence."},{"id":"5f09dc52-3560-4d54-944d-ce98d1b4cdf7","title":"Add metadata conversion tab in ld-analyse","details":"Extend mainwindow.ui and mainwindow.cpp/h to add a metadata conversion tab that runs JSON↔SQLite via metadata-converter."}],"completed_todos":[{"id":"0ed072be-63a2-4011-b82c-26a95b788819","title":"Phase 2: JSON Converter Enhancement","details":"Add bidirectional conversion support to ld-json-converter with --direction parameter and SQLite → JSON export functionality."},{"id":"588c25f8-0260-4d48-ba8d-cb4d44b18fa4","title":"Rename ld-json-converter to metadata-converter","details":"Move src/ld-json-converter to src/metadata-converter and update CMake targets, app name strings, and docs references."},{"id":"6a8c9535-1b01-429a-84b3-309d3ae19ba1","title":"Configure build with CMake via nix develop","details":"Run cmake -S /home/harry/tbc-tools -B /home/harry/tbc-tools/build -G Ninja -DCMAKE_BUILD_TYPE=Release via nix develop."},{"id":"a94d626c-016c-442c-964a-19417b0f9784","title":"Run ninja build via nix develop","details":"Run nix develop -c ninja -C /home/harry/tbc-tools/build and capture output."},{"id":"e6dc6e35-a39e-475a-9a61-6524adb39377","title":"Log build request and commands in prompt_readme.md","details":"Append entry for user request to build locally and capture command output."},{"id":"9618dd04-4026-4304-869a-be2b9cc8450a","title":"Phase 1: Schema Extension","details":"Update SQLite schema and LdDecodeMetaData structures to add ChromaDecoder, ChromaGain, ChromaPhase, and LumaNR fields. Increment schema version and add migration logic."},{"id":"885e02b8-2391-40e1-a63c-7709b567604f","title":"Phase 3: Y/C File Support","details":"Update SourceVideo class and file detection logic to support vhs-decode style chroma_.tbc Y/C file pairs."}]}
+```
+````
+## 2026-02-27T18:56:54Z
+User input: "I wanted anouther tablike metadata is in its ownj"
+User input: "profile list does show, but it does not trigger export"
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.ui
+Output: [see tool output]
+
+Command: ripgrep (query: "getCurrentSourceFilename\\(") in /home/harry/tbc-tools/src/ld-analyse
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.h (ranges 1-240)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp (ranges 1-240, 760-980, 1200-1400, 1500-1700)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_validators.py (ranges 81-280)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/common/enums.py (ranges 51-250)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_ldtools.py (ranges 111-310)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opt_types.py (ranges 1-200)
+Output: [see tool output]
+
+Command: apply_patch (exportdialog.cpp: add PATH/environment prep, working directory, status/error surfacing)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[18/18] Linking CXX executable bin/ld-analyse
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output: 2026-02-27T18:56:54Z
+
+Command: tail -n 40 /home/harry/tbc-tools/prompt_readme.md
+Output: [see tool output]
+
+## 2026-02-28T10:41:03Z
+User input: "Metadata was currupted, replaced, ressume with fixing the export cli readout information, I think it would make more sence to put the readout info directly into a dialog  of the export page like how we have metadata stats pop out dialog"
+User input: "I dont want a readout button I want a readout to be triggered when export is running"
+
+Command: ripgrep (query: "MetadataStatusDialog|metadatastatusdialog") in /home/harry/tbc-tools/src/ld-analyse
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadatastatusdialog.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/CMakeLists.txt (ranges 1-200)
+Output: [see tool output]
+
+Command: apply_patch (add exportreadoutdialog.h)
+Output: [see tool output]
+
+Command: apply_patch (add exportreadoutdialog.cpp)
+Output: [see tool output]
+
+Command: apply_patch (add exportreadoutdialog.ui)
+Output: [see tool output]
+
+Command: apply_patch (include exportreadoutdialog in CMakeLists.txt)
+Output: [see tool output]
+
+Command: apply_patch (update exportdialog.h for readout dialog)
+Output: [see tool output]
+
+Command: apply_patch (include exportreadoutdialog in exportdialog.cpp)
+Output: [see tool output]
+
+Command: apply_patch (add ensureReadoutDialog in exportdialog.cpp)
+Output: [see tool output]
+
+Command: apply_patch (initialize readout dialog on export start)
+Output: [see tool output]
+
+Command: apply_patch (sync status/log output to readout dialog)
+Output: [see tool output]
+
+Command: apply_patch (seed readout dialog status)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.cpp
+Output: [see tool output]
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T10:41:03Z
+```
+## 2026-02-27T19:00:06Z
+User input: "/media/harry/20TB\\ HDD1/Ryan_Handley_USA/VHS/Tape_03 this tape is my testing tape for this.. note it."
+User input: "it was loaded as normal, tbc-video-export did not open at all... nothing happend."
+## 2026-02-27T19:10:40Z
+User input: "Here is some context about my environment that could be useful: { ... }"
+User input: "attached is context" (screenshot of Export tab for Tape_03_Decode.tbc)
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.h (ranges 141-340)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp (ranges 761-960, 1293-1492)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.h (ranges 1-240)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp (ranges 1-220, 351-550, 1800-2100)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.ui (ranges 1-200, 696-895)
+Output: [see tool output]
+
+Command: ripgrep (query: "mainTabWidget") in /home/harry/tbc-tools/src/ld-analyse
+Output: [see tool output]
+
+Command: ls -1 "/media/harry/20TB HDD1/Ryan_Handley_USA/VHS/Tape_03"
+Output:
+Diamler_Chrysler_NTSC_SP_Tape_03_baseband_78.1khz_aligned.flac
+Diamler_Chrysler_NTSC_SP_Tape_03_baseband_78.1khz.wav
+Diamler_Chrysler_NTSC_SP_Tape_03_Ref_capture_options.log
+Diamler_Chrysler_NTSC_SP_Tape_03_Ref_frame_eia608data.txt
+Diamler_Chrysler_NTSC_SP_Tape_03_Ref.framemd5
+Diamler_Chrysler_NTSC_SP_Tape_03_Ref.mkv
+Diamler_Chrysler_NTSC_SP_Tape_03_Ref.mkv.qctools.mkv
+Diamler_Chrysler_NTSC_SP_Tape_03_Ref_Proxy.mp4
+Diamler_Chrysler_NTSC_SP_Tape_03_Ref_QC_output_graphs.jpeg
+Diamler_Chrysler_NTSC_SP_Tape_03_Ref.scc
+Diamler_Chrysler_NTSC_SP_Tape_03_Ref_vrecord_input.log
+Diamler_Chrysler_NTSC_SP_Tape_03_video_rf_20msps.flac
+Tape_03_Decode_chroma.tbc
+Tape_03_Decode.log
+Tape_03_Decode_REf_Safe.mkv
+Tape_03_Decode.tbc
+Tape_03_Decode.tbc.json
+Tape_03_Decode.tbc.json.bup
+
+Command: apply_patch (exportdialog.cpp: explicit signal connections + status messages)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[18/18] Linking CXX executable bin/ld-analyse
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output: 2026-02-27T19:10:40Z
+
+## 2026-02-27T19:23:52Z
+User input: "side quest, add the gui from ld-analyse to the metadata converter tool directly making it independetly usable via gui"
+
+Command: ripgrep (query: "MetadataConversionDialog|metadataconversiondialog|metadata-converter|metadataconverter") in /home/harry/tbc-tools/src
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconversiondialog.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconverterutil.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/metadataconverterutil.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/metadata-converter/CMakeLists.txt
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/metadata-converter/main.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/metadata-converter/README.md
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/metadata-converter/jsonconverter.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/metadata-converter/jsonconverter.cpp
+Output: [see tool output]
+
+Command: apply_patch (add metadataconversiondialog.h)
+Output: [see tool output]
+
+Command: apply_patch (add metadataconversiondialog.cpp)
+Output: [see tool output]
+
+Command: apply_patch (add metadataconversiondialog.ui)
+Output: [see tool output]
+
+Command: apply_patch (add metadataconverterutil.h)
+Output: [see tool output]
+
+Command: apply_patch (add metadataconverterutil.cpp)
+Output: [see tool output]
+
+Command: apply_patch (update src/metadata-converter/CMakeLists.txt for GUI sources and Qt Widgets)
+Output: [see tool output]
+
+Command: apply_patch (update src/metadata-converter/main.cpp for --gui support)
+Output: [see tool output]
+
+Command: apply_patch (update src/metadata-converter/README.md with GUI usage)
+Output: [see tool output]
+
+Command: nix develop -c cmake -S /home/harry/tbc-tools -B /home/harry/tbc-tools/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+Output:
+warning: Git tree '/home/harry/tbc-tools' is dirty
+-- Qt Version: 
+-- Configuring done (0.4s)
+-- Generating done (0.2s)
+-- Build files have been written to: /home/harry/tbc-tools/build
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[10/10] Linking CXX executable bin/metadata-converter
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output: 2026-02-27T19:23:52Z
+
+```bash
+nix develop -c cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && nix develop -c ninja -C build
+```
+
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+-- Qt Version: 
+-- Configuring done (0.3s)
+-- Generating done (0.2s)
+-- Build files have been written to: /home/harry/tbc-tools/build
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `build'
+[116/116] Linking CXX executable bin/ld-analyse
+```
+
+## Session 2026-02-27T16:15:29Z
+
+### User Input
+```
+right so it's the chroma-decoder that is not taking the altered metadata values and applying them over stock defutls
+```
+
+### Commands
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+Output:
+```
+2026-02-27T16:15:29Z
+```
+
+```bash
+tail -n 40 /home/harry/tbc-tools/prompt_readme.md
+```
+
+Output:
+```
+- `src/library/tbc/lddecodemetadata.cpp` (1-760)
+- `src/library/tbc/sourcevideo.h` (1-260)
+- `src/library/tbc/sourcevideo.cpp` (1-260)
+- `src/ld-analyse/tbcsource.h` (1-260)
+- `src/ld-analyse/tbcsource.cpp` (1-260, 430-660, 720-920, 1133-1332)
+- `docs/Tools/ld-analyse.md` (1-200)
+- `docs/Tools/ld-chroma-encoder.md` (1-200)
+- `src/ld-chroma-decoder/main.cpp` (1-240)
+- `src/ld-chroma-decoder/decoderpool.h` (1-200)
+- `src/ld-chroma-decoder/decoderpool.cpp` (1-220)
+- `src/ld-dropout-correct/dropoutcorrect.h` (1-200)
+- `src/ld-dropout-correct/dropoutcorrect.cpp` (1-220)
+- `src/ld-analyse/README.md` (1-200)
+
+#### apply_patch
+Updated:
+- `src/ld-analyse/tbcsource.cpp` (add chroma_*.tbc prefix support and pairing logic)
+- `docs/Tools/ld-analyse.md` (mention chroma_*.tbc prefix naming)
+
+#### mark_todo_as_done
+```
+{"pending_todos":[{"id":"a8f4c595-dc51-4192-b27e-ef6e7d5f5dcf","title":"Phase 4: ld-analyse Integration","details":"Add metadata-only mode and connect ChromaDecoder dialog to metadata persistence for saving/loading settings."},{"id":"72b0a446-3fe2-4af3-be4f-10a968963068","title":"Phase 5: ld-chroma-decoder Integration","details":"Update ld-chroma-decoder to read ChromaDecoder settings from metadata as defaults while maintaining CLI precedence."},{"id":"5f09dc52-3560-4d54-944d-ce98d1b4cdf7","title":"Add metadata conversion tab in ld-analyse","details":"Extend mainwindow.ui and mainwindow.cpp/h to add a metadata conversion tab that runs JSON↔SQLite via metadata-converter."}],"completed_todos":[{"id":"0ed072be-63a2-4011-b82c-26a95b788819","title":"Phase 2: JSON Converter Enhancement","details":"Add bidirectional conversion support to ld-json-converter with --direction parameter and SQLite → JSON export functionality."},{"id":"588c25f8-0260-4d54-944d-ce98d1b4cdf7","title":"Rename ld-json-converter to metadata-converter","details":"Move src/ld-json-converter to src/metadata-converter and update CMake targets, app name strings, and docs references."},{"id":"6a8c9535-1b01-429a-84b3-309d3ae19ba1","title":"Configure build with CMake via nix develop","details":"Run cmake -S /home/harry/tbc-tools -B /home/harry/tbc-tools/build -G Ninja -DCMAKE_BUILD_TYPE=Release via nix develop."},{"id":"a94d626c-016c-442c-964a-19417b0f9784","title":"Run ninja build via nix develop","details":"Run nix develop -c ninja -C /home/harry/tbc-tools/build and capture output."},{"id":"e6dc6e35-a39e-475a-9a61-6524adb39377","title":"Log build request and commands in prompt_readme.md","details":"Append entry for user request to build locally and capture command output."},{"id":"9618dd04-4026-4304-869a-be2b9cc8450a","title":"Phase 1: Schema Extension","details":"Update SQLite schema and LdDecodeMetaData structures to add ChromaDecoder, ChromaGain, ChromaPhase, and LumaNR fields. Increment schema version and add migration logic."},{"id":"885e02b8-2391-40e1-a63c-7709b567604f","title":"Phase 3: Y/C File Support","details":"Update SourceVideo class and file detection logic to support vhs-decode style chroma_.tbc Y/C file pairs."}]}
+```
+````
+
+### Tool Outputs (Context)
+#### ripgrep
+Queries: LdDecodeMetaData, metadata, chromaDecoder, chromaGain, chromaPhase, lumaNR, VideoParameters, tbc, \.db, \.json
+```
+{"matched_files":[{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/decoderpool.cpp","matched_lines":[30,44]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/decoder.h","matched_lines":[34,66,84]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/componentframe.cpp","matched_lines":[32]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/palencoder.h","matched_lines":[31,38,42]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/paldecoder.cpp","matched_lines":[35]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/ntscdecoder.cpp","matched_lines":[36]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/paldecoder.h","matched_lines":[35,48]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/sourcefield.h","matched_lines":[28,31,33,39,40,53,56]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/comb.h","matched_lines":[36,49,50,69,86,91,110,115]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/componentframe.h","matched_lines":[32,46]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/framecanvas.cpp","matched_lines":[27]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/main.cpp","matched_lines":[33,34,228,229,242,244,249,255,256]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/framecanvas.h","matched_lines":[30,39,71]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/monodecoder.h","matched_lines":[34,49,53,54]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/sourcefield.cpp","matched_lines":[29,34,48,55]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/ntscdecoder.h","matched_lines":[36,49]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/outputwriter.h","matched_lines":[33,58,59,60,81]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/ntscencoder.h","matched_lines":[34,45,49]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal.h","matched_lines":[34,52,89]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/palencoder.cpp","matched_lines":[42,44,128]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/outputwriter.cpp","matched_lines":[53]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/transformpal.cpp","matched_lines":[42]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/encoder.cpp","matched_lines":[51,53,61,147,153,157,158]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/monodecoder.cpp","matched_lines":[43,51,68]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/decoderpool.h","matched_lines":[36,47,71,111]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/comb.cpp","matched_lines":[40,113,207,218,542,802,805,806,807,827]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/palcolour.cpp","matched_lines":[45,109,299,300,301,454]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/palcolour.h","matched_lines":[35,60,61,77,110]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/ntscencoder.cpp","matched_lines":[43,45,113]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/main.cpp","matched_lines":[37,38,134,135,136,158,161,164,167,236,239,314,361,362,363,364,373,374,375,376,381,382,399,400,401,402,447,464,465,470,471,473,484,485,486,487,489,490,491,493,494,495,496,518,519,521,522,524,529,535]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/README.md","matched_lines":[13,25,65,97,100,103,106,109,121]},{"file_path":"/home/harry/tbc-tools/src/ld-chroma-decoder/encoder/encoder.h","matched_lines":[34,68,70,81,82,95,97,101]}]}
+```
+
+#### read_files
+Read (ranges):
+- `src/ld-chroma-decoder/main.cpp` (1-220, 300-620, 171-370)
+- `src/ld-chroma-decoder/decoderpool.cpp` (1-200)
+- `src/ld-chroma-decoder/decoderpool.h` (1-200)
+
+#### apply_patch
+Updated:
+- `src/ld-chroma-decoder/main.cpp` (prefer JSON metadata when present/newer for default metadata selection)
+
+## Session 2026-02-27T16:22:06Z
+
+### User Input
+```
+As you answer my questions, there are several curated sources of context that you might consider using to inform your response:
+# Codebases
+This is the list of codebases on my machine that have been indexed and can be semantically searched via the `codebase_semantic_search` tool.  You must still use the `grep` tool when searching for exact symbols/functions/etc.
+If a codebase is not specified in a query, you should assume that I am referring to the codebase in my current working directory.
+{
+  "codebases": [
+    {
+      "name": "DdD-App-Source",
+      "path": "/home/harry/DdD-App-Source"
+    },
+    {
+      "name": "MISRC",
+      "path": "/home/harry/MISRC"
+    },
+    {
+      "name": "MISRC_GUI",
+      "path": "/home/harry/MISRC_GUI"
+    },
+    {
+      "name": "Simon-analyse",
+      "path": "/home/harry/Simon-analyse"
+    },
+    {
+      "name": "cxadc-capture-server",
+      "path": "/home/harry/cxadc-capture-server"
+    },
+    {
+      "name": "DomesdayDuplicator",
+      "path": "/home/harry/github/DomesdayDuplicator"
+    },
+    {
+      "name": "ld-decode-ld-analyse-updates",
+      "path": "/home/harry/ld-decode-ld-analyse-updates"
+    },
+    {
+      "name": "ld-decode-pr",
+      "path": "/home/harry/ld-decode-pr"
+    },
+    {
+      "name": "ltfs-manager",
+      "path": "/home/harry/ltfs-manager"
+    },
+    {
+      "name": "misrc_gui_main",
+      "path": "/home/harry/misrc_gui_main"
+    },
+    {
+      "name": "ms-tools",
+      "path": "/home/harry/ms-tools"
+    },
+    {
+      "name": "ltfs",
+      "path": "/home/harry/src/ltfs"
+    },
+    {
+      "name": "vhs-decode",
+      "path": "/home/harry/vhs-decode"
+    }
+  ]
+}
+
+
+
+
+# Rules
+
+Rules represent a set of manually curated instructions provided by the user which you should always adhere to. This could include information about the user's terminal and coding environment, persistent preferences, past interactions, and project specific rules you've had with the user.
+
+IMPORTANT: ALWAYS use the following rules as additional context to inform your response unless explicitly stated otherwise.
+
+Rule Precedence (CRITICAL - rules are listed in order of precedence):
+- The rules below are listed in ASCENDING ORDER OF PRECEDENCE
+- Rules that appear LATER in the list take precedence over rules that appear EARLIER
+- Project rules (those with file paths as names) take precedence over personal rules
+- When multiple project rules conflict, prefer rules from subdirectory over the parent directory
+- For example: rules from "project/src/components/WARP.md" override rules from "project/WARP.md" which override personal rules
+Here are the user's existing rules:
+{
+  "rules": [
+    {
+      "document_type": "RULE",
+      "document_id": "GA9leLlNMkVpPvbNEAFn3u",
+      "rule_content": "Never assume a result is accurate, unless 100% verifyed by inpspecting hard data, if not accurate to context provided, then ask user for clearer or more advanced context."
+    },
+    {
+      "document_type": "RULE",
+      "document_id": "Gx7w791EYIjU04S4dWrV5y",
+      "rule_content": "When a prompt is changing a user interactable element such as a command or gui button real-world conformation should be requested before assuming its working.\n\ni.g if a GUI is open ask about what happend instead of just automatically ignoring the user and assuming things."
+    },
+    {
+      "document_type": "RULE",
+      "document_id": "NMQjtpUMr3H6IMUClKEuUE",
+      "rule_content": "When a prompt is started, a prompt readme.md should be made on the host system with all output, input, and commands run. \n\nThis ensures it can be refranced back to instead of any use context to be ignored."
+    },
+    {
+      "document_type": "RULE",
+      "document_id": "W7xFGRUZRqtRDnv0uDBPm6",
+      "rule_content": "When asked to add/impliment/genarate a feature, all the logic to actually make it work should be implimented, not just looking like it works, but fully working. "
+    },
+    {
+      "document_type": "RULE",
+      "document_id": "c0Ok9WllyrDa25uC3AKODJ",
+      "rule_content": "When provided an example refrance, extract context veribles from this, then go back to using and or testing on real-data examples provided by the end user."
+    },
+    {
+      "document_type": "RULE",
+      "document_id": "gYY0S66FhZDn1HHcZZTDVg",
+      "rule_content": "Do not use terms like 'enterprise grade' and avoid giving 'everything is working/done' summaries on every small change, as nothing is done or validated yet."
+    },
+    {
+      "document_type": "RULE",
+      "document_id": "udQirjAOEYGyA029HzncJp",
+      "rule_content": "When user states a fix or edit that the user states as fixed or fully fixed or fully working, create a log note .md and alongside the code make a zip and preserve that data as a go back to restore point."
+    },
+    {
+      "document_type": "RULE",
+      "document_id": "/home/harry/tbc-tools/AGENTS.md",
+      "rule_content": "# AGENTS.md\n\nThis file provides guidance to WARP (warp.dev) when working with code in this repository.\n\n## Project Overview\n\nThe ld-decode tools project provides professional-grade tools for digitizing, processing, and analyzing analog video sources (particularly LaserDisc captures) with exceptional quality and accuracy. The codebase consists of multiple C++ command-line tools and a shared library infrastructure.\n\n## Development Environment\n\nThis project uses **Nix** for reproducible builds and development environments.\n\n### Essential Commands\n\n**Setup Development Environment:**\n```bash\nnix develop\n```\n\n**Build (inside Nix shell):**\n```bash\ncmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release\nninja -C build\n```\n\n**Build without entering shell:**\n```bash\nnix develop -c cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release\nnix develop -c ninja -C build\n```\n\n**Install without entering profile:**\n```bash\nnix profile install .#\n```\n\n**Run Tests:**\n```bash\n# Inside build directory after cmake/ninja\nctest --test-dir build --output-on-failure\n```\n\n**Clean Build:**\n```bash\nrm -rf build\n```\n\n## Architecture Overview\n\n### Core Structure\n- **`src/`**: All source code organized by tool\n- **`src/library/`**: Shared libraries used across tools\n  - **`src/library/filter/`**: Digital signal processing filters (FIR, IIR, de-emphasis)\n  - **`src/library/tbc/`**: TBC format handling, metadata management, video/audio I/O\n- **Individual tool directories**: Each tool has its own directory under `src/`\n\n### Key Tools Categories\n- **Core Processing**: `ld-process-vbi`, `ld-process-vits`\n- **EFM Decoder Suite**: `efm-decoder-f2`, `efm-decoder-d24`, `efm-decoder-audio`, `efm-decoder-data`, `efm-stacker-f2`\n- **Analysis**: `ld-analyse` (GUI), `ld-discmap`, `ld-dropout-correct`\n- **Export/Conversion**: `ld-chroma-decoder`, `ld-export-metadata`, `ld-lds-converter`, `metadata-converter`\n\n### Build System\n- **CMake-based** with Ninja generator preferred\n- **Out-of-source builds required** (enforced by CMakeLists.txt)\n- **Multi-threading support** for performance\n- **Qt6** dependency for GUI components and core functionality\n- **FFTW3** for signal processing\n- **SQLite** for metadata storage\n\n### Critical Dependencies\n- **ezpwd Reed-Solomon library**: Managed as git submodule at `src/efm-decoder/libs/ezpwd`\n- **Qt6**: Core, Gui, Widgets, Sql modules\n- **FFmpeg, FFTW, SQLite**: Via Nix or system packages\n\n## File Format Specifications\n\n### TBC Files\n- **Binary format**: 16-bit unsigned samples, little-endian\n- **Extension**: `.tbc`\n- **Metadata**: Stored in separate SQLite database (`.tbc.db`)\n- **Field-based**: Sequential field data with fixed width per line\n\n### Metadata Format\n- **SQLite database** format (internal, subject to change)\n- **Do NOT access directly** - use `ld-export-metadata` instead\n- **Tables**: `video_parameters`, `fields`, `dropouts`\n\n## Development Patterns\n\n### Shared Library Usage\n```cpp\n// TBC metadata access\n#include \"tbc/lddecodemetadata.h\"\nLdDecodeMetaData metadata;\nmetadata.read(\"video.tbc.db\");\n\n// Video I/O\n#include \"tbc/sourcevideo.h\"\nSourceVideo source;\nsource.open(\"input.tbc\", fieldWidth);\n\n// Filtering\n#include \"filter/firfilter.h\"\nFIRFilter<double> filter(coefficients);\n```\n\n### Testing Framework\n- **CTest** integration for automated testing\n- **Unit tests** in `src/library/*/test*` directories\n- **Integration tests** via scripts in `scripts/` directory\n- **Test data** expected in `testdata/` directory (git submodule)\n\n## Important Notes\n\n- **SQLite metadata format is internal only** - never access `.tbc.db` files directly\n- **Out-of-source builds are enforced** - use `build/` or `build-*` directories\n- **Nix environment provides all dependencies** - prefer Nix over manual dependency management\n- **Qt6 required** - all tools use Qt framework even for CLI tools\n- **Multi-threading enabled** by default for performance-critical operations\n"
+    }
+  ]
+}
+```
+
+```
+CONVERSATION SUMMARY #1
+
+This is a summary of a prior sequence of messages in this conversation. You can use it to assist you in your work. Note that the user still sees the full conversation and you should avoid mentioning that the conversation has been summarized.
+
+# Overview
+The conversation centers on implementing **native JSON metadata support** across the TBC library and tools (especially `ld-analyse` and `ld-chroma-decoder`) without conversion to SQLite. The agent added JSON I/O to the shared TBC library, wired `ld-analyse` to load/save JSON directly, updated metadata discovery to include `.json`, and successfully rebuilt. The immediate new issue: **the chroma decoder isn’t applying modified metadata values**, likely because `ld-chroma-decoder` defaults to `.db` and ignores `.json` unless specified. The agent already began addressing this by changing `ld-chroma-decoder` default metadata selection to prefer `.json` when present/newer and updated help text, but this needs verification/testing and possibly more logic if values still don’t apply. 
+
+# Topics Summary
+
+## Topic: Native JSON metadata reading/writing in TBC library and ld-analyse
+**Status**: Active (core changes done; need verification and possible fixes if issues persist)
+
+**User messages**:
+> rebuid
+
+> right so it's the chroma-decoder that is not taking the altered metadata values and applying them over stock defutls
+
+**Progress**:
+- Added JSON I/O support to shared TBC library (new `jsonio.h/.cpp` included in `src/library/CMakeLists.txt`).
+- Added JSON read/write to `DropOuts`.
+- Added JSON read/write to `LdDecodeMetaData` structures and auto-detect `.json` in `read()`; `.write()` outputs JSON if `.json` suffix. Implemented `LdDecodeMetaData::readFields(JsonReader&)` and `writeFields(JsonWriter&)`.
+- `ld-analyse` now loads JSON natively: removed JSON→SQLite conversion in `MainWindow::loadTbcFile()` and removed JSON save conversion in `on_finishedSaving()`. Updated metadata-only mode to accept `.db` **or** `.json`. `updateMetadataStatusPanel()` now shows `.json` path when loaded directly.
+- `TbcSource` metadata discovery now checks `.json` alongside `.db`, including alternate `.tbc.json` forms for `.ytbc/.ctbc/.tbcy/.tbcc`, and messages are format-agnostic (no “SQLite” wording).
+- Build succeeded via Nix (`nix develop -c cmake ... && nix develop -c ninja -C build`), linking `bin/ld-analyse`. Logged build in `prompt_readme.md`.
+
+**TODOs**:
+- Verify JSON metadata is read and applied end-to-end in GUI and tools; specifically, confirm `ld-analyse` loads `.json` without conversion and saves back to JSON properly.
+- Verify `ld-chroma-decoder` now picks `.json` defaults and uses metadata values.
+
+**Plan Documents**:
+- Existing plan `a647c3c5-e5a9-41b4-a57a-17b857c52537` (older, includes conversion/UI/Y-C expansions) no longer matches current “native JSON” approach; no edits made.
+
+**Completion Criteria**:
+- Tools (esp. `ld-analyse` and `ld-chroma-decoder`) load `.json` metadata directly with no conversion.
+- Edited metadata values in JSON override defaults during processing.
+- Build passes.
+
+**Next steps**:
+- Validate `ld-chroma-decoder` metadata selection and application (see next topic).
+- If still failing, inspect metadata values in JSON, confirm `LdDecodeMetaData` populates `VideoParameters` correctly, and verify `ld-chroma-decoder` uses those values without overriding.
+
+**Technical details**:
+- Files changed:  
+  - Added `src/library/tbc/jsonio.h`, `src/library/tbc/jsonio.cpp`.  
+  - Updated `src/library/CMakeLists.txt` to compile `tbc/jsonio.cpp`.  
+  - Updated `src/library/tbc/dropouts.h/.cpp` for JSON read/write.  
+  - Updated `src/library/tbc/lddecodemetadata.h/.cpp` for JSON read/write, auto-detect `.json`, and `readFields`/`writeFields` JSON array helpers.  
+  - `src/ld-analyse/mainwindow.cpp`: removed metadata converter usage; metadata-only supports `.json`; status panel uses `.json` path.  
+  - `src/ld-analyse/tbcsource.cpp`: metadata candidate includes `.json`; messages now format-agnostic.  
+- Build command used: `nix develop -c cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && nix develop -c ninja -C build` (success).
+
+---
+
+## Topic: ld-chroma-decoder not applying altered metadata values
+**Status**: Active
+
+**User messages**:
+> right so it's the chroma-decoder that is not taking the altered metadata values and applying them over stock defutls
+
+**Progress**:
+- Investigated `src/ld-chroma-decoder/main.cpp` and confirmed it reads metadata via `LdDecodeMetaData::read()` and applies metadata values **only if** command-line flags are not set.
+- Found metadata file default hard-coded to `inputFileName + ".db"` unless `--input-metadata` is used. This likely causes JSON edits to be ignored if `.db` exists.
+- Implemented change in `src/ld-chroma-decoder/main.cpp` to prefer `.json` when present and newer than `.db`. Also updated help text to “default input.db or input.json”. Added `#include <QFileInfo>`.
+  - Logic: if `--input-metadata` not set, choose `.json` if it exists and either `.db` doesn’t exist or `.json` is newer; otherwise use `.db`.
+
+**TODOs**:
+- Rebuild and test `ld-chroma-decoder` with a `.tbc.json` that has modified values. Verify values are applied (chroma gain/phase, lumaNR, ntsc adaptive, etc.).  
+- If still failing, inspect whether metadata JSON contains those fields and if `videoParameters.isValid` and fields are parsed in `LdDecodeMetaData::read()` (JSON path). Ensure `videoParameters.numberOfSequentialFields` matches fields array.
+
+**Completion Criteria**:
+- Running `ld-chroma-decoder` without `--input-metadata` uses `.json` when present/newer and applies altered metadata values (over defaults/stock), unless CLI overrides are supplied.
+
+**Next steps**:
+- Rebuild `ld-chroma-decoder` and run a short test using a known `.tbc` + `.tbc.json` with modified values. If mismatch persists, check JSON contents and `LdDecodeMetaData` parsing.
+
+**Technical details**:
+- Modified file: `src/ld-chroma-decoder/main.cpp`
+  - Added `#include <QFileInfo>`
+  - Updated option description: “default input.db or input.json”
+  - Changed metadata default resolution logic (prefer `.json` if exists and newer).
+- Core behavior in `main.cpp`: metadata values are applied only if corresponding CLI options are not set; if CLI option is set, it takes precedence.
+
+---
+
+# Active Work Priority
+- **Immediate**: Confirm `ld-chroma-decoder` now uses `.json` metadata by default and applies altered values. This is the user’s reported issue.
+- **Dependency**: Requires rebuild and a sample metadata file test. If failure persists, inspect JSON contents and parsing in `LdDecodeMetaData`.
+
+---
+```
+
+### Commands
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+Output:
+```
+2026-02-27T16:22:06Z
+```
+
+```bash
+nix develop -c ninja -C /home/harry/tbc-tools/build
+```
+
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[3/3] Linking CXX executable bin/ld-chroma-decoder
+```
+
+### Tool Outputs (Context)
+#### read_plans
+```
+# Metadata Improvements Implementation Plan
+## Problem Statement
+Implement comprehensive metadata improvements to support:
+1. Bidirectional JSON support for all tools (with `ld-json-converter` renamed to `metadata-converter`)
+2. Y/C support with "chroma_.tbc" naming convention from vhs-decode
+3. Extended metadata format with ChromaDecoder, ChromaGain, ChromaPhase, and LumaNR fields
+4. JSON/SQLite-only reading mode for ld-analyse
+5. A metadata conversion tab inside ld-analyse for JSON↔SQLite conversion
+## Current State Analysis
+Based on code analysis:
+* `ld-json-converter` currently only converts JSON → SQLite (unidirectional)
+* Metadata format uses SQLite as primary storage, JSON as legacy import
+* `ld-analyse` has ChromaDecoder configuration dialog with gain/phase/NR controls
+* Current SQLite schema in `sqliteio.h/cpp` and `lddecodemetadata.h`
+* No Y/C file support currently implemented
+* ChromaDecoder settings exist in UI but not persisted to metadata
+## Proposed Changes
+### 1. Bidirectional JSON Converter (Rename to metadata-converter)
+Extend the converter to support:
+* `--direction` parameter: `json-to-sqlite` (default) or `sqlite-to-json`
+* SQLite → JSON export functionality
+* Maintain format compatibility with existing JSON schema
+* Rename tool and build target to `metadata-converter`
+### 2. Extended Metadata Schema
+Add new fields to SQLite schema and `LdDecodeMetaData` structures:
+* `ChromaDecoder` (string): decoder type ("pal2d", "transform2d", "transform3d", "ntsc1d", "ntsc2d", "ntsc3d", "mono")
+* `ChromaGain` (double): chroma gain multiplier
+* `ChromaPhase` (double): chroma phase adjustment in degrees
+* `LumaNR` (double): luma noise reduction level
+### 3. Y/C File Support
+Implement vhs-decode style Y/C support:
+* Detect "chroma_.tbc" files alongside main TBC files
+* Load and process Y/C pairs properly
+* Update file I/O routines in `SourceVideo` class
+* Add Y/C mode detection and handling
+### 4. ld-analyse Metadata-Only Mode
+Add JSON/SQLite-only viewing mode:
+* `--metadata-only` command line option
+* Skip TBC file loading requirements
+* Focus UI on metadata inspection and editing
+* Allow ChromaDecoder settings to be saved to metadata
+### 5. ld-analyse Metadata Conversion Tab
+Add a metadata tab that can invoke JSON↔SQLite conversion:
+* UI controls for selecting input/output files
+* Run conversion using `metadata-converter`
+* Show success/failure status
+### 6. ChromaDecoder Settings Integration
+Connect `ld-analyse` ChromaDecoder dialog to metadata storage:
+* Save/load ChromaDecoder settings from metadata
+* Export settings for `ld-chroma-decoder` consumption
+* Update `ld-chroma-decoder` to read metadata settings as defaults
+## Implementation Steps
+### Phase 1: Schema Extension
+1. Update SQLite schema in `sqliteio.cpp` to add new ChromaDecoder fields
+2. Extend `LdDecodeMetaData::VideoParameters` structure
+3. Update read/write methods in SqliteReader/SqliteWriter
+4. Increment schema version and add migration logic
+### Phase 2: JSON Converter Enhancement + Rename
+1. Add bidirectional conversion support to `ld-json-converter`
+2. Implement SQLite → JSON export functionality
+3. Update JSON schema documentation
+4. Add command-line options for conversion direction
+5. Rename the tool, build target, and docs to `metadata-converter`
+### Phase 3: Y/C File Support
+1. Update `SourceVideo` class to detect and load chroma_.tbc files
+2. Modify file detection logic throughout codebase
+3. Update command-line tools to handle Y/C file pairs
+4. Add Y/C mode indicators to metadata
+### Phase 4: ld-analyse Integration
+1. Add metadata-only mode to ld-analyse
+2. Connect ChromaDecoder dialog to metadata persistence
+3. Implement settings save/load functionality
+4. Update UI to show metadata-sourced defaults
+5. Add metadata conversion tab wiring to run `metadata-converter`
+### Phase 5: ld-chroma-decoder Integration
+1. Update ld-chroma-decoder to read ChromaDecoder settings from metadata
+2. Use metadata values as defaults when no CLI options provided
+3. Maintain CLI option precedence over metadata defaults
+## File Modifications Required
+* `src/library/tbc/lddecodemetadata.h` - Add new fields to VideoParameters
+* `src/library/tbc/sqliteio.h/cpp` - Update schema and I/O methods
+* `src/metadata-converter/` - Add bidirectional conversion and rename from `ld-json-converter`
+* `src/library/tbc/sourcevideo.h/cpp` - Y/C file support
+* `src/ld-analyse/` - Metadata-only mode, settings persistence, and conversion UI
+* `src/ld-chroma-decoder/main.cpp` - Read metadata defaults
+* SQLite schema migration logic
+## Testing Strategy
+* Create test files with both JSON and SQLite metadata
+* Test bidirectional JSON ↔ SQLite conversion
+* Verify Y/C file detection and loading
+* Test metadata-only mode in ld-analyse
+* Confirm ChromaDecoder settings persistence and application
+* Regression testing with existing TBC files
+```
+
+## 2026-02-28T07:37:05Z
+User input: "continue"
+
+Notes:
+- Updated `src/metadata-converter/README.md` to mention GUI launches by default when no arguments are provided.
+
+Commands and Output:
+
+### Command
+```bash
+nix develop -c ninja -C /home/harry/tbc-tools/build
+```
+
+### Output
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[4/4] Linking CXX executable bin/metadata-converter
+```
+
+### Command
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+### Output
+```
+2026-02-28T07:37:05Z
+```
+
+## 2026-02-28T07:49:51Z
+User input: "okay that works, now we need to go back to tidying up ld-analyse with export features"
+
+Command: git -C /home/harry/tbc-tools --no-pager status -sb
+Output:
+```
+## metadata-improvements
+ M AGENTS.md
+ M CMakeLists.txt
+ M README.md
+ M docs/Tools/ld-analyse.md
+ M prompt_readme.md
+ M src/ld-analyse/CMakeLists.txt
+ D "src/ld-analyse/Graphics/ld-analyse logo.ai"
+ D src/ld-analyse/Graphics/ld-analyse.icns
+ M src/ld-analyse/main.cpp
+ M src/ld-analyse/mainwindow.cpp
+ M src/ld-analyse/mainwindow.h
+ M src/ld-analyse/mainwindow.ui
+ M src/ld-analyse/tbcsource.cpp
+ M src/ld-analyse/tbcsource.h
+ M src/ld-chroma-decoder/main.cpp
+ D src/ld-json-converter/.gitignore
+ D src/ld-json-converter/CMakeLists.txt
+ D src/ld-json-converter/README.md
+ D src/ld-json-converter/dropouts.cpp
+ D src/ld-json-converter/dropouts.h
+ D src/ld-json-converter/jsonconverter.cpp
+ D src/ld-json-converter/jsonconverter.h
+ D src/ld-json-converter/jsonio.cpp
+ D src/ld-json-converter/jsonio.h
+ D src/ld-json-converter/lddecodemetadata.cpp
+ D src/ld-json-converter/lddecodemetadata.h
+ D src/ld-json-converter/main.cpp
+ M src/library/CMakeLists.txt
+ M src/library/tbc/dropouts.cpp
+ M src/library/tbc/dropouts.h
+ M src/library/tbc/lddecodemetadata.cpp
+ M src/library/tbc/lddecodemetadata.h
+ M src/library/tbc/sqliteio.cpp
+ M src/library/tbc/sqliteio.h
+?? development-logs/
+?? icons_metadata_dialog_fixed_2026-02-27.zip
+?? log_note_icons_metadata_dialog_fixed_2026-02-27.md
+?? log_note_metadata_fixed_2026-02-27.md
+?? metadata_fixed_2026-02-27.zip
+?? metadata_improvements_readme.md
+?? src/ld-analyse/Graphics/appicon.icns
+?? src/ld-analyse/exportdialog.cpp
+?? src/ld-analyse/exportdialog.h
+?? src/ld-analyse/exportdialog.ui
+?? src/ld-analyse/metadataconversiondialog.cpp
+?? src/ld-analyse/metadataconversiondialog.h
+?? src/ld-analyse/metadataconversiondialog.ui
+?? src/ld-analyse/metadataconverterutil.cpp
+?? src/ld-analyse/metadataconverterutil.h
+?? src/ld-analyse/metadatastatusdialog.cpp
+?? src/ld-analyse/metadatastatusdialog.h
+?? src/ld-analyse/metadatastatusdialog.ui
+?? src/library/tbc/jsonio.cpp
+?? src/library/tbc/jsonio.h
+?? src/metadata-converter/
+```
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.ui
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/log_note_metadata_fixed_2026-02-27.md
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/log_note_icons_metadata_dialog_fixed_2026-02-27.md
+Output: [see tool output]
+
+Command: unzip -l /home/harry/tbc-tools/metadata_fixed_2026-02-27.zip | head -n 40
+Output: [see tool output]
+
+Command: unzip -l /home/harry/tbc-tools/metadata_fixed_2026-02-27.zip | grep -m1 -E '^ *[0-9]+ .*\\.git/'
+Output:
+```
+        0  02-26-2026 17:32   src/efm-decoder/libs/ezpwd/.git/
+```
+
+Command: unzip -l /home/harry/tbc-tools/metadata_fixed_2026-02-27.zip | grep -m1 -E 'build/'
+Output:
+```
+```
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T07:47:56Z
+```
+
+Command: zip -r /home/harry/tbc-tools/metadata_converter_gui_default_fixed_2026-02-28.zip /home/harry/tbc-tools -x "/home/harry/tbc-tools/build/*" -x "*.zip"
+Output: [see tool output]
+
+Command: cat <<'EOF' > /home/harry/tbc-tools/log_note_metadata_converter_gui_default_fixed_2026-02-28.md
+Output:
+```
+# Log Note: metadata-converter GUI default launch confirmed
+
+Timestamp: 2026-02-28T07:47:56Z
+
+User confirmation:
+- Running metadata-converter with no arguments launches the GUI.
+
+Context:
+- Default GUI launch was enabled when no arguments are provided.
+
+Restore point zip:
+- /home/harry/tbc-tools/metadata_converter_gui_default_fixed_2026-02-28.zip
+```
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T07:49:51Z
+```
+
+## 2026-02-28T08:04:17Z
+User input: "profile list is working, there is no triggering of tbc-video-export to confirm it is working past that."
+
+Command: ripgrep (query: "tbc-video-export") in /home/harry/tbc-tools
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/README.md (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/docs/How-to-guides/Creating-video-from-NTSC-decodes.md (ranges 1-200)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/docs/How-to-guides/Creating-video-from-PAL-decodes.md (ranges 1-275)
+Output: [see tool output]
+
+Command: file_glob (patterns: "*tbc-video-export*" in /home/harry/tbc-tools)
+Output: [see tool output]
+
+Command: command -v tbc-video-export
+Output:
+```
+/home/harry/.local/bin/tbc-video-export
+```
+
+Command: /home/harry/.local/bin/tbc-video-export --help
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/bin/tbc-video-export (ranges 1-260)
+Output: [see tool output]
+
+Command: /home/harry/.local/pipx/venvs/tbc-video-export/bin/python - <<'PY'
+Output:
+```
+/home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/__main__.py
+```
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/__main__.py (ranges 1-260)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_parser.py (ranges 1-260)
+Output: [see tool output]
+
+Command: read_files /home/harry/.local/pipx/venvs/tbc-video-export/lib/python3.10/site-packages/tbc_video_export/opts/opts_ldtools.py (ranges 1-260)
+Output: [see tool output]
+
+Command: apply_patch (add export log pane to src/ld-analyse/exportdialog.ui)
+Output: [see tool output]
+
+Command: apply_patch (add log helpers to src/ld-analyse/exportdialog.h)
+Output: [see tool output]
+
+Command: apply_patch (add logging + command display to src/ld-analyse/exportdialog.cpp)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.cpp (ranges 71-270)
+Output: [see tool output]
+
+Command: apply_patch (remove duplicate log line in exportdialog.cpp)
+Output: [see tool output]
+
+Command: apply_patch (log missing tbc-video-export in export action)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[20/20] Linking CXX executable bin/ld-analyse
+```
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T08:04:17Z
+```
+
+## 2026-02-28T08:11:29Z
+User input: "profile list is working, there is no triggering of tbc-video-export to confirm it is working past that."
+
+Command: apply_patch (skip --luma-nr for split sources in src/ld-analyse/exportdialog.cpp)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[18/18] Linking CXX executable bin/ld-analyse
+```
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T08:11:29Z
+```
+
+## 2026-02-28T08:20:32Z
+User input: "[08:12:53] Ready. ... Export failed at 08:13:01 after 0:00:00.181."
+
+Command: apply_patch (add log output checkbox to exportdialog.ui)
+Output: [see tool output]
+
+Command: apply_patch (log-process-output flag, failure detection, and busy handling in exportdialog.cpp)
+Output: [see tool output]
+
+Command: apply_patch (remove redundant setBusy(true) after start)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[18/18] Linking CXX executable bin/ld-analyse
+```
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T08:20:32Z
+```
+
+## 2026-02-28T08:26:16Z
+User input: "[08:21:27] Ready. ... Export failed at 08:21:37 after 0:00:00.181."
+
+Command: apply_patch (remove duplicate manual signal connections in src/ld-analyse/exportdialog.cpp)
+Output: [see tool output]
+
+Command: apply_patch (default logProcessOutputCheckBox checked in src/ld-analyse/exportdialog.ui)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[18/18] Linking CXX executable bin/ld-analyse
+```
+
+Command: /home/harry/.local/bin/tbc-video-export --log-process-output --length 1 --profile ffv1 --video-system ntsc --chroma-decoder ntsc2d --chroma-gain 0.000000 --chroma-phase 0.000 --ffll 20 --lfll 263 --ffrl 40 --lfrl 525 --ntsc-phase-comp "/media/harry/20TB HDD1/Ryan_Handley_USA/VHS/Tape_03/Tape_03_Decode.tbc" "/media/harry/20TB HDD1/Ryan_Handley_USA/VHS/Tape_03/Tape_03_Decode"
+Output:
+```
+tbc-video-export 0.1.7
+
+Input TBC:     /media/harry/20TB HDD1/Ryan_Handley_USA/VHS/Tape_03/Tape_03_Decode.tbc
+Output Files:  /media/harry/20TB HDD1/Ryan_Handley_USA/VHS/Tape_03/Tape_03_Decode.mkv
+Log Files:     26-02-28_082519661_*.log
+
+Video System:  NTSC   TBC Type:     S-Video (Y+C)    Chroma Decoder: MONO + NTSC2D
+Total Fields:  26913  Total Frames: 1                Export Mode:    Luma + Chroma (merged)
+
+Profile:       ffv1
+Frame Type:    Interlaced (Top Field First)
+
+● ld-dropout-correct (LUMA)       frame:      0/13456    errors:   0
+● ld-chroma-decoder  (LUMA)       frame:      1/1        errors:   0  fps:   45
+● ld-dropout-correct (CHROMA)     frame:      0/13456    errors:   0
+● ld-chroma-decoder  (CHROMA)     frame:      1/1        errors:   0  fps:   16
+● ffmpeg                          frame:      1          errors:   0
+
+Size:    0.00 GB	Duration: 00:00:00.033	Bitrate: 1213618.5kbits/s
+
+Export finished at 08:25:20 after 0:00:00.485.
+```
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T08:26:16Z
+```
+
+## 2026-02-28T09:15:10Z
+User input: "CONVERSATION SUMMARY #1"
+
+Command: read_plans (plan_id a647c3c5-e5a9-41b4-a57a-17b857c52537, plan_id 3fca73e5-7e99-4b2b-959b-263a6d3c1079)
+Output: [see tool output]
+
+Command: apply_patch (add --input-json alias to src/ld-chroma-decoder/main.cpp)
+Output: [see tool output]
+
+Command: ripgrep "input-metadata" /home/harry/tbc-tools
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-dropout-correct/main.cpp (ranges 1-240)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-dropout-correct/main.cpp (ranges 240-520)
+Output: [see tool output]
+
+Command: apply_patch (add --input-json/--output-json aliases to src/ld-dropout-correct/main.cpp)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/prompt_readme.md (ranges 3258-3457)
+Output: [see tool output]
+
+Command: wc -l /home/harry/tbc-tools/prompt_readme.md
+Output:
+```
+3839 /home/harry/tbc-tools/prompt_readme.md
+```
+
+Command: read_files /home/harry/tbc-tools/prompt_readme.md (ranges 3700-3899)
+Output: [see tool output]
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T09:15:10Z
+```
+
+## 2026-02-28T09:17:55Z
+User input: "(no new user input; continuing export fix)"
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[6/6] Linking CXX executable bin/ld-chroma-decoder
+```
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build ld-dropout-correct
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+ninja: no work to do.
+```
+
+Command: /home/harry/tbc-tools/build/bin/ld-dropout-correct --help | grep -E "input-json|output-json"
+Output:
+```
+  --input-json <filename>       Specify the input metadata file for the first
+  --output-json <filename>      Specify the output metadata file (legacy alias
+```
+
+Command: /home/harry/tbc-tools/build/bin/ld-chroma-decoder --help | grep -E "input-json"
+Output:
+```
+  --input-json <filename>                     Specify the input metadata file
+```
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T09:17:55Z
+```
+
+## 2026-02-28T09:53:35Z
+User input: "CONVERSATION SUMMARY #1 ... remove ANSI log line and add Cancel button (Ctrl+C), rebuild, log and restore."
+
+Command: read_plans (a647c3c5-e5a9-41b4-a57a-17b857c52537, 3fca73e5-7e99-4b2b-959b-263a6d3c1079)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/prompt_readme.md
+Output: [see tool output]
+
+Command: apply_patch (disable cancel button initially in exportdialog.cpp)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.ui
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[20/20] Linking CXX executable bin/ld-analyse
+```
+
+Command: ls /home/harry/tbc-tools
+Output:
+```
+AGENTS.md
+build
+BUILD.md
+CMakeLists.txt
+CMakePresets.json
+development-logs
+DEV_NOTES.md
+docs
+flake.lock
+flake.nix
+icons_metadata_dialog_fixed_2026-02-27.zip
+INSTALL.md
+LICENSE
+log_note_export_metadata_passthrough_fixed_2026-02-28.md
+log_note_icons_metadata_dialog_fixed_2026-02-27.md
+log_note_metadata_converter_gui_default_fixed_2026-02-28.md
+log_note_metadata_fixed_2026-02-27.md
+log_note_ux_buttons_fixed_2026-02-26.md
+log_note_windows_workflow_fixed_2026-02-26.md
+metadata_converter_gui_default_fixed_2026-02-28.zip
+metadata_fixed_2026-02-27.zip
+metadata_improvements_readme.md
+notes
+prompt_readme.md
+prototypes
+README.md
+result
+scripts
+session_readme.md
+src
+test-data
+vcpkg.json
+```
+
+Command: read_files /home/harry/tbc-tools/log_note_export_metadata_passthrough_fixed_2026-02-28.md
+Output: [see tool output]
+
+Command: unzip -l /home/harry/tbc-tools/metadata_converter_gui_default_fixed_2026-02-28.zip
+Output: [see tool output]
+
+Command: zip -r /home/harry/tbc-tools/export_metadata_passthrough_fixed_2026-02-28.zip /home/harry/tbc-tools -x /home/harry/tbc-tools/export_metadata_passthrough_fixed_2026-02-28.zip
+Output: [see tool output]
+
+Command: ls -l /home/harry/tbc-tools/export_metadata_passthrough_fixed_2026-02-28.zip
+Output:
+```
+-rw-rw-r-- 1 harry harry 1150857138 Feb 28 09:52 /home/harry/tbc-tools/export_metadata_passthrough_fixed_2026-02-28.zip
+```
+
+Command: tail -n 20 /home/harry/tbc-tools/prompt_readme.md
+Output: [see tool output]
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T09:53:35Z
+```
+
+## 2026-02-28T10:01:03Z
+User input: "Provided environment context (omitted per system reminder)."
+User input:
+```
+[09:56:35] Export running...
+[09:56:35] The software will run but be unable to display realtime progress.
+[09:56:35] UnicodeDecodeError: 'utf-8' codec can't decode byte 0x8d in position 98: invalid start byte
+[09:56:35] Export complete.
+```
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.cpp (ranges 101-300, 300-520)
+Output: [see tool output]
+
+Command: apply_patch (set PYTHONIOENCODING/PYTHONUTF8 in exportdialog.cpp)
+Output: [see tool output]
+
+Command: nix develop -c ninja -C /home/harry/tbc-tools/build
+Output:
+```
+warning: Git tree '/home/harry/tbc-tools' is dirty
+ninja: Entering directory `/home/harry/tbc-tools/build'
+[18/18] Linking CXX executable bin/ld-analyse
+```
+
+Command: tail -n 10 /home/harry/tbc-tools/prompt_readme.md
+Output: [see tool output]
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T10:01:03Z
+```
+
+## 2026-02-28T10:09:41Z
+User input: "Provided environment context (omitted per system reminder)."
+User input: "Regression file loading in ld-analyse is broken"
+
+Command: git -C /home/harry/tbc-tools --no-pager status -sb
+Output: [see tool output]
+
+Command: ripgrep (query: "loadTbcFile|openFile|on_actionOpen|load.*File|metadata-only|metadata only|setCurrentSourceFilename|TbcSource") in /home/harry/tbc-tools/src/ld-analyse
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/mainwindow.cpp (ranges 101-300, 500-740, 1000-1260, 1650-2100, 721-920, 948-1147, 1988-2187)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/main.cpp (ranges 71-270)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.h
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/tbcsource.cpp (ranges 1-260, 760-980, 1180-1400, 1471-1670, 1338-1537, 260-520, 881-1080)
+Output: [see tool output]
+
+Command: git -C /home/harry/tbc-tools --no-pager diff -U3 -- src/ld-analyse/mainwindow.cpp src/ld-analyse/tbcsource.cpp
+Output: [see tool output]
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T10:09:41Z
+```
+
+## 2026-02-28T10:23:15Z
+User input: "Just alter back to the state before I asked for readout fix for export, it was working fine it was the changes after that point that broke it"
+
+Command: git --no-pager status -sb
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/src/ld-analyse/exportdialog.cpp
+Output: [see tool output]
+
+Command: apply_patch (remove PYTHONIOENCODING/PYTHONUTF8 overrides from exportdialog.cpp)
+Output: [see tool output]
+
+Command: read_files /home/harry/tbc-tools/prompt_readme.md
+Output: [see tool output]
+
+Command: date -u +"%Y-%m-%dT%H:%M:%SZ"
+Output:
+```
+2026-02-28T10:23:15Z
+```
+
+Command: tail -n 40 /home/harry/tbc-tools/prompt_readme.md
+Output: [see tool output]

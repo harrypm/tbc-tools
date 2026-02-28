@@ -19,7 +19,9 @@
 #include <QMessageBox>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QRect>
 #include <QTimer>
+#include <QVector>
 
 #include "oscilloscopedialog.h"
 #include "vectorscopedialog.h"
@@ -33,6 +35,9 @@
 #include "closedcaptionsdialog.h"
 #include "videoparametersdialog.h"
 #include "chromadecoderconfigdialog.h"
+#include "exportdialog.h"
+#include "metadataconversiondialog.h"
+#include "metadatastatusdialog.h"
 #include "configuration.h"
 #include "tbcsource.h"
 
@@ -45,7 +50,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QString inputFilenameParam, QWidget *parent = nullptr);
+    explicit MainWindow(QString inputFilenameParam, bool metadataOnlyParam = false, QWidget *parent = nullptr);
 	TbcSource& getTbcSource();
     ~MainWindow();
 
@@ -54,6 +59,8 @@ private slots:
     void on_actionExit_triggered();
     void on_actionOpen_TBC_file_triggered();
     void on_actionReload_TBC_triggered();
+    void on_actionMetadata_Conversion_triggered();
+    void on_actionMetadata_Status_triggered();
     void on_actionSave_Metadata_triggered();
     void on_actionLine_scope_triggered();
     void on_actionVectorscope_triggered();
@@ -73,6 +80,7 @@ private slots:
     void on_actionVideo_parameters_triggered();
     void on_actionChroma_decoder_configuration_triggered();
     void on_actionToggleChromaDuringSeek_triggered();
+    void on_actionExport_Decode_Metadata_triggered();
 
     // Media control frame handlers
     void on_previousPushButton_clicked();
@@ -110,6 +118,7 @@ private slots:
     void mouseMoveEvent(QMouseEvent *event);
     void videoParametersChangedSignalHandler(const LdDecodeMetaData::VideoParameters &videoParameters);
     void chromaDecoderConfigChangedSignalHandler();
+    void exportBoundaryToggledSignalHandler(bool enabled);
 
     // Tbc Source signal handlers
     void on_busy(QString infoMessage);
@@ -135,6 +144,9 @@ private:
     ClosedCaptionsDialog *closedCaptionDialog;
     VideoParametersDialog *videoParametersDialog;
     ChromaDecoderConfigDialog *chromaDecoderConfigDialog;
+    MetadataConversionDialog *metadataConversionDialog;
+    MetadataStatusDialog *metadataStatusDialog;
+    ExportDialog *exportDialog;
 
     // Class globals
     Configuration configuration;
@@ -144,6 +156,7 @@ private:
     QLabel timeCodeStatus;
     TbcSource tbcSource;
     bool displayAspectRatio;
+    bool showExportBoundary = false;
 	bool autoResize = true;
 	bool resizeFrameWithWindow = true;
     qint32 lastScopeLine;
@@ -152,6 +165,9 @@ private:
     double scaleFactor;
     QPalette buttonPalette;
     QString lastFilename;
+    bool metadataJsonLoaded = false;
+    QString metadataJsonFilename;
+    QString metadataTempSqliteFilename;
     
     // Slider debouncing
     QTimer* sliderDebounceTimer;
@@ -172,6 +188,7 @@ private:
     void updateGuiUnloaded();
     void updateAspectPushButton();
     void updateSourcesPushButton();
+    void updateMetadataStatusPanel();
     void setViewValues();
     void setCurrentFrame(qint32 frame);
     void setCurrentField(qint32 field);
@@ -182,13 +199,15 @@ private:
     void updateImage();
     qint32 getAspectAdjustment();
     void updateImageViewer();
+    QVector<QRect> getActiveVideoRects() const;
     void hideImage();
     void resizeFrameToWindow();
     void enterChromaSeekMode(QPushButton* button);
     void exitChromaSeekMode(QPushButton* button);
 
     // TBC source signal handlers
-    void loadTbcFile(QString inputFileName);
+    void loadTbcFile(QString inputFileName, bool forceMetadataOnly = false);
+    void cleanupTempMetadataFile();
     void updateOscilloscopeDialogue();
     void updateVectorscopeDialogue();
     void mouseScanLineSelect(qint32 oX, qint32 oY);

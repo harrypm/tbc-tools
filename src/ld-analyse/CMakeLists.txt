@@ -5,8 +5,12 @@ set(ld-analyse_SOURCES
     blacksnranalysisdialog.cpp blacksnranalysisdialog.ui
     busydialog.cpp busydialog.ui
     closedcaptionsdialog.cpp closedcaptionsdialog.ui
+    exportdialog.cpp exportdialog.ui
+    metadataconversiondialog.cpp metadataconversiondialog.ui
+    metadatastatusdialog.cpp metadatastatusdialog.ui
     main.cpp
     mainwindow.cpp mainwindow.ui
+    metadataconverterutil.cpp
     oscilloscopedialog.cpp oscilloscopedialog.ui
     vectorscopedialog.cpp vectorscopedialog.ui
     aboutdialog.cpp aboutdialog.ui
@@ -40,7 +44,7 @@ target_include_directories(ld-analyse PRIVATE
 )
 
 target_link_libraries(ld-analyse PRIVATE
-    Qt::Core Qt::Gui Qt::Widgets
+    Qt::Core Qt::Gui Qt::Widgets Qt::Svg
     lddecode-library lddecode-chroma
 )
 

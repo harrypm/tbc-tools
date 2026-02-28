@@ -133,9 +133,10 @@ int main(int argc, char *argv[])
 
     // Add theme override option
     parser.addOption(QCommandLineOption("force-dark-theme", "Force dark theme regardless of system settings"));
+    parser.addOption(QCommandLineOption("metadata-only", "Load metadata (.db or .json) without TBC data"));
 
     // Positional argument to specify input video file
-    parser.addPositionalArgument("input", QCoreApplication::translate("main", "Specify input TBC file"));
+    parser.addPositionalArgument("input", QCoreApplication::translate("main", "Specify input TBC or metadata file"));
 
     // Process the command line arguments given by the user
     parser.process(a);
@@ -170,9 +171,10 @@ int main(int argc, char *argv[])
     } else {
         inputFileName.clear();
     }
+    const bool metadataOnly = parser.isSet("metadata-only");
 
     // Start the GUI application
-    MainWindow w(inputFileName);
+    MainWindow w(inputFileName, metadataOnly);
     w.show();
 
     return a.exec();

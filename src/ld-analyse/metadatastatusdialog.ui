@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MetadataStatusDialog</class>
+ <widget class="QDialog" name="MetadataStatusDialog">
+  <property name="windowTitle">
+   <string>Metadata status</string>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>320</width>
+    <height>0</height>
+   </size>
+  </property>
+  <layout class="QVBoxLayout" name="metadataStatusLayout">
+   <item>
+    <layout class="QFormLayout" name="metadataStatusFormLayout">
+     <property name="labelAlignment">
+      <set>Qt::AlignRight|Qt::AlignVCenter</set>
+     </property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="metadataStatusDbLabel">
+       <property name="text">
+        <string>Metadata DB:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="metadataStatusDbValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="textInteractionFlags">
+        <set>Qt::TextSelectableByMouse</set>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="metadataStatusJsonLabel">
+       <property name="text">
+        <string>Metadata JSON:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLabel" name="metadataStatusJsonValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="textInteractionFlags">
+        <set>Qt::TextSelectableByMouse</set>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="metadataStatusSystemLabel">
+       <property name="text">
+        <string>Video system:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QLabel" name="metadataStatusSystemValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="metadataStatusChromaDecoderLabel">
+       <property name="text">
+        <string>Chroma decoder:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QLabel" name="metadataStatusChromaDecoderValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="metadataStatusChromaGainLabel">
+       <property name="text">
+        <string>Chroma gain:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="1">
+      <widget class="QLabel" name="metadataStatusChromaGainValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="0">
+      <widget class="QLabel" name="metadataStatusChromaPhaseLabel">
+       <property name="text">
+        <string>Chroma phase:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="1">
+      <widget class="QLabel" name="metadataStatusChromaPhaseValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="0">
+      <widget class="QLabel" name="metadataStatusLumaNrLabel">
+       <property name="text">
+        <string>Luma NR:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="1">
+      <widget class="QLabel" name="metadataStatusLumaNrValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="0">
+      <widget class="QLabel" name="metadataStatusNtscAdaptiveLabel">
+       <property name="text">
+        <string>NTSC adaptive:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="1">
+      <widget class="QLabel" name="metadataStatusNtscAdaptiveValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="8" column="0">
+      <widget class="QLabel" name="metadataStatusNtscAdaptThresholdLabel">
+       <property name="text">
+        <string>NTSC adapt threshold:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="8" column="1">
+      <widget class="QLabel" name="metadataStatusNtscAdaptThresholdValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="9" column="0">
+      <widget class="QLabel" name="metadataStatusNtscChromaWeightLabel">
+       <property name="text">
+        <string>NTSC chroma weight:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="9" column="1">
+      <widget class="QLabel" name="metadataStatusNtscChromaWeightValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="0">
+      <widget class="QLabel" name="metadataStatusNtscPhaseCompLabel">
+       <property name="text">
+        <string>NTSC phase comp:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="1">
+      <widget class="QLabel" name="metadataStatusNtscPhaseCompValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="0">
+      <widget class="QLabel" name="metadataStatusPalTransformThresholdLabel">
+       <property name="text">
+        <string>PAL transform thresh:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="1">
+      <widget class="QLabel" name="metadataStatusPalTransformThresholdValueLabel">
+       <property name="text">
+        <string>—</string>
+       </property>
+      </widget>
+     </item>
+     <item row="12" column="0">
+      <widget class="QLabel" name="metadataStatusSavePendingLabel">
+       <property name="text">
+        <string>Save pending:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="12" column="1">
+      <widget class="QLabel" name="metadataStatusSavePendingValueLabel">
+       <property name="text">
+        <string>No</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
