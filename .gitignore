@@ -108,3 +108,6 @@ compile.bat
 
 # Nix artefacts
 result
+
+# CI Windows Cache
+ci/cache
