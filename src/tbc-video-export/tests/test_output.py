@@ -195,6 +195,7 @@ class TestOutput:
                 height=432,
                 pixel_aspect_ratio="0.828",
                 display_aspect_ratio="1.778",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorPAL(
                 bit_depth=10,
@@ -229,6 +230,7 @@ class TestOutput:
                 height=624,
                 pixel_aspect_ratio="0.833",
                 display_aspect_ratio="1.239",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorPAL(
                 bit_depth=10,
@@ -308,6 +310,7 @@ class TestOutput:
                 height=432,
                 pixel_aspect_ratio="0.828",
                 display_aspect_ratio="1.778",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorPAL(
                 bit_depth=10,
@@ -341,6 +344,7 @@ class TestOutput:
                 width=928,
                 height=624,
                 display_aspect_ratio="1.239",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorPAL(
                 bit_depth=10,
@@ -420,6 +424,7 @@ class TestOutput:
                 height=432,
                 pixel_aspect_ratio="0.828",
                 display_aspect_ratio="1.778",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorPAL(
                 bit_depth=10,
@@ -453,6 +458,7 @@ class TestOutput:
                 width=928,
                 height=624,
                 display_aspect_ratio="1.239",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorPAL(
                 bit_depth=10,
@@ -515,6 +521,7 @@ class TestOutput:
                 width=760,
                 height=508,
                 display_aspect_ratio="1.275",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorNTSC(
                 bit_depth=10,
@@ -565,6 +572,7 @@ class TestOutput:
                 width=760,
                 height=528,
                 display_aspect_ratio="1.227",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorNTSC(
                 bit_depth=10,
@@ -627,6 +635,7 @@ class TestOutput:
                 width=760,
                 height=508,
                 display_aspect_ratio="1.275",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorNTSC(
                 bit_depth=10,
@@ -677,6 +686,7 @@ class TestOutput:
                 width=760,
                 height=528,
                 display_aspect_ratio="1.227",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorNTSC(
                 bit_depth=10,
@@ -739,6 +749,7 @@ class TestOutput:
                 width=760,
                 height=508,
                 display_aspect_ratio="1.275",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorNTSC(
                 bit_depth=10,
@@ -789,6 +800,7 @@ class TestOutput:
                 width=760,
                 height=528,
                 display_aspect_ratio="1.227",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorNTSC(
                 bit_depth=10,
@@ -851,6 +863,7 @@ class TestOutput:
                 width=760,
                 height=508,
                 display_aspect_ratio="1.275",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorPALM(
                 bit_depth=10,
@@ -898,6 +911,7 @@ class TestOutput:
                 height=528,
                 pixel_aspect_ratio="0.852",
                 display_aspect_ratio="1.227",
+                scan_order="BFF",
             ),
             output_video_color=VideoColorPALM(
                 bit_depth=10,

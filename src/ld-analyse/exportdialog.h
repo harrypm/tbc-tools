@@ -112,14 +112,12 @@ private:
     bool shouldGenerateProxyForSelection() const;
     QString selectedProxyCodecId() const;
     QString proxyOutputPath(const QString &outputBase, const QString &proxyCodecId) const;
-    QString findProxySourceVideoPath(const QString &outputBase, QString *errorMessage) const;
-    QStringList buildProxyArguments(QString *errorMessage,
-                                    const QString &ffmpegPath,
-                                    const QString &sourceVideoPath,
-                                    const QString &proxyOutputPath,
-                                    const QString &proxyCodecId,
-                                    bool overwriteExisting) const;
     bool startProxyExport(QString *errorMessage, bool forceOverwrite = false);
+    void prepareVideoExportLaunch(const QString &exportPath,
+                                  const QStringList &exportArgs,
+                                  const QString &contextLabel,
+                                  QString *programOut,
+                                  QStringList *argsOut);
     void clearRunState();
     bool prepareTrimmedAudioTracks(int zeroBasedStartFrame, int rangeLengthFrames,
                                    QStringList *audioTracks, QString *errorMessage);

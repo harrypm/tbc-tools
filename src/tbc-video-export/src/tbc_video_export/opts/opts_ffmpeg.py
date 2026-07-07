@@ -102,10 +102,12 @@ def add_ffmpeg_opts(parent: argparse.ArgumentParser) -> None:
         "--field-order",
         type=opt_types.TypeFieldOrder(parent),
         choices=list(FieldOrder),
-        default=FieldOrder.TFF,
+        default=FieldOrder.AUTO,
         metavar="order",
         help=(
-            "Set a field order. (default: tff)"
+            "Set a field order. (default: auto - derived from the source\n"
+            "  TBC metadata and output framing, matching the chroma decoder's\n"
+            "  weaved field order; use tff/bff to override, prog for progressive)"
             "\n\n"
             "Available formats:\n  "
             + "\n  ".join(f"{e.name.lower()!s:<5s} {e.value}" for e in FieldOrder)

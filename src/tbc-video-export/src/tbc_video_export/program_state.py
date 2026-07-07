@@ -9,9 +9,15 @@ from tbc_video_export.common import VideoSystemData, consts, exceptions
 from tbc_video_export.common.enums import (
     ChromaDecoder,
     ExportMode,
+    FieldOrder,
     FlagHelper,
     TBCType,
     VideoSystem,
+)
+from tbc_video_export.common.field_order import (
+    DEFAULT_PADDING,
+    compute_is_tff,
+    compute_top_pad_lines,
 )
 from tbc_video_export.common.utils import ansi
 from tbc_video_export.config.config import GetProfileFilter
@@ -165,6 +171,61 @@ class ProgramState:
         return video_system.active_lines["default"]
 
     @cached_property
+    def _effective_active_frame_lines(self) -> tuple[int, int]:
+        """Return the (first, last) active frame lines the chroma decoder will use.
+
+        Resolution mirrors WrapperLDChromaDecoder._get_active_line_opts:
+        user opts take priority, then a non-default active-line preset, then the
+        TBC JSON, then the video-system default preset.
+        """
+        default_preset = self.video_system_data.active_lines["default"]
+
+        if self.opts.contains_active_line_opts():
+            first = self.opts.first_active_frame_line
+            last = self.opts.last_active_frame_line
+            if first is not None and last is not None:
+                return first, last
+
+        if self.decoder_line_preset != default_preset:
+            preset = self.decoder_line_preset
+            return preset.first_frame, preset.last_frame
+
+        json_first = self.tbc_json.first_active_frame_line
+        json_last = self.tbc_json.last_active_frame_line
+        if json_first is not None and json_last is not None:
+            return json_first, json_last
+
+        return default_preset.first_frame, default_preset.last_frame
+
+    @cached_property
+    def _effective_output_padding(self) -> int:
+        """Return the padding amount the chroma decoder will use."""
+        if self.opts.output_padding is not None:
+            return self.opts.output_padding
+        if (padding := self.decoder_line_preset.padding) is not None:
+            return padding
+        return DEFAULT_PADDING
+
+    @cached_property
+    def source_field_order(self) -> FieldOrder:
+        """Derive the output field order (TFF/BFF) from the source + output framing.
+
+        Replicates ld-chroma-decoder's OutputWriter field-order logic
+        (outputwriter.cpp:174): the weaved frame is TFF when
+        ``firstActiveFrameLine % 2 == topPadLines % 2``, else BFF. Computing
+        this here lets the ``--field-order auto`` default feed ``setfield`` the
+        correct parity so ``bwdif`` deinterlacing does not jitter on BFF
+        sources. Falls back to TFF if the active lines cannot be determined.
+        """
+        trim_to_active = not (self.opts.full_frame or self.opts.luma_4fsc)
+        first, last = self._effective_active_frame_lines
+        top_pad_lines = compute_top_pad_lines(
+            first, last, self._effective_output_padding, trim_to_active
+        )
+        is_tff = compute_is_tff(first, top_pad_lines)
+        return FieldOrder.TFF if is_tff else FieldOrder.BFF
+
+    @cached_property
     def dry_run(self) -> bool:
         """Whether the program will execute the procs or just print them."""
         return self.opts.dry_run
@@ -265,6 +326,12 @@ class ProgramState:
             "v3": 50,
         }
 
+        resolved_field_order = (
+            f" -> {self.source_field_order.name.lower()}"
+            if self.opts.field_order is FieldOrder.AUTO
+            else ""
+        )
+
         return (
             f"{ansi.dim('Input TBC:'):<{col_w['k1']}s} "
             f"{self.file_helper.tbc_luma}\n"
@@ -287,5 +354,5 @@ class ProgramState:
             f"{ansi.dim('Profile:'):<{col_w['k1']}s} "
             f"{profiles}\n"
             f"{ansi.dim('Frame Type:'):<{col_w['k1']}s} "
-            f"{self.opts.field_order}\n\n"
+            f"{self.opts.field_order}{resolved_field_order}\n\n"
         )

@@ -60,6 +60,16 @@ class TBCJsonHelper:
         value_str = str(value).strip()
         return value_str if value_str else None
 
+    def _get_video_parameter_int(self, key: str) -> int | None:
+        """Return an int value from videoParameters when available."""
+        value_str = self._get_video_parameter(key)
+        if value_str is None:
+            return None
+        try:
+            return int(value_str)
+        except (TypeError, ValueError):
+            return None
+
     @cached_property
     def git_branch(self) -> str | None:
         """Return decode git branch from videoParameters when available."""
@@ -109,6 +119,20 @@ class TBCJsonHelper:
     def source_video_system(self) -> str | None:
         """Return source video-system string from videoParameters when available."""
         return self._get_video_parameter("system")
+
+    @cached_property
+    def first_active_frame_line(self) -> int | None:
+        """Return firstActiveFrameLine from videoParameters when available.
+
+        Used to derive the correct output field order (TFF/BFF), matching the
+        logic in ld-chroma-decoder's OutputWriter (outputwriter.cpp:174).
+        """
+        return self._get_video_parameter_int("firstActiveFrameLine")
+
+    @cached_property
+    def last_active_frame_line(self) -> int | None:
+        """Return lastActiveFrameLine from videoParameters when available."""
+        return self._get_video_parameter_int("lastActiveFrameLine")
 
     @cached_property
     def source_video_system_normalized(self) -> str | None:

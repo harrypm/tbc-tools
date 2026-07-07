@@ -153,6 +153,57 @@ class ContractCoverageTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(set(check_ci_contracts.BUNDLE_VERIFY_REQUIRED_SNIPPETS)))
 
+    def test_ld_analyse_contract_forbids_hand_rolled_bwdif_parity_graph(self) -> None:
+        expected_forbidden = {
+            "bwdif=mode=send_frame:parity=auto:deint=all",
+        }
+        self.assertTrue(
+            expected_forbidden.issubset(set(check_ci_contracts.LD_ANALYSE_FORBIDDEN_SNIPPETS))
+        )
+
+    def test_ld_analyse_contract_requires_tbc_video_export_web_profile_routing(self) -> None:
+        expected = {
+            "proxy deinterlace routed via tbc-video-export web profile",
+            "proxyExportProfileName",
+        }
+        self.assertTrue(expected.issubset(set(check_ci_contracts.LD_ANALYSE_REQUIRED_SNIPPETS)))
+
+    def test_tbc_video_export_contract_requires_auto_field_order_default(self) -> None:
+        expected = {
+            "default=FieldOrder.AUTO",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.TBC_VIDEO_EXPORT_REQUIRED_SNIPPETS))
+        )
+
+    def test_check_not_contains_flags_hand_rolled_bwdif_literal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture = Path(tmp_dir) / "exportdialog.cpp"
+            fixture.write_text(
+                'filterChain << QStringLiteral("bwdif=mode=send_frame:parity=auto:deint=all");',
+                encoding="utf-8",
+            )
+            errors: list[str] = []
+            check_ci_contracts.check_not_contains(
+                fixture, "bwdif=mode=send_frame:parity=auto:deint=all", errors
+            )
+            self.assertEqual(len(errors), 1)
+            self.assertIn("forbidden snippet present", errors[0])
+
+    def test_check_contains_requires_proxy_web_profile_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture = Path(tmp_dir) / "exportdialog.cpp"
+            fixture.write_text(
+                "// proxy deinterlace routed via tbc-video-export web profile\n"
+                "proxyExportProfileName(proxyCodecForCurrentRun);",
+                encoding="utf-8",
+            )
+            errors: list[str] = []
+            check_ci_contracts.check_contains(
+                fixture, "proxy deinterlace routed via tbc-video-export web profile", errors
+            )
+            self.assertEqual(errors, [])
+
 
 if __name__ == "__main__":
     unittest.main()

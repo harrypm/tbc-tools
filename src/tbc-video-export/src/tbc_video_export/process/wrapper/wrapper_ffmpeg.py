@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from tbc_video_export.common import consts, exceptions
 from tbc_video_export.common.enums import (
     ExportMode,
+    FieldOrder,
     HardwareAccelType,
     PipeType,
     ProcessName,
@@ -866,8 +867,16 @@ class WrapperFFmpeg(Wrapper):
         )
 
     def _get_field_order(self) -> str:
-        """Return the formatted field order from opts."""
-        return self._state.opts.field_order.name.lower()
+        """Return the formatted field order to feed to ``setfield``.
+
+        ``auto`` (the default) resolves to the source-derived TFF/BFF so that
+        ``bwdif`` deinterlacing uses the correct parity instead of jittering
+        on BFF sources. Explicit tff/bff/prog are passed through unchanged.
+        """
+        field_order = self._state.opts.field_order
+        if field_order is FieldOrder.AUTO:
+            field_order = self._state.source_field_order
+        return field_order.name.lower()
 
     @cached_property
     def process_name(self) -> ProcessName:  # noqa: D102

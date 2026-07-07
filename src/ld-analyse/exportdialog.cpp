@@ -1196,17 +1196,6 @@ QString normalizedProxyCodecId(const QString &proxyCodecId)
     return QStringLiteral("h264");
 }
 
-QString proxyCodecDisplayName(const QString &proxyCodecId)
-{
-    const QString normalized = normalizedProxyCodecId(proxyCodecId);
-    if (normalized == QStringLiteral("hevc")) {
-        return QStringLiteral("HEVC/H.265");
-    }
-    if (normalized == QStringLiteral("av1")) {
-        return QStringLiteral("AV1");
-    }
-    return QStringLiteral("AVC/H.264");
-}
 QString dropoutInterfieldCorrectionValue(const TbcSource *source, const QString &correctionMode)
 {
     if (correctionMode == QStringLiteral("intra")) {
@@ -1230,73 +1219,6 @@ QString dropoutInterfieldCorrectionValue(const TbcSource *source, const QString 
     default:
         return QStringLiteral("combined");
     }
-}
-
-QStringList parseFfmpegEncoderNames(const QString &rawOutput)
-{
-    QStringList encoders;
-    static const QRegularExpression encoderLinePattern(
-        QStringLiteral("^\\s*[A-Z\\.]{6}\\s+([A-Za-z0-9_\\-]+)\\s+"));
-    const QStringList lines =
-        stripAnsiSequences(rawOutput).split(QRegularExpression(QStringLiteral("[\\r\\n]+")), Qt::SkipEmptyParts);
-    for (const QString &line : lines) {
-        const QRegularExpressionMatch match = encoderLinePattern.match(line);
-        if (!match.hasMatch()) {
-            continue;
-        }
-        const QString encoderName = match.captured(1).trimmed();
-        if (!encoderName.isEmpty() && !encoders.contains(encoderName)) {
-            encoders << encoderName;
-        }
-    }
-    return encoders;
-}
-
-QStringList ffmpegEncoderNames(const QString &ffmpegPath)
-{
-    if (ffmpegPath.isEmpty()) {
-        return QStringList();
-    }
-
-    static QHash<QString, QStringList> encoderCache;
-    if (encoderCache.contains(ffmpegPath)) {
-        return encoderCache.value(ffmpegPath);
-    }
-
-    QProcess encoderProcess;
-    encoderProcess.setProcessChannelMode(QProcess::MergedChannels);
-    encoderProcess.start(ffmpegPath, QStringList() << QStringLiteral("-hide_banner") << QStringLiteral("-encoders"));
-
-    QStringList encoders;
-    if (encoderProcess.waitForStarted(3000) && encoderProcess.waitForFinished(10000)) {
-        encoders = parseFfmpegEncoderNames(QString::fromLocal8Bit(encoderProcess.readAllStandardOutput()));
-    }
-    encoderCache.insert(ffmpegPath, encoders);
-    return encoders;
-}
-
-QString selectFirstAvailableEncoder(const QStringList &availableEncoders,
-                                    const QStringList &preferredEncoders)
-{
-    for (const QString &preferred : preferredEncoders) {
-        if (listContainsCaseInsensitive(availableEncoders, preferred)) {
-            return preferred;
-        }
-    }
-    return QString();
-}
-
-bool isLikelyVideoContainerExtension(const QString &extension)
-{
-    static const QStringList videoExtensions = {
-        QStringLiteral("mkv"),
-        QStringLiteral("mp4"),
-        QStringLiteral("mov"),
-        QStringLiteral("avi"),
-        QStringLiteral("m4v"),
-        QStringLiteral("webm")
-    };
-    return videoExtensions.contains(extension.trimmed().toLower());
 }
 
 QString formatVitcTimecodeForFfmpeg(const VitcDecoder::Vitc &vitc)
@@ -3506,56 +3428,15 @@ void ExportDialog::on_exportButton_clicked()
         QMessageBox::warning(this, tr("Error"), tr("tbc-video-export not found in PATH or alongside ld-analyse."));
         return;
     }
-    const auto prepareVideoExportLaunch = [this, &exportPath](const QStringList &exportArgs,
-                                                               const QString &contextLabel,
-                                                               QString *programOut,
-                                                               QStringList *argsOut) {
-        if (!programOut || !argsOut) {
-            return;
-        }
-
-        *programOut = exportPath;
-        *argsOut = exportArgs;
-
-#if defined(Q_OS_UNIX)
-        const QString scriptPath = QStandardPaths::findExecutable(QStringLiteral("script"));
-        if (!scriptPath.isEmpty()) {
-#if defined(Q_OS_MACOS)
-            *programOut = scriptPath;
-            *argsOut = {QStringLiteral("-q"), QStringLiteral("/dev/null"), exportPath};
-            argsOut->append(exportArgs);
-            appendLog(tr("Using script (bsd) to enable ANSI progress output for %1.")
-                          .arg(contextLabel));
-#else
-            const QString scriptCommand = formatShellCommand(exportPath, exportArgs);
-            *programOut = scriptPath;
-            *argsOut = {QStringLiteral("-q"), QStringLiteral("-e"), QStringLiteral("-c"),
-                        scriptCommand, QStringLiteral("/dev/null")};
-            appendLog(tr("Using script to enable ANSI progress output for %1.")
-                          .arg(contextLabel));
-#endif
-            return;
-        }
-
-        if (!argsOut->contains(QStringLiteral("--show-process-output"))) {
-            argsOut->append(QStringLiteral("--show-process-output"));
-            appendLog(tr("script command not found; using --show-process-output for %1.")
-                          .arg(contextLabel));
-        }
-#else
-        Q_UNUSED(contextLabel);
-#endif
-    };
-
     QString programToRun;
     QStringList argsToRun;
-    prepareVideoExportLaunch(arguments, tr("main export"), &programToRun, &argsToRun);
+    prepareVideoExportLaunch(exportPath, arguments, tr("main export"), &programToRun, &argsToRun);
     appendLog(tr("Command: %1").arg(formatCommand(programToRun, argsToRun)));
 
     QString proxyProgramToRun;
     QStringList proxyArgsToRun;
     if (generateProxyRequested && !parallelProxyArguments.isEmpty()) {
-        prepareVideoExportLaunch(parallelProxyArguments, tr("parallel proxy export"),
+        prepareVideoExportLaunch(exportPath, parallelProxyArguments, tr("parallel proxy export"),
                                  &proxyProgramToRun, &proxyArgsToRun);
         appendLog(tr("Parallel proxy command: %1")
                       .arg(formatCommand(proxyProgramToRun, proxyArgsToRun)));
@@ -3635,7 +3516,7 @@ void ExportDialog::on_exportButton_clicked()
             appendLog(tr("Parallel proxy export running using profile '%1'.")
                           .arg(proxyExportProfileName(selectedProxyCodec)));
         } else {
-            appendLog(tr("Parallel proxy export failed to start; falling back to post-export proxy transcoding."));
+            appendLog(tr("Parallel proxy export failed to start; falling back to post-export proxy re-run via tbc-video-export."));
         }
     }
 }
@@ -3769,7 +3650,7 @@ void ExportDialog::handleProcessFinished(int exitCode, QProcess::ExitStatus exit
             showExportFailureNotification(tr("Proxy generation failed"),
                                           tr("Proxy generation failed."),
                                           combinedOutput,
-                                          tr("ffmpeg reported failure while generating proxy output."));
+                                          tr("tbc-video-export reported failure while generating proxy output."));
         }
         clearRunState();
         return;
@@ -3782,7 +3663,7 @@ void ExportDialog::handleProcessFinished(int exitCode, QProcess::ExitStatus exit
             return;
         }
         if (parallelProxyFinished && !parallelProxySucceeded) {
-            appendLog(tr("Parallel proxy export failed; attempting post-export proxy transcoding fallback."));
+            appendLog(tr("Parallel proxy export failed; attempting post-export proxy re-run via tbc-video-export."));
             generateProxyForCurrentRun = true;
             QString proxyFallbackError;
             if (startProxyExport(&proxyFallbackError, true)) {
@@ -3886,7 +3767,7 @@ void ExportDialog::handleProcessError(QProcess::ProcessError)
         showExportFailureNotification(tr("Proxy generation failed"),
                                       proxySummary,
                                       detailedOutput,
-                                      tr("ffmpeg could not be started for proxy generation."));
+                                      tr("tbc-video-export could not be started for proxy generation."));
     } else {
         const QString exportSummary = tr("Export failed to start.");
         appendStatus(exportSummary);
@@ -4042,7 +3923,7 @@ void ExportDialog::handleParallelProxyProcessFinished(int exitCode, QProcess::Ex
         return;
     }
 
-    appendLog(tr("Parallel proxy export failed after main export completion; attempting post-export proxy transcoding fallback."));
+    appendLog(tr("Parallel proxy export failed after main export completion; attempting post-export proxy re-run via tbc-video-export."));
     generateProxyForCurrentRun = true;
     QString proxyFallbackError;
     if (startProxyExport(&proxyFallbackError, true)) {
@@ -4080,7 +3961,7 @@ void ExportDialog::handleParallelProxyProcessError(QProcess::ProcessError)
         return;
     }
 
-    appendLog(tr("Parallel proxy export failed to start after main export completion; attempting post-export proxy transcoding fallback."));
+    appendLog(tr("Parallel proxy export failed to start after main export completion; attempting post-export proxy re-run via tbc-video-export."));
     generateProxyForCurrentRun = true;
     QString proxyFallbackError;
     if (startProxyExport(&proxyFallbackError, true)) {
@@ -4625,205 +4506,9 @@ QString ExportDialog::proxyOutputPath(const QString &outputBase, const QString &
     return QStringLiteral("%1_Proxy.mp4").arg(sanitizedBase);
 }
 
-QString ExportDialog::findProxySourceVideoPath(const QString &outputBase, QString *errorMessage) const
-{
-    if (errorMessage) {
-        errorMessage->clear();
-    }
-
-    QStringList existingOutputs;
-    findExistingOutputFiles(outputBase, &existingOutputs);
-    QVector<QFileInfo> videoCandidates;
-    for (const QString &outputPath : existingOutputs) {
-        const QFileInfo outputInfo(outputPath);
-        if (!outputInfo.exists() || !outputInfo.isFile()) {
-            continue;
-        }
-        if (!isLikelyVideoContainerExtension(outputInfo.suffix())) {
-            continue;
-        }
-        const QString outputBaseName = outputInfo.completeBaseName();
-        if (outputBaseName.contains(QStringLiteral(".proxy"), Qt::CaseInsensitive)
-            || outputBaseName.contains(QStringLiteral("_proxy"), Qt::CaseInsensitive)) {
-            continue;
-        }
-        videoCandidates.push_back(outputInfo);
-    }
-
-    if (videoCandidates.isEmpty()) {
-        if (errorMessage) {
-            *errorMessage = tr("Main export completed, but no video output was found for proxy generation.");
-        }
-        return QString();
-    }
-
-    std::sort(videoCandidates.begin(),
-              videoCandidates.end(),
-              [](const QFileInfo &a, const QFileInfo &b) {
-                  return a.lastModified() > b.lastModified();
-              });
-    return videoCandidates.first().absoluteFilePath();
-}
-
-QStringList ExportDialog::buildProxyArguments(QString *errorMessage,
-                                              const QString &ffmpegPath,
-                                              const QString &sourceVideoPath,
-                                              const QString &proxyOutputPathValue,
-                                              const QString &proxyCodecId,
-                                              bool overwriteExisting) const
-{
-    if (errorMessage) {
-        errorMessage->clear();
-    }
-
-    QStringList args;
-    if (ffmpegPath.isEmpty()) {
-        if (errorMessage) {
-            *errorMessage = tr("ffmpeg not found in PATH or alongside ld-analyse.");
-        }
-        return args;
-    }
-    if (sourceVideoPath.isEmpty()) {
-        if (errorMessage) {
-            *errorMessage = tr("No main export output available for proxy generation.");
-        }
-        return args;
-    }
-    const QFileInfo sourceInfo(sourceVideoPath);
-    if (!sourceInfo.exists() || !sourceInfo.isFile()) {
-        if (errorMessage) {
-            *errorMessage = tr("Proxy source video is missing: %1").arg(sourceVideoPath);
-        }
-        return args;
-    }
-    if (proxyOutputPathValue.isEmpty()) {
-        if (errorMessage) {
-            *errorMessage = tr("Invalid proxy output path.");
-        }
-        return args;
-    }
-    const QFileInfo proxyOutputInfo(proxyOutputPathValue);
-    if (sourceInfo.absoluteFilePath().compare(proxyOutputInfo.absoluteFilePath(), Qt::CaseInsensitive) == 0) {
-        if (errorMessage) {
-            *errorMessage = tr("Proxy output path conflicts with the main export output.");
-        }
-        return args;
-    }
-    QDir proxyOutputDir = proxyOutputInfo.absoluteDir();
-    if (!proxyOutputDir.exists() && !proxyOutputDir.mkpath(QStringLiteral("."))) {
-        if (errorMessage) {
-            *errorMessage = tr("Could not create proxy output directory: %1")
-                                .arg(proxyOutputDir.absolutePath());
-        }
-        return args;
-    }
-
-    const QString normalizedCodec = normalizedProxyCodecId(proxyCodecId);
-    const QString proxyProfileName = proxyExportProfileName(normalizedCodec);
-    const bool deinterlacedProxyMode = isWebProfileName(proxyProfileName);
-
-    QStringList preferredEncoders;
-    if (normalizedCodec == QStringLiteral("hevc")) {
-        preferredEncoders << QStringLiteral("libx265");
-        if (deinterlacedProxyMode) {
-            preferredEncoders << QStringLiteral("hevc_videotoolbox");
-        }
-    } else if (normalizedCodec == QStringLiteral("av1")) {
-        preferredEncoders << QStringLiteral("libsvtav1")
-                          << QStringLiteral("libaom-av1");
-        if (deinterlacedProxyMode) {
-            preferredEncoders << QStringLiteral("av1_videotoolbox");
-        }
-    } else {
-        preferredEncoders << QStringLiteral("libx264");
-        if (deinterlacedProxyMode) {
-            preferredEncoders << QStringLiteral("h264_videotoolbox");
-        }
-    }
-
-    const QStringList availableEncoders = ffmpegEncoderNames(ffmpegPath);
-    QString selectedEncoder = selectFirstAvailableEncoder(availableEncoders, preferredEncoders);
-    if (selectedEncoder.isEmpty() && !preferredEncoders.isEmpty() && availableEncoders.isEmpty()) {
-        selectedEncoder = preferredEncoders.constFirst();
-    }
-    if (selectedEncoder.isEmpty()) {
-        if (errorMessage) {
-            *errorMessage = tr("The selected proxy codec (%1) is not available in ffmpeg.")
-                                .arg(proxyCodecDisplayName(normalizedCodec));
-        }
-        return args;
-    }
-
-    QStringList filterChain;
-    if (deinterlacedProxyMode) {
-        filterChain << QStringLiteral("bwdif=mode=send_frame:parity=auto:deint=all")
-                    << QStringLiteral("pad=ceil(iw/2)*2:ceil(ih/2)*2:(ow-iw)/2:(oh-ih)/2");
-    } else if (selectedEncoder == QStringLiteral("libx264")) {
-        filterChain << QStringLiteral("pad=ceil(iw/2)*2:ceil(ih/4)*4:(ow-iw)/2:(oh-ih)/2");
-    } else {
-        filterChain << QStringLiteral("pad=ceil(iw/2)*2:ceil(ih/2)*2:(ow-iw)/2:(oh-ih)/2");
-    }
-
-    args << QStringLiteral("-hide_banner")
-         << QStringLiteral("-nostdin")
-         << (overwriteExisting ? QStringLiteral("-y") : QStringLiteral("-n"))
-         << QStringLiteral("-i") << sourceVideoPath
-         << QStringLiteral("-map") << QStringLiteral("0:v:0");
-    if (audioConfiguredForCurrentRun) {
-        args << QStringLiteral("-map") << QStringLiteral("0:a?");
-    } else {
-        args << QStringLiteral("-an");
-    }
-    args << QStringLiteral("-map_metadata") << QStringLiteral("0")
-         << QStringLiteral("-map_chapters") << QStringLiteral("0")
-         << QStringLiteral("-max_muxing_queue_size") << QStringLiteral("4096")
-         << QStringLiteral("-vf") << filterChain.join(QStringLiteral(","))
-         << QStringLiteral("-c:v") << selectedEncoder;
-
-    if (selectedEncoder == QStringLiteral("libx264")) {
-        args << QStringLiteral("-preset") << QStringLiteral("medium")
-             << QStringLiteral("-crf") << QStringLiteral("21");
-        if (!deinterlacedProxyMode) {
-            args << QStringLiteral("-flags") << QStringLiteral("+ildct+ilme")
-                 << QStringLiteral("-x264opts") << QStringLiteral("interlaced=1");
-        }
-    } else if (selectedEncoder == QStringLiteral("libx265")) {
-        args << QStringLiteral("-preset") << QStringLiteral("medium")
-             << QStringLiteral("-crf") << QStringLiteral("26");
-        if (!deinterlacedProxyMode) {
-            args << QStringLiteral("-x265-params") << QStringLiteral("interlace=1");
-        }
-    } else if (selectedEncoder == QStringLiteral("libsvtav1")) {
-        args << QStringLiteral("-preset") << QStringLiteral("8")
-             << QStringLiteral("-crf") << QStringLiteral("35");
-    } else if (selectedEncoder == QStringLiteral("libaom-av1")) {
-        args << QStringLiteral("-cpu-used") << QStringLiteral("6")
-             << QStringLiteral("-crf") << QStringLiteral("35")
-             << QStringLiteral("-b:v") << QStringLiteral("0");
-    } else if (selectedEncoder == QStringLiteral("h264_videotoolbox")) {
-        args << QStringLiteral("-b:v") << QStringLiteral("3500k")
-             << QStringLiteral("-maxrate") << QStringLiteral("5000k")
-             << QStringLiteral("-bufsize") << QStringLiteral("10000k");
-    } else if (selectedEncoder == QStringLiteral("hevc_videotoolbox")) {
-        args << QStringLiteral("-b:v") << QStringLiteral("2500k")
-             << QStringLiteral("-maxrate") << QStringLiteral("3500k")
-             << QStringLiteral("-bufsize") << QStringLiteral("7000k");
-    } else if (selectedEncoder == QStringLiteral("av1_videotoolbox")) {
-        args << QStringLiteral("-b:v") << QStringLiteral("2000k")
-             << QStringLiteral("-maxrate") << QStringLiteral("3000k")
-             << QStringLiteral("-bufsize") << QStringLiteral("6000k");
-    }
-
-    args << QStringLiteral("-pix_fmt") << QStringLiteral("yuv420p");
-    if (audioConfiguredForCurrentRun) {
-        args << QStringLiteral("-c:a") << QStringLiteral("aac")
-             << QStringLiteral("-b:a") << QStringLiteral("160k");
-    }
-    args << QStringLiteral("-movflags") << QStringLiteral("+faststart")
-         << proxyOutputPathValue;
-    return args;
-}
-
+// proxy deinterlace routed via tbc-video-export web profile -- do not hand-roll ffmpeg
+// bwdif/parity graphs here; field-order (parity) resolution lives in tbc-video-export
+// (common/field_order.py) and is inherited by the web profiles (h264_web/h265_web/av1_web).
 bool ExportDialog::startProxyExport(QString *errorMessage, bool forceOverwrite)
 {
     if (errorMessage) {
@@ -4835,29 +4520,24 @@ bool ExportDialog::startProxyExport(QString *errorMessage, bool forceOverwrite)
         }
         return false;
     }
-
-    const QString ffmpegPath = resolveFfmpegPath();
-    if (ffmpegPath.isEmpty()) {
+    if (!tbcSource) {
         if (errorMessage) {
-            *errorMessage = tr("ffmpeg not found in PATH or alongside ld-analyse.");
+            *errorMessage = tr("No source loaded.");
         }
         return false;
     }
 
-    QString proxySourceErrorMessage;
-    const QString sourceVideoPath = findProxySourceVideoPath(outputBaseForCurrentRun, &proxySourceErrorMessage);
-    if (sourceVideoPath.isEmpty()) {
+    const QString exportPath = resolveVideoExportPath();
+    if (exportPath.isEmpty()) {
         if (errorMessage) {
-            *errorMessage = proxySourceErrorMessage;
+            *errorMessage = tr("tbc-video-export not found in PATH or alongside ld-analyse.");
         }
         return false;
     }
 
-    QString targetProxyPath = proxyOutputPathForCurrentRun;
-    if (targetProxyPath.isEmpty()) {
-        targetProxyPath = proxyOutputPath(outputBaseForCurrentRun, proxyCodecForCurrentRun);
-    }
-    if (targetProxyPath.isEmpty()) {
+    const QString proxyProfile = proxyExportProfileName(proxyCodecForCurrentRun);
+    const QString proxyOutputBase = sanitizeOutputBaseName(proxyOutputPathForCurrentRun);
+    if (proxyOutputBase.isEmpty()) {
         if (errorMessage) {
             *errorMessage = tr("Could not determine proxy output file path.");
         }
@@ -4866,21 +4546,29 @@ bool ExportDialog::startProxyExport(QString *errorMessage, bool forceOverwrite)
 
     const bool overwriteProxyOutput = overwriteExistingForCurrentRun || forceOverwrite;
 
-    QString proxyArgumentsError;
-    const QStringList proxyArguments = buildProxyArguments(&proxyArgumentsError,
-                                                           ffmpegPath,
-                                                           sourceVideoPath,
-                                                           targetProxyPath,
-                                                           proxyCodecForCurrentRun,
-                                                           overwriteProxyOutput);
+    // Reuse the same tbc-video-export argument construction the parallel proxy path uses
+    // (on_exportButton_clicked). Empty audio tracks + -1/-1 let buildArguments collect audio
+    // and in/out points from the UI, matching the parallel run. The metadata snapshot and
+    // export config prepared for the main run are still valid here (clearRunState has not run).
+    QString proxyArgsError;
+    const QStringList proxyArguments = buildArguments(&proxyArgsError,
+                                                      temporaryInputJsonPath,
+                                                      overwriteProxyOutput,
+                                                      temporaryExportConfigPath,
+                                                      QStringList(),
+                                                      -1,
+                                                      -1,
+                                                      proxyProfile,
+                                                      proxyOutputBase);
     if (proxyArguments.isEmpty()) {
         if (errorMessage) {
-            *errorMessage = proxyArgumentsError;
+            *errorMessage = proxyArgsError.isEmpty()
+                                ? tr("Could not prepare proxy export arguments.")
+                                : proxyArgsError;
         }
         return false;
     }
 
-    proxyOutputPathForCurrentRun = targetProxyPath;
     splitStatsByFeed = true;
     updateProcessStatsPaneMode();
     updateFeedLogPaneMode();
@@ -4889,13 +4577,16 @@ bool ExportDialog::startProxyExport(QString *errorMessage, bool forceOverwrite)
     pendingStdoutBuffer.clear();
     pendingStderrBuffer.clear();
 
-    const QString proxyCommand = formatCommand(ffmpegPath, proxyArguments);
+    QString programToRun;
+    QStringList argsToRun;
+    prepareVideoExportLaunch(exportPath, proxyArguments, tr("proxy export"), &programToRun, &argsToRun);
+    const QString proxyCommand = formatCommand(programToRun, argsToRun);
     appendLog(tr("Proxy command: %1").arg(proxyCommand));
-    appendStatus(tr("Generating proxy MP4..."));
-    appendLog(tr("Generating proxy MP4..."));
+    appendStatus(tr("Generating proxy via tbc-video-export..."));
+    appendLog(tr("Generating proxy via tbc-video-export web profile '%1'...").arg(proxyProfile));
 
     ExportProcessStat stat;
-    stat.process = QStringLiteral("ffmpeg");
+    stat.process = QStringLiteral("tbc-video-export");
     stat.tbcType = QStringLiteral("—");
     stat.trackedName = QStringLiteral("frame");
     stat.current = QStringLiteral("0");
@@ -4905,9 +4596,9 @@ bool ExportDialog::startProxyExport(QString *errorMessage, bool forceOverwrite)
     stat.feedTag = kStatsFeedProxy;
     updateProcessStat(stat);
 
-    exportProcess->setWorkingDirectory(QFileInfo(sourceVideoPath).absolutePath());
+    exportProcess->setWorkingDirectory(QFileInfo(currentInputFile).absolutePath());
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    const QStringList prependDirs = defaultExecutableSearchDirs(sourceVideoPath);
+    const QStringList prependDirs = defaultExecutableSearchDirs(currentInputFile);
     QStringList pathEntries = env.value(QStringLiteral("PATH"))
                                   .split(QDir::listSeparator(), Qt::SkipEmptyParts);
     prependUniquePathEntries(&pathEntries, prependDirs);
@@ -4917,15 +4608,58 @@ bool ExportDialog::startProxyExport(QString *errorMessage, bool forceOverwrite)
     exportProcess->setProcessEnvironment(env);
 
     activeRunStage = RunStage::ProxyExport;
-    exportProcess->start(ffmpegPath, proxyArguments);
+    exportProcess->start(programToRun, argsToRun);
     if (!exportProcess->waitForStarted(5000)) {
         activeRunStage = RunStage::Idle;
         if (errorMessage) {
-            *errorMessage = tr("Failed to start ffmpeg for proxy generation.");
+            *errorMessage = tr("Failed to start tbc-video-export for proxy generation.");
         }
         return false;
     }
     return true;
+}
+
+void ExportDialog::prepareVideoExportLaunch(const QString &exportPath,
+                                            const QStringList &exportArgs,
+                                            const QString &contextLabel,
+                                            QString *programOut,
+                                            QStringList *argsOut)
+{
+    if (!programOut || !argsOut) {
+        return;
+    }
+
+    *programOut = exportPath;
+    *argsOut = exportArgs;
+
+#if defined(Q_OS_UNIX)
+    const QString scriptPath = QStandardPaths::findExecutable(QStringLiteral("script"));
+    if (!scriptPath.isEmpty()) {
+#if defined(Q_OS_MACOS)
+        *programOut = scriptPath;
+        *argsOut = {QStringLiteral("-q"), QStringLiteral("/dev/null"), exportPath};
+        argsOut->append(exportArgs);
+        appendLog(tr("Using script (bsd) to enable ANSI progress output for %1.")
+                      .arg(contextLabel));
+#else
+        const QString scriptCommand = formatShellCommand(exportPath, exportArgs);
+        *programOut = scriptPath;
+        *argsOut = {QStringLiteral("-q"), QStringLiteral("-e"), QStringLiteral("-c"),
+                    scriptCommand, QStringLiteral("/dev/null")};
+        appendLog(tr("Using script to enable ANSI progress output for %1.")
+                      .arg(contextLabel));
+#endif
+        return;
+    }
+
+    if (!argsOut->contains(QStringLiteral("--show-process-output"))) {
+        argsOut->append(QStringLiteral("--show-process-output"));
+        appendLog(tr("script command not found; using --show-process-output for %1.")
+                      .arg(contextLabel));
+    }
+#else
+    Q_UNUSED(contextLabel);
+#endif
 }
 
 void ExportDialog::clearRunState()

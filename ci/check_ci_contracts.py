@@ -14,6 +14,9 @@ WINDOWS_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-bui
 LINUX_BUILD_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-linux.txt"
 LINUX_PYINSTALLER_SCRIPT = ROOT / "src/tbc-video-export/pyinstaller/build_linux.py"
 BUNDLE_VERIFY_SCRIPT = ROOT / "ci/verify_linux_bundle.sh"
+LD_ANALYSE_EXPORT_DIALOG = ROOT / "src/ld-analyse/exportdialog.cpp"
+TBC_VIDEO_EXPORT_OPTS_FFMPEG = ROOT / "src/tbc-video-export/src/tbc_video_export/opts/opts_ffmpeg.py"
+TBC_VIDEO_EXPORT_FIELD_ORDER = ROOT / "src/tbc-video-export/src/tbc_video_export/common/field_order.py"
 
 XCB_RUNTIME_LIBS = (
     "libxcb-cursor.so.0",
@@ -107,6 +110,26 @@ WINDOWS_REQUIRED_PACKAGES = (
     "pywin32",
 )
 
+# ld-analyse must route all deinterlace/proxy output through tbc-video-export web profiles
+# instead of hand-rolling ffmpeg bwdif/parity filter graphs. The field-order (parity)
+# resolution lives in tbc-video-export (common/field_order.py) and is inherited by the
+# h264_web/h265_web/av1_web profiles. See AGENTS.md "Hard rule" entries.
+LD_ANALYSE_FORBIDDEN_SNIPPETS = (
+    # Hand-rolled bwdif parity=auto graph that bypassed field-order resolution and jittered.
+    "bwdif=mode=send_frame:parity=auto:deint=all",
+)
+LD_ANALYSE_REQUIRED_SNIPPETS = (
+    # Marker anchoring the refactored proxy path that routes via tbc-video-export web profile.
+    "proxy deinterlace routed via tbc-video-export web profile",
+    # Web profile selection helper used by both parallel and fallback proxy paths.
+    "proxyExportProfileName",
+)
+# tbc-video-export must keep --field-order defaulting to AUTO so parity is derived from
+# firstActiveFrameLine/lastActiveFrameLine + output padding rather than hardcoded TFF/BFF.
+TBC_VIDEO_EXPORT_REQUIRED_SNIPPETS = (
+    "default=FieldOrder.AUTO",
+)
+
 
 def check_contains(path: Path, snippet: str, errors: list[str]) -> None:
     content = path.read_text(encoding="utf-8")
@@ -141,6 +164,9 @@ def main() -> int:
         LINUX_BUILD_REQUIREMENTS,
         LINUX_PYINSTALLER_SCRIPT,
         BUNDLE_VERIFY_SCRIPT,
+        LD_ANALYSE_EXPORT_DIALOG,
+        TBC_VIDEO_EXPORT_OPTS_FFMPEG,
+        TBC_VIDEO_EXPORT_FIELD_ORDER,
     ):
         if not required_file.exists():
             errors.append(f"missing required file: {required_file}")
@@ -185,6 +211,15 @@ def main() -> int:
     for runtime_lib in XCB_RUNTIME_LIBS:
         check_count_at_least(LINUX_WORKFLOW, runtime_lib, 2, errors)
         check_contains(BUNDLE_VERIFY_SCRIPT, runtime_lib, errors)
+
+    for snippet in LD_ANALYSE_FORBIDDEN_SNIPPETS:
+        check_not_contains(LD_ANALYSE_EXPORT_DIALOG, snippet, errors)
+    for snippet in LD_ANALYSE_REQUIRED_SNIPPETS:
+        check_contains(LD_ANALYSE_EXPORT_DIALOG, snippet, errors)
+    for snippet in TBC_VIDEO_EXPORT_REQUIRED_SNIPPETS:
+        check_contains(TBC_VIDEO_EXPORT_OPTS_FFMPEG, snippet, errors)
+    check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_is_tff", errors)
+    check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_top_pad_lines", errors)
 
     if errors:
         print("CI contract checks failed:")
