@@ -109,3 +109,7 @@ compile.bat
 
 # Nix artefacts
 result
+
+# CUDA 11.8 closure cache (lives in the dedicated tbc-tools-ci-cache repo,
+# not here). Created by scripts/cuda-closure-cache.sh.
+cuda-cache/

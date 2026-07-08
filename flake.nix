@@ -126,6 +126,19 @@
       assert pkgs.lib.assertMsg
         (!enableCuda || pkgs.lib.versionAtLeast vendoredCudaPackages12.cudatoolkit.version "12.4")
         "Vendored CUDA 12 package set must provide toolkit >= 12.4";
+      # Pre-empt the Nixpkgs 25.05 removal of cudaPackages_11_8: if the
+      # nixpkgsLegacy pin is ever bumped past a rev that drops it (or drops
+      # cudnn_8_9 / gcc11), fail loudly at eval time instead of silently
+      # breaking GTX-1000-series (Pascal) CUDA builds.
+      assert pkgs.lib.assertMsg
+        (!enableCuda || legacyPkgs ? cudaPackages_11_8)
+        "nixpkgsLegacy no longer provides cudaPackages_11_8. Re-pin nixpkgsLegacy to a Nixpkgs rev that still ships it (e.g. nixos-24.11) to preserve GTX-1000-series CUDA support.";
+      assert pkgs.lib.assertMsg
+        (!enableCuda || (cudaPackages != null && cudaPackages ? cudatoolkit && cudaPackages ? cudnn_8_9 && legacyPkgs ? gcc11))
+        "Vendored CUDA 11.8 package set is incomplete (missing cudatoolkit, cudnn_8_9, or gcc11). The nixpkgsLegacy pin may have drifted.";
+      assert pkgs.lib.assertMsg
+        (!enableCuda || pkgs.lib.hasPrefix "11.8" cudaPackages.cudatoolkit.version)
+        "CUDA toolkit must be 11.8.x for GTX-1000-series (Pascal) support — got ${cudaPackages.cudatoolkit.version}";
       {
         packages.ffmpeg = pkgs.ffmpeg;
         packages.default = pkgs.stdenv.mkDerivation {
