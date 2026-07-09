@@ -14,6 +14,7 @@
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QSpinBox>
+#include <QString>
 #include <QWheelEvent>
 
 namespace {
@@ -119,6 +120,13 @@ bool VideoParametersDialog::eventFilter(QObject *object, QEvent *event)
     return QDialog::eventFilter(object, event);
 }
 
+void VideoParametersDialog::updateResultingFrameSizeLabel()
+{
+    const qint32 width = videoParameters.activeVideoEnd - videoParameters.activeVideoStart;
+    const qint32 height = videoParameters.lastActiveFrameLine - videoParameters.firstActiveFrameLine;
+    ui->resultingFrameSizeValueLabel->setText(QString("%1 x %2").arg(width).arg(height));
+}
+
 void VideoParametersDialog::setVideoParameters(const LdDecodeMetaData::VideoParameters &_videoParameters)
 {
     videoParameters = _videoParameters;
@@ -205,6 +213,8 @@ void VideoParametersDialog::setVideoParameters(const LdDecodeMetaData::VideoPara
     if (videoParameters.isWidescreen) ui->aspectRatio169RadioButton->setChecked(true);
     else ui->aspectRatio43RadioButton->setChecked(true);
 
+    updateResultingFrameSizeLabel();
+
     // Unblock signals
     ui->activeVideoWidthSpinBox->blockSignals(false);
     ui->activeVideoStartSpinBox->blockSignals(false);
@@ -243,6 +253,7 @@ void VideoParametersDialog::on_activeVideoStartSpinBox_valueChanged(int value)
         QSignalBlocker blocker(ui->activeVideoStartHorizontalSlider);
         ui->activeVideoStartHorizontalSlider->setValue(value);
     }
+    updateResultingFrameSizeLabel();
     emit videoParametersChanged(videoParameters);
 }
 
@@ -253,6 +264,7 @@ void VideoParametersDialog::on_activeVideoWidthSpinBox_valueChanged(int value)
         QSignalBlocker blocker(ui->activeVideoWidthHorizontalSlider);
         ui->activeVideoWidthHorizontalSlider->setValue(value);
     }
+    updateResultingFrameSizeLabel();
     emit videoParametersChanged(videoParameters);
 }
 
@@ -319,6 +331,7 @@ void VideoParametersDialog::on_firstActiveFrameLineSpinBox_valueChanged(int valu
         QSignalBlocker blocker(ui->firstActiveFrameLineHorizontalSlider);
         ui->firstActiveFrameLineHorizontalSlider->setValue(value);
     }
+    updateResultingFrameSizeLabel();
     emit videoParametersChanged(videoParameters);
 }
 
@@ -332,6 +345,7 @@ void VideoParametersDialog::on_lastActiveFrameLineSpinBox_valueChanged(int value
         QSignalBlocker blocker(ui->lastActiveFrameLineHorizontalSlider);
         ui->lastActiveFrameLineHorizontalSlider->setValue(value);
     }
+    updateResultingFrameSizeLabel();
     emit videoParametersChanged(videoParameters);
 }
 

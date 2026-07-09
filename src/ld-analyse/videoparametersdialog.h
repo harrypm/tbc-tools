@@ -66,6 +66,8 @@ private slots:
     void on_exportBoundaryThicknessHorizontalSlider_valueChanged(int value);
 
 private:
+    void updateResultingFrameSizeLabel();
+
     Ui::VideoParametersDialog *ui;
     LdDecodeMetaData::VideoParameters videoParameters;
     qint32 originalActiveVideoStart = -1;
