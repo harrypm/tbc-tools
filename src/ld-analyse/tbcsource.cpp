@@ -1652,22 +1652,13 @@ qint32 TbcSource::getCcData1() const
 }
 
 void TbcSource::setChromaConfiguration(const PalColour::Configuration &_palConfiguration,
-                                       const Comb::Configuration &_ntscConfiguration,
-                                       const OutputWriter::Configuration &_outputConfiguration)
+                                       const Comb::Configuration &_ntscConfiguration)
 {
     ntscColour.requestNnTransform3DCancel();
     invalidateImageCache();
 
     palConfiguration = _palConfiguration;
     ntscConfiguration = _ntscConfiguration;
-    outputConfiguration = _outputConfiguration;
-    if (outputConfiguration.trimToActiveRegion) {
-        chromaDecodeMode = ACTIVE_ONLY_CHROMA_MODE;
-    } else if (outputConfiguration.fullFrameDecode) {
-        chromaDecodeMode = FULL_FRAME_CHROMA_MODE;
-    } else {
-        chromaDecodeMode = HYBRID_CHROMA_MODE;
-    }
 
     configureChromaDecoder();
 }

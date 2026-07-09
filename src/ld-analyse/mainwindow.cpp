@@ -2136,8 +2136,7 @@ void MainWindow::resetGui()
                                                 tbcSource.getNtscConfiguration(),
                                                 tbcSource.getMonoConfiguration(),
                                                 tbcSource.getSourceMode(),
-												true,//set to true because the chroma decoder is already init
-												tbcSource.getOutputConfiguration());
+                                                true); // set to true because the chroma decoder is already init
     chromaDecoderConfigDialog->setVideoLevels(tbcSource.getVideoParameters());
 }
 
@@ -2177,8 +2176,7 @@ void MainWindow::updateGuiLoaded()
                                                 tbcSource.getNtscConfiguration(),
                                                 tbcSource.getMonoConfiguration(),
                                                 tbcSource.getSourceMode(),
-												false,//set to false to init the chroma decoder selection
-												tbcSource.getOutputConfiguration());
+                                                false); // set to false to init the chroma decoder selection
     chromaDecoderConfigDialog->setVideoLevels(tbcSource.getVideoParameters());
 
     // Ensure the busy dialogue is hidden
@@ -7239,9 +7237,7 @@ void MainWindow::chromaDecoderConfigChangedSignalHandler()
     const PalColour::Configuration &palConfig = chromaDecoderConfigDialog->getPalConfiguration();
     const Comb::Configuration &ntscConfig = chromaDecoderConfigDialog->getNtscConfiguration();
     // Set the new configuration
-    tbcSource.setChromaConfiguration(palConfig,
-                                     ntscConfig,
-                                     chromaDecoderConfigDialog->getOutputConfiguration());
+    tbcSource.setChromaConfiguration(palConfig, ntscConfig);
 
     LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     videoParameters.chromaGain = palConfig.chromaGain;

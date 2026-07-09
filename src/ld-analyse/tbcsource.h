@@ -169,8 +169,7 @@ public:
     qint32 getCcData0() const;
     qint32 getCcData1() const;
 
-    void setChromaConfiguration(const PalColour::Configuration &palConfiguration, const Comb::Configuration &ntscConfiguration,
-                                const OutputWriter::Configuration &outputConfiguration);
+    void setChromaConfiguration(const PalColour::Configuration &palConfiguration, const Comb::Configuration &ntscConfiguration);
     void requestNnTransform3DCancel();
     const PalColour::Configuration &getPalConfiguration() const;
     const Comb::Configuration &getNtscConfiguration() const;

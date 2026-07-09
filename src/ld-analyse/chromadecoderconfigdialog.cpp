@@ -135,15 +135,13 @@ void ChromaDecoderConfigDialog::setConfiguration(VideoSystem _system, const PalC
                                                  const Comb::Configuration &_ntscConfiguration,
                                                  const MonoDecoder::MonoConfiguration &_monoConfiguration,
 												 const TbcSource::SourceMode &_mode,
-												 const bool _isInit,
-                                                 const OutputWriter::Configuration &_outputConfiguration)
+												 const bool _isInit)
 {
     const double configuredYNRLevel = _system == NTSC ? _ntscConfiguration.yNRLevel : _palConfiguration.yNRLevel;
     system = _system;
     palConfiguration = _palConfiguration;
     ntscConfiguration = _ntscConfiguration;
     monoConfiguration = _monoConfiguration;
-    outputConfiguration = _outputConfiguration;
 	sourceMode = _mode;
 
     palConfiguration.chromaGain = qBound(0.0, palConfiguration.chromaGain, 2.0);
@@ -183,10 +181,6 @@ const Comb::Configuration &ChromaDecoderConfigDialog::getNtscConfiguration()
     return ntscConfiguration;
 }
 
-const OutputWriter::Configuration &ChromaDecoderConfigDialog::getOutputConfiguration()
-{
-    return outputConfiguration;
-}
 void ChromaDecoderConfigDialog::setVideoLevels(const LdDecodeMetaData::VideoParameters &videoParameters)
 {
     system = videoParameters.system;

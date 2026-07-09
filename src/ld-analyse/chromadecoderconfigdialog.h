@@ -17,7 +17,6 @@
 #include <QSlider>
 
 #include "comb.h"
-#include "outputwriter.h"
 #include "palcolour.h"
 #include "monodecoder.h"
 #include "tbcsource.h"
@@ -38,12 +37,10 @@ public:
                           const Comb::Configuration &ntscConfiguration,
                           const MonoDecoder::MonoConfiguration &monoConfiguration,
                           const TbcSource::SourceMode &_mode,
-						  const bool _isInit,
-                          const OutputWriter::Configuration &outputConfiguration);
+						  const bool _isInit);
     void setVideoLevels(const LdDecodeMetaData::VideoParameters &videoParameters);
     const PalColour::Configuration &getPalConfiguration();
     const Comb::Configuration &getNtscConfiguration();
-    const OutputWriter::Configuration &getOutputConfiguration();
 
 signals:
     void chromaDecoderConfigChanged();
@@ -86,7 +83,6 @@ private:
     PalColour::Configuration palConfiguration;
     Comb::Configuration ntscConfiguration;
     MonoDecoder::MonoConfiguration monoConfiguration;
-    OutputWriter::Configuration outputConfiguration;
 	TbcSource* tbcSource = nullptr;
 	TbcSource::SourceMode sourceMode;
 	bool isInit = true;
