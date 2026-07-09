@@ -149,6 +149,68 @@ jobs:
             cmd /c "copy /b `"$zipPath.part.*`" `"$zipPath`" >nul"
           }
 
+      - name: Pre-fetch gas-preprocessor.pl for arm64 ffmpeg (insulate from raw.githubusercontent.com 429)
+        # The vcpkg ffmpeg port only calls vcpkg_find_acquire_program(GASPREPROCESSOR)
+        # for arm/arm64-windows (x64 uses NASM and is unaffected). That download pulls
+        # gas-preprocessor.pl from raw.githubusercontent.com, which rate-limits (HTTP 429)
+        # and fails the whole Win arm64 build with "building ffmpeg:arm64-windows failed".
+        # vcpkg_download_distfile SKIPS the network fetch if the file already exists at
+        # ${VCPKG_ROOT}/downloads/<filename> with the expected SHA512, so pre-place it
+        # from CDN mirrors (jsDelivr first) with SHA512 validation. The commit_id + SHA
+        # are parsed from the pinned vcpkg's own program definition so this auto-tracks
+        # a VCPKG_COMMIT bump. Best-effort: on total failure, let vcpkg try its own download.
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $defFile = Join-Path $env:VCPKG_ROOT 'scripts\cmake\vcpkg_find_acquire_program(GASPREPROCESSOR).cmake'
+          if (-not (Test-Path $defFile)) {
+            Write-Warning "GASPREPROCESSOR program def not found at $defFile; skipping pre-fetch."
+            exit 0
+          }
+          $def = Get-Content -Raw -LiteralPath $defFile
+          $commit = $null; $sha = $null
+          if ($def -match '(?m)^set\(\s*commit_id\s+([0-9a-f]+)\s*\)') { $commit = $matches[1] }
+          if ($def -match '(?m)^set\(\s*download_sha512\s+([0-9a-fA-F]+)\s*\)') { $sha = $matches[1].ToLower() }
+          if (-not $commit -or -not $sha) {
+            Write-Warning "Could not parse commit_id/download_sha512 from $defFile; skipping pre-fetch."
+            exit 0
+          }
+          $filename = "gas-preprocessor-$($commit.Substring(0,8)).pl"
+          $downloadsDir = Join-Path $env:VCPKG_ROOT 'downloads'
+          New-Item -ItemType Directory -Force -Path $downloadsDir | Out-Null
+          $target = Join-Path $downloadsDir $filename
+          if (Test-Path $target) {
+            $h = (Get-FileHash -Algorithm SHA512 -LiteralPath $target).Hash.ToLower()
+            if ($h -eq $sha) { Write-Host "gas-preprocessor.pl already cached at $target (sha512 OK)"; exit 0 }
+          }
+          $mirrors = @(
+            "https://cdn.jsdelivr.net/gh/FFmpeg/gas-preprocessor@$commit/gas-preprocessor.pl",
+            "https://github.com/FFmpeg/gas-preprocessor/raw/$commit/gas-preprocessor.pl",
+            "https://raw.githubusercontent.com/FFmpeg/gas-preprocessor/$commit/gas-preprocessor.pl"
+          )
+          $ok = $false
+          for ($attempt = 1; $attempt -le 4 -and -not $ok; $attempt++) {
+            foreach ($url in $mirrors) {
+              try {
+                Invoke-WebRequest -Uri $url -OutFile $target -ErrorAction Stop
+                $h = (Get-FileHash -Algorithm SHA512 -LiteralPath $target).Hash.ToLower()
+                if ($h -eq $sha) {
+                  Write-Host "Pre-fetched gas-preprocessor.pl from $url (sha512 OK) -> $target"
+                  $ok = $true; break
+                }
+                Write-Warning "Downloaded $url but sha512 mismatch ($h); will retry next mirror"
+              } catch {
+                Write-Warning "Download from $url failed (attempt $attempt): $($_.Exception.Message)"
+              }
+              Remove-Item -LiteralPath $target -ErrorAction SilentlyContinue
+            }
+            if (-not $ok) { Start-Sleep -Seconds (5 * $attempt) }
+          }
+          if (-not $ok) {
+            Write-Warning "Could not pre-fetch gas-preprocessor.pl from any mirror; letting vcpkg attempt its own download."
+          }
+
       - name: Run CMake
         uses: lukka/run-cmake@v10
         with:

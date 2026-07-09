@@ -246,6 +246,30 @@ class ContractCoverageTests(unittest.TestCase):
             f"expected exactly one CUDA cache restore step in Linux workflow, found {count}",
         )
 
+    def test_windows_gas_preprocessor_contract_requires_insulation_step(self) -> None:
+        expected = {
+            "Pre-fetch gas-preprocessor.pl for arm64 ffmpeg",
+            "vcpkg_find_acquire_program(GASPREPROCESSOR)",
+            "cdn.jsdelivr.net/gh/FFmpeg/gas-preprocessor",
+            "raw.githubusercontent.com/FFmpeg/gas-preprocessor",
+            "Get-FileHash -Algorithm SHA512",
+            "if: matrix.arch == 'arm64'",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.WINDOWS_GAS_PREPROCESSOR_REQUIRED_SNIPPETS))
+        )
+
+    def test_windows_workflow_has_exactly_one_gas_preprocessor_step(self) -> None:
+        # The gas-preprocessor pre-fetch step is gated to arm64 and must appear
+        # exactly once in build_windows_tools.yml.
+        content = check_ci_contracts.WINDOWS_WORKFLOW.read_text(encoding="utf-8")
+        count = content.count("Pre-fetch gas-preprocessor.pl for arm64 ffmpeg")
+        self.assertEqual(
+            count,
+            1,
+            f"expected exactly one gas-preprocessor pre-fetch step in Windows workflow, found {count}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -148,6 +148,21 @@ TESTS_CUDA_CACHE_REQUIRED_SNIPPETS = (
     "bash scripts/cuda-closure-cache.sh pull",
     "bash scripts/cuda-closure-cache.sh restore",
 )
+# Windows arm64 CI must pre-fetch gas-preprocessor.pl into the vcpkg downloads
+# dir (SHA512-validated, from CDN mirrors) so a raw.githubusercontent.com HTTP
+# 429 / outage cannot fail the arm64 ffmpeg build. The vcpkg ffmpeg port only
+# calls vcpkg_find_acquire_program(GASPREPROCESSOR) for arm/arm64-windows
+# (x64 uses NASM), so this step is gated to arm64 and must appear exactly once.
+# vcpkg skips its network fetch when ${VCPKG_ROOT}/downloads/<filename> already
+# exists with the expected SHA512 (verified in vcpkg_download_distfile.cmake).
+WINDOWS_GAS_PREPROCESSOR_REQUIRED_SNIPPETS = (
+    "Pre-fetch gas-preprocessor.pl for arm64 ffmpeg",
+    "vcpkg_find_acquire_program(GASPREPROCESSOR)",
+    "cdn.jsdelivr.net/gh/FFmpeg/gas-preprocessor",
+    "raw.githubusercontent.com/FFmpeg/gas-preprocessor",
+    "Get-FileHash -Algorithm SHA512",
+    "if: matrix.arch == 'arm64'",
+)
 
 
 def check_contains(path: Path, snippet: str, errors: list[str]) -> None:
@@ -248,6 +263,19 @@ def main() -> int:
         check_contains(LINUX_WORKFLOW, snippet, errors)
     for snippet in TESTS_CUDA_CACHE_REQUIRED_SNIPPETS:
         check_contains(TESTS_WORKFLOW, snippet, errors)
+    # Windows arm64 must pre-fetch gas-preprocessor.pl (insulate from
+    # raw.githubusercontent.com 429). Step is gated to arm64 and must appear
+    # exactly once in build_windows_tools.yml.
+    for snippet in WINDOWS_GAS_PREPROCESSOR_REQUIRED_SNIPPETS:
+        check_contains(WINDOWS_WORKFLOW, snippet, errors)
+    gp_step_count = WINDOWS_WORKFLOW.read_text(encoding="utf-8").count(
+        "Pre-fetch gas-preprocessor.pl for arm64 ffmpeg"
+    )
+    if gp_step_count != 1:
+        errors.append(
+            f"{WINDOWS_WORKFLOW}: gas-preprocessor pre-fetch step must appear exactly once "
+            f"(arm64 only), found {gp_step_count}"
+        )
     # The cache restore step must only appear once in build_linux_tools.yml
     # (x86_64 CUDA job) -- never in the arm64 job, where enableCuda=false and
     # restoring an x86_64 closure would fail. Exactly one occurrence.
