@@ -204,6 +204,48 @@ class ContractCoverageTests(unittest.TestCase):
             )
             self.assertEqual(errors, [])
 
+    def test_linux_cuda_cache_contract_requires_pull_restore_step(self) -> None:
+        expected = {
+            "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache",
+            "bash scripts/cuda-closure-cache.sh pull",
+            "bash scripts/cuda-closure-cache.sh restore",
+            "tbc-tools-ci-cache",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.LINUX_CUDA_CACHE_REQUIRED_SNIPPETS))
+        )
+
+    def test_tests_cuda_cache_contract_requires_pull_restore_step(self) -> None:
+        expected = {
+            "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache",
+            "bash scripts/cuda-closure-cache.sh pull",
+            "bash scripts/cuda-closure-cache.sh restore",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.TESTS_CUDA_CACHE_REQUIRED_SNIPPETS))
+        )
+
+    def test_cuda_closure_cache_script_and_tests_workflow_are_required_files(self) -> None:
+        # The contract must guard both the script and the tests workflow so the
+        # CUDA closure restore cannot be silently removed from either path.
+        required_paths = {
+            check_ci_contracts.CUDA_CLOSURE_CACHE_SCRIPT,
+            check_ci_contracts.TESTS_WORKFLOW,
+        }
+        for path in required_paths:
+            self.assertTrue(path.exists(), f"required contract file missing: {path}")
+
+    def test_linux_workflow_has_exactly_one_cuda_cache_restore_step(self) -> None:
+        # The restore step must appear exactly once (x86_64 job only) -- never
+        # in the arm64 job where enableCuda=false.
+        content = check_ci_contracts.LINUX_WORKFLOW.read_text(encoding="utf-8")
+        count = content.count("Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache")
+        self.assertEqual(
+            count,
+            1,
+            f"expected exactly one CUDA cache restore step in Linux workflow, found {count}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

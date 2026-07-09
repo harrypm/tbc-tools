@@ -124,3 +124,19 @@ FIRFilter<double> filter(coefficients);
 - **Hard rule: contrast guards must not restyle the full app** - shared contrast enforcement may adjust text readability roles (`Text`, `PlaceholderText`, `HighlightedText`) but must not globally override theme-defining palette roles such as `Base` and `Highlight`
 - **Hard rule: tbc-video-export is the sole export/deinterlace engine** - ld-analyse must not hand-roll ffmpeg `bwdif`/`parity` filter graphs; proxy/web deinterlaced output must be produced via tbc-video-export web profiles (`h264_web`/`h265_web`/`av1_web`) so field-order (parity) resolution flows through `src/tbc-video-export/src/tbc_video_export/common/field_order.py`. Enforced by `ci/check_ci_contracts.py` (`LD_ANALYSE_FORBIDDEN_SNIPPETS` forbids `bwdif=mode=send_frame:parity=auto:deint=all`; `LD_ANALYSE_REQUIRED_SNIPPETS` requires the proxy web-profile routing marker + `proxyExportProfileName`).
 - **Hard rule: field-order parity must default to AUTO** - `--field-order` must resolve from `firstActiveFrameLine`/`lastActiveFrameLine` + output padding (`compute_top_pad_lines`/`compute_is_tff`); never hardcode TFF/BFF in export or proxy paths. Enforced by `ci/check_ci_contracts.py` (`TBC_VIDEO_EXPORT_REQUIRED_SNIPPETS` requires `default=FieldOrder.AUTO` in `src/tbc-video-export/src/tbc_video_export/opts/opts_ffmpeg.py` and the field-order helpers in `common/field_order.py`).
+- **Hard rule: Linux x86_64 CI self-serves the pinned CUDA 11.8 closure** - the `build-tbc-tools` (x86_64) job in `.github/workflows/build_linux_tools.yml` and the `full-build-test` job in `.github/workflows/tests.yml` must run `scripts/cuda-closure-cache.sh pull` + `restore` to import the pinned CUDA 11.8 closure from the dedicated `harrypm/tbc-tools-ci-cache` repo into the local Nix store before `nix build`/`nix develop`, so `cache.nixos.org` GC or the Nixpkgs 25.05 removal of `cudaPackages_11_8` cannot break GTX-1000-series (Pascal) CUDA builds. The step is best-effort (`continue-on-error`) with a `cache.nixos.org` fallback so neither external service is a hard single point of failure. Never add the restore step to the arm64 job (`enableCuda=false` there; an x86_64 closure would fail to restore). Enforced by `ci/check_ci_contracts.py` (`LINUX_CUDA_CACHE_REQUIRED_SNIPPETS` + `TESTS_CUDA_CACHE_REQUIRED_SNIPPETS` require the step + `pull`/`restore` commands; an exact-count check guards that it appears exactly once in `build_linux_tools.yml`).
+
+## CUDA 11.8 closure cache
+
+The flake vendors CUDA 11.8 from `nixpkgsLegacy` (nixos-24.11) for GTX-1000-series (Pascal) support. Nixpkgs 25.05 will remove `cudaPackages_11_8`, and `cache.nixos.org` may GC its paths. To insulate the build, the pinned closure is mirrored in the public `harrypm/tbc-tools-ci-cache` git repo as a Nix binary cache (nars > 95 MiB are chunked to fit GitHub's 100 MiB/file limit).
+
+`scripts/cuda-closure-cache.sh` manages it:
+```bash
+scripts/cuda-closure-cache.sh export  --out ./cuda-cache   # realise + write the binary cache (chunk big nars)
+scripts/cuda-closure-cache.sh verify  --out ./cuda-cache   # structural + sha256 check (no restore)
+scripts/cuda-closure-cache.sh restore --out ./cuda-cache   # reassemble chunks + import into local Nix store
+scripts/cuda-closure-cache.sh push    --out ./cuda-cache --yes   # commit + push cache to tbc-tools-ci-cache
+scripts/cuda-closure-cache.sh pull    --out ./cuda-cache   # clone tbc-tools-ci-cache -> ./cuda-cache
+```
+
+The script's `NIXPKGS_REV`/`NIXPKGS_SHA` must match `flake.lock`'s `nixpkgsLegacy` rev; `flake.nix` has eval-time assertions that fail loudly if the pin drifts and drops `cudaPackages_11_8`/`cudnn_8_9`/`gcc11` or ships a non-11.8 toolkit. The local `cuda-cache/` working dir is gitignored here (the closure lives in `tbc-tools-ci-cache`, not this repo).

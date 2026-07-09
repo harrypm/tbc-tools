@@ -93,6 +93,33 @@ jobs:
           save: false
           gc-max-store-size-linux: 8G
 
+      - name: Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache
+        # Insulate CUDA 11.8 fetches from cache.nixos.org GC / the Nixpkgs
+        # 25.05 removal of cudaPackages_11_8: pull + restore the pinned
+        # closure from the dedicated tbc-tools-ci-cache repo into the local
+        # Nix store so `nix build .#` finds the CUDA paths locally instead of
+        # substituting from cache.nixos.org. Best effort: if the cache repo is
+        # unreachable, fall back to cache.nixos.org (neither external service
+        # is a hard single point of failure). x86_64 only -- arm64 has
+        # enableCuda=false and does not need the CUDA closure.
+        shell: bash
+        continue-on-error: true
+        run: |
+          set +e
+          bash scripts/cuda-closure-cache.sh pull --out ./cuda-cache
+          pull_rc=$?
+          if [ "$pull_rc" -ne 0 ]; then
+            echo "::warning::CUDA closure pull from tbc-tools-ci-cache failed (rc=$pull_rc); falling back to cache.nixos.org for CUDA 11.8 paths."
+            exit 0
+          fi
+          bash scripts/cuda-closure-cache.sh restore --out ./cuda-cache
+          restore_rc=$?
+          if [ "$restore_rc" -ne 0 ]; then
+            echo "::warning::CUDA closure restore failed (rc=$restore_rc); falling back to cache.nixos.org for CUDA 11.8 paths."
+            exit 0
+          fi
+          echo "CUDA 11.8 closure restored from tbc-tools-ci-cache; nix build .# will use local store paths."
+
       - name: Create release directory
         run: mkdir release/
 

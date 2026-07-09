@@ -10,6 +10,8 @@ WINDOWS_WORKFLOW = ROOT / ".github/workflows/build_windows_tools.yml"
 LINUX_WORKFLOW = ROOT / ".github/workflows/build_linux_tools.yml"
 MACOS_WORKFLOW = ROOT / ".github/workflows/build_macos_tools.yml"
 RELEASE_WORKFLOW = ROOT / ".github/workflows/release.yml"
+TESTS_WORKFLOW = ROOT / ".github/workflows/tests.yml"
+CUDA_CLOSURE_CACHE_SCRIPT = ROOT / "scripts/cuda-closure-cache.sh"
 WINDOWS_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-windows.txt"
 LINUX_BUILD_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-linux.txt"
 LINUX_PYINSTALLER_SCRIPT = ROOT / "src/tbc-video-export/pyinstaller/build_linux.py"
@@ -129,6 +131,23 @@ LD_ANALYSE_REQUIRED_SNIPPETS = (
 TBC_VIDEO_EXPORT_REQUIRED_SNIPPETS = (
     "default=FieldOrder.AUTO",
 )
+# Linux x86_64 CI (build_linux_tools.yml build-tbc-tools + tests.yml full-build-test)
+# must self-serve the pinned CUDA 11.8 closure from the dedicated tbc-tools-ci-cache
+# repo via scripts/cuda-closure-cache.sh pull+restore, so cache.nixos.org GC or the
+# Nixpkgs 25.05 removal of cudaPackages_11_8 cannot break GTX-1000-series CUDA builds.
+# The restore is best-effort (continue-on-error) with a cache.nixos.org fallback, so
+# the contract only requires the step + commands to be present, not a hard failure.
+LINUX_CUDA_CACHE_REQUIRED_SNIPPETS = (
+    "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache",
+    "bash scripts/cuda-closure-cache.sh pull",
+    "bash scripts/cuda-closure-cache.sh restore",
+    "tbc-tools-ci-cache",
+)
+TESTS_CUDA_CACHE_REQUIRED_SNIPPETS = (
+    "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache",
+    "bash scripts/cuda-closure-cache.sh pull",
+    "bash scripts/cuda-closure-cache.sh restore",
+)
 
 
 def check_contains(path: Path, snippet: str, errors: list[str]) -> None:
@@ -167,6 +186,8 @@ def main() -> int:
         LD_ANALYSE_EXPORT_DIALOG,
         TBC_VIDEO_EXPORT_OPTS_FFMPEG,
         TBC_VIDEO_EXPORT_FIELD_ORDER,
+        TESTS_WORKFLOW,
+        CUDA_CLOSURE_CACHE_SCRIPT,
     ):
         if not required_file.exists():
             errors.append(f"missing required file: {required_file}")
@@ -220,6 +241,27 @@ def main() -> int:
         check_contains(TBC_VIDEO_EXPORT_OPTS_FFMPEG, snippet, errors)
     check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_is_tff", errors)
     check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_top_pad_lines", errors)
+
+    # Linux x86_64 CI must self-serve the pinned CUDA 11.8 closure from
+    # tbc-tools-ci-cache (best-effort, with cache.nixos.org fallback).
+    for snippet in LINUX_CUDA_CACHE_REQUIRED_SNIPPETS:
+        check_contains(LINUX_WORKFLOW, snippet, errors)
+    for snippet in TESTS_CUDA_CACHE_REQUIRED_SNIPPETS:
+        check_contains(TESTS_WORKFLOW, snippet, errors)
+    # The cache restore step must only appear once in build_linux_tools.yml
+    # (x86_64 CUDA job) -- never in the arm64 job, where enableCuda=false and
+    # restoring an x86_64 closure would fail. Exactly one occurrence.
+    check_count_at_least(
+        LINUX_WORKFLOW, "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache", 1, errors
+    )
+    linux_step_count = LINUX_WORKFLOW.read_text(encoding="utf-8").count(
+        "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache"
+    )
+    if linux_step_count != 1:
+        errors.append(
+            f"{LINUX_WORKFLOW}: CUDA cache restore step must appear exactly once "
+            f"(x86_64 job only), found {linux_step_count}"
+        )
 
     if errors:
         print("CI contract checks failed:")
