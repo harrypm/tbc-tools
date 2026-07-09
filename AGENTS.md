@@ -141,3 +141,5 @@ scripts/cuda-closure-cache.sh pull    --out ./cuda-cache   # clone tbc-tools-ci-
 ```
 
 The script's `NIXPKGS_REV`/`NIXPKGS_SHA` must match `flake.lock`'s `nixpkgsLegacy` rev; `flake.nix` has eval-time assertions that fail loudly if the pin drifts and drops `cudaPackages_11_8`/`cudnn_8_9`/`gcc11` or ships a non-11.8 toolkit. The local `cuda-cache/` working dir is gitignored here (the closure lives in `tbc-tools-ci-cache`, not this repo).
+
+The cache is self-built and **unsigned**, so `restore` imports it with `nix copy --from file://... --option require-sigs false`. This is safe because the cache is local (not an untrusted network substituter), `reassemble_all` already SHA256-verifies every reassembled nar, and `require-sigs = false` only lifts the trusted-key signature check — Nix still verifies each imported nar's content hash against the narinfo's `narHash`. Without this, Nix refuses the paths (`cannot add path ... because it lacks a signature by a trusted key`) and CI silently falls back to `cache.nixos.org` (no insulation). Enforced by `ci/check_ci_contracts.py` (`CUDA_CLOSURE_CACHE_SCRIPT` must contain `--option require-sigs false`).

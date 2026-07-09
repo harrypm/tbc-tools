@@ -226,7 +226,18 @@ cmd_restore() {
   reassemble_all "$cache"
   say "importing closure into the local Nix store"
   local paths=(); while IFS= read -r p; do paths+=("$p"); done < "$cache/manifest.txt"
-  nix copy --from "file://$cache" "${paths[@]}"
+  # This binary cache is self-built and unsigned, so Nix's default
+  # `require-sigs = true` refuses the import with "cannot add path ... because
+  # it lacks a signature by a trusted key". Disable the trusted-key signature
+  # requirement for this local file:// cache. This is safe because:
+  #   (1) the cache is local and produced by `export` above (not fetched from
+  #       an untrusted network substituter);
+  #   (2) `reassemble_all` already SHA256-verified every reassembled nar
+  #       against the sha recorded at split time;
+  #   (3) `require-sigs = false` only lifts the trusted-key signature check --
+  #       Nix still verifies each imported nar's content hash against the
+  #       narinfo's narHash, so a corrupt/tampered nar still fails to import.
+  nix copy --from "file://$cache" --option require-sigs false "${paths[@]}"
   say "restore complete: $(nix path-info --recursive --store "file://$cache" "${paths[@]}" | wc -l) paths now importable"
 }
 

@@ -270,6 +270,17 @@ class ContractCoverageTests(unittest.TestCase):
             f"expected exactly one gas-preprocessor pre-fetch step in Windows workflow, found {count}",
         )
 
+    def test_cuda_closure_restore_disables_signature_requirement(self) -> None:
+        # The CUDA closure cache is self-built and unsigned; the restore must
+        # import it with require-sigs disabled or Nix refuses the paths and CI
+        # silently falls back to cache.nixos.org (no insulation).
+        content = check_ci_contracts.CUDA_CLOSURE_CACHE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn(
+            "--option require-sigs false",
+            content,
+            "cuda-closure-cache.sh restore must use --option require-sigs false for the unsigned local cache",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -276,6 +276,11 @@ def main() -> int:
             f"{WINDOWS_WORKFLOW}: gas-preprocessor pre-fetch step must appear exactly once "
             f"(arm64 only), found {gp_step_count}"
         )
+    # The CUDA closure cache is self-built and unsigned, so the restore must
+    # import it with require-sigs disabled or Nix refuses the paths with
+    # "cannot add path ... because it lacks a signature by a trusted key" and
+    # CI silently falls back to cache.nixos.org (no insulation).
+    check_contains(CUDA_CLOSURE_CACHE_SCRIPT, "--option require-sigs false", errors)
     # The cache restore step must only appear once in build_linux_tools.yml
     # (x86_64 CUDA job) -- never in the arm64 job, where enableCuda=false and
     # restoring an x86_64 closure would fail. Exactly one occurrence.
