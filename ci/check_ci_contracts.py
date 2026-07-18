@@ -33,6 +33,18 @@ XCB_RUNTIME_LIBS = (
 
 MACOS_FORBIDDEN_SNIPPETS = (
     "/usr/local/*|/opt/homebrew/*",
+    # The arm64 runner must not drift back to `macos-latest`: that label migrated
+    # to macos-26 (Tahoe) on 2026-07-15, and the flake.lock-pinned nixpkgs Qt uic
+    # crashes with SIGTRAP on macOS 26 (CMake AUTOUIC -> "CMake Generate step
+    # failed"). The explanatory comment may mention macos-latest, so forbid the
+    # precise `runner: macos-latest` assignment, not the bare label.
+    "runner: macos-latest",
+    # The ffmpeg fallback must not revert to the live channel: Nixpkgs 26.11
+    # dropped x86_64-darwin, so `nix build nixpkgs#ffmpeg.bin` throws on the
+    # macos-15-intel runner. Use the flake's pinned .#ffmpeg^bin instead. The
+    # comment may mention nixpkgs#ffmpeg.bin, so forbid the precise `nix build
+    # nixpkgs#ffmpeg.bin` invocation, not the bare attribute.
+    "nix build nixpkgs#ffmpeg.bin",
 )
 
 WINDOWS_REQUIRED_SNIPPETS = (
@@ -69,7 +81,17 @@ LINUX_REQUIRED_SNIPPETS = (
 MACOS_REQUIRED_SNIPPETS = (
     "workflow_dispatch:",
     "workflow_call:",
+    # Both macOS runners must be pinned to macos-15: macos-latest migrated to
+    # macos-26 on 2026-07-15, where the flake.lock-pinned nixpkgs Qt uic crashes
+    # (SIGTRAP) during CMake AUTOUIC. macos-15-intel is the x86_64 runner;
+    # `runner: macos-15` is the arm64 pin (see MACOS_FORBIDDEN_SNIPPETS for the
+    # matching `runner: macos-latest` prohibition).
     "macos-15-intel",
+    "runner: macos-15",
+    # ffmpeg must come from the flake's pinned nixpkgs (.#ffmpeg^bin), not the
+    # live channel (nixpkgs#ffmpeg.bin) which dropped x86_64-darwin in Nixpkgs
+    # 26.11. See MACOS_FORBIDDEN_SNIPPETS for the matching prohibition.
+    "nix build .#ffmpeg^bin",
     "for item in result/bin/*; do",
     "Missing vendored exporter tool: dist/tbc-tools.app/Contents/MacOS/tbc-video-export",
     "tbc-tools.app/Contents/MacOS/tbc-video-export --version",

@@ -125,6 +125,40 @@ class ContractCoverageTests(unittest.TestCase):
             expected_forbidden.issubset(set(check_ci_contracts.MACOS_FORBIDDEN_SNIPPETS))
         )
 
+    def test_macos_contract_pins_runners_and_uses_flake_ffmpeg(self) -> None:
+        # Both macOS runners must be pinned to macos-15 (macos-latest migrated to
+        # macos-26 on 2026-07-15, breaking the pinned nixpkgs Qt uic), and ffmpeg
+        # must come from the flake's pinned nixpkgs (.#ffmpeg^bin) -- not the
+        # live channel, which dropped x86_64-darwin in Nixpkgs 26.11.
+        expected = {
+            "macos-15-intel",
+            "runner: macos-15",
+            "nix build .#ffmpeg^bin",
+        }
+        self.assertTrue(expected.issubset(set(check_ci_contracts.MACOS_REQUIRED_SNIPPETS)))
+
+    def test_macos_contract_forbids_drifting_runner_and_live_channel_ffmpeg(self) -> None:
+        # Forbid the precise code patterns (not the bare labels, which the
+        # explanatory comments mention) so the arm64 runner cannot drift back to
+        # macos-latest and the ffmpeg fallback cannot revert to the live channel.
+        expected_forbidden = {
+            "runner: macos-latest",
+            "nix build nixpkgs#ffmpeg.bin",
+        }
+        self.assertTrue(
+            expected_forbidden.issubset(set(check_ci_contracts.MACOS_FORBIDDEN_SNIPPETS))
+        )
+
+    def test_macos_workflow_uses_pinned_runner_and_flake_ffmpeg(self) -> None:
+        # Integration-level: the actual workflow must contain the pinned arm64
+        # runner + flake ffmpeg, and must NOT contain a drifting runner or a
+        # live-channel ffmpeg invocation.
+        content = check_ci_contracts.MACOS_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("runner: macos-15", content)
+        self.assertIn("nix build .#ffmpeg^bin", content)
+        self.assertNotIn("runner: macos-latest", content)
+        self.assertNotIn("nix build nixpkgs#ffmpeg.bin", content)
+
     def test_release_contract_wires_all_platform_packaging_workflows(self) -> None:
         expected = {
             "uses: ./.github/workflows/build_linux_tools.yml",

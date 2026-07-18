@@ -24,7 +24,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-latest
+          # Pin arm64 to macos-15: the macos-latest label migrated to macos-26
+          # (Tahoe) on 2026-07-15, and the flake.lock-pinned nixpkgs Qt uic
+          # crashes with SIGTRAP on macOS 26 (CMake AUTOUIC test fails ->
+          # "CMake Generate step failed"). macos-15 is the same macOS major
+          # version the x86_64 job (macos-15-intel) builds on successfully.
+          # Re-evaluate this pin when flake.lock bumps nixpkgs to a Qt that
+          # supports macOS 26.
+          - runner: macos-15
             arch: arm64
           - runner: macos-15-intel
             arch: x86_64
@@ -94,10 +101,27 @@ jobs:
             cp "$item" "dist/bin/$base"
             chmod +x "dist/bin/$base" 2>/dev/null || true
           done
-          # Bundle ffmpeg/ffprobe for self-contained exports
+          # Bundle ffmpeg/ffprobe for self-contained exports. Use the flake's
+          # pinned ffmpeg (.#ffmpeg^bin, built from flake.lock-pinned nixpkgs)
+          # rather than the live nixos-unstable channel's ffmpeg.bin output:
+          # Nixpkgs 26.11 dropped x86_64-darwin, so the live channel throws
+          # "Nixpkgs 26.11 has dropped support for x86_64-darwin" on the
+          # macos-15-intel runner (the 2>/dev/null previously hid this). The
+          # flake's nixpkgs pin still supports both darwin arches -- `nix build .#`
+          # above already builds ffmpeg as a buildInput -- so .#ffmpeg^bin works
+          # on x86_64-darwin and insulates arm64 from future channel rolls.
           FFMPEG_STORE="$(nix-store -q --references result 2>/dev/null | grep -E '/ffmpeg-[^/]+-bin$' | head -n 1 || true)"
           if [ -z "$FFMPEG_STORE" ]; then
-            FFMPEG_STORE="$(nix build nixpkgs#ffmpeg.bin --no-link --print-out-paths 2>/dev/null | tail -n 1 || true)"
+            FFMPEG_ERR="$(mktemp)"
+            FFMPEG_STORE="$(nix build .#ffmpeg^bin --no-link --print-out-paths 2>"$FFMPEG_ERR" | tail -n 1 || true)"
+            if [ -z "$FFMPEG_STORE" ] || [ ! -x "$FFMPEG_STORE/bin/ffmpeg" ]; then
+              echo "nix build .#ffmpeg^bin did not produce a usable ffmpeg bin; stderr:" >&2
+              cat "$FFMPEG_ERR" >&2
+              rm -f "$FFMPEG_ERR"
+              echo "Missing ffmpeg from nixpkgs build"
+              exit 1
+            fi
+            rm -f "$FFMPEG_ERR"
           fi
           if [ -z "$FFMPEG_STORE" ] || [ ! -x "$FFMPEG_STORE/bin/ffmpeg" ]; then
             echo "Missing ffmpeg from nixpkgs build"
