@@ -337,7 +337,10 @@ jobs:
 
       - name: Copy license files to release directory
         run: |
-          New-Item -ItemType Directory -Path release\\LICENSES
+          # -Force: the x86_64 CUDA runtime DLL bundle step above pre-creates
+          # release\LICENSES for the NVIDIA copyright files; without -Force this
+          # throws "item already exists" on x86_64. Idempotent on arm64 (creates it).
+          New-Item -ItemType Directory -Force -Path release\\LICENSES
           "brotli", `
           "bzip2", `
           "double-conversion", `
