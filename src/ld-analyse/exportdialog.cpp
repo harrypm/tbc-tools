@@ -2962,7 +2962,7 @@ void ExportDialog::on_exportProfileConfigEjectButton_clicked()
     QString dumpDirPath = sourceStorageTemporaryPath(
         QStringLiteral("ld-analyse-export-config-dump-%1")
             .arg(QUuid::createUuid().toString(QUuid::WithoutBraces)));
-    const auto cleanupDumpDir = [&dumpDirPath]() {
+    const auto cleanupDumpDir = [this, &dumpDirPath]() {
         if (dumpDirPath.isEmpty()) {
             return;
         }
@@ -2971,6 +2971,7 @@ void ExportDialog::on_exportProfileConfigEjectButton_clicked()
             dumpDir.removeRecursively();
         }
         dumpDirPath.clear();
+        cleanupSourceStorageTemporaryRoot();
     };
     if (!QDir().mkpath(dumpDirPath)) {
         const QString errorText = tr("Failed to create temporary directory for default profile ejection.");
@@ -5728,6 +5729,36 @@ void ExportDialog::cleanupTemporaryMetadataSnapshot()
         QFile::remove(path);
     }
     temporaryAudioTrackPaths.clear();
+    cleanupSourceStorageTemporaryRoot();
+}
+
+void ExportDialog::cleanupSourceStorageTemporaryRoot()
+{
+    const QString sourceDirectory = sourceDataDirectory();
+    if (sourceDirectory.isEmpty()) {
+        return;
+    }
+    const QString tempRoot = QDir(sourceDirectory).filePath(QStringLiteral(".ld-analyse-temp"));
+    if (tempRoot.isEmpty() || tempRoot == sourceDirectory) {
+        return;
+    }
+    QDir tempDir(tempRoot);
+    if (!tempDir.exists()) {
+        return;
+    }
+    // Best-effort removal of our own leftover temp files (always prefixed "ld-analyse-").
+    const QStringList leftovers = tempDir.entryList(
+        QStringList() << QStringLiteral("ld-analyse-*"),
+        QDir::Files | QDir::NoDotAndDotDot);
+    for (const QString &name : leftovers) {
+        QFile::remove(tempDir.filePath(name));
+    }
+    // Only drop the folder itself when nothing else remains, so we never
+    // clobber files we do not own.
+    const QStringList remaining = tempDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+    if (remaining.isEmpty()) {
+        tempDir.removeRecursively();
+    }
 }
 
 void ExportDialog::appendStatus(const QString &message)

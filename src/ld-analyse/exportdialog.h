@@ -135,6 +135,7 @@ private:
                                         const QString &baseConfigOverridePath = QString());
     QString createTemporaryMetadataSnapshot(QString *errorMessage);
     void cleanupTemporaryMetadataSnapshot();
+    void cleanupSourceStorageTemporaryRoot();
     void updateExportProfileConfigPathUi();
     void emitExportProfileConfigPreferenceChanged();
     void appendStatus(const QString &message);
