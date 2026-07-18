@@ -281,6 +281,58 @@ class ContractCoverageTests(unittest.TestCase):
             "cuda-closure-cache.sh restore must use --option require-sigs false for the unsigned local cache",
         )
 
+    def test_windows_cuda_runtime_contract_requires_bundle_step(self) -> None:
+        expected = {
+            "Pull + bundle CUDA 11.8 + cuDNN 8.9 runtime DLLs (x86_64 only)",
+            "bash scripts/windows-cuda-runtime.sh pull",
+            "bash scripts/windows-cuda-runtime.sh verify",
+            "if: matrix.arch == 'x86_64'",
+            "release\\\\cudart64_110.dll",
+            "release\\\\cublas64_11.dll",
+            "release\\\\cublasLt64_11.dll",
+            "release\\\\cufft64_10.dll",
+            "release\\\\cudnn64_8.dll",
+            "release\\\\cudnn_cnn_infer64_8.dll",
+            "release\\\\cudnn_ops_infer64_8.dll",
+            "release\\\\cudnn_adv_infer64_8.dll",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.WINDOWS_CUDA_RUNTIME_REQUIRED_SNIPPETS))
+        )
+
+    def test_windows_workflow_has_exactly_one_cuda_runtime_bundle_step(self) -> None:
+        # The CUDA runtime DLL bundle step is gated to x86_64 and must appear
+        # exactly once in build_windows_tools.yml.
+        content = check_ci_contracts.WINDOWS_WORKFLOW.read_text(encoding="utf-8")
+        count = content.count(
+            "Pull + bundle CUDA 11.8 + cuDNN 8.9 runtime DLLs (x86_64 only)"
+        )
+        self.assertEqual(
+            count,
+            1,
+            f"expected exactly one CUDA runtime DLL bundle step in Windows workflow, found {count}",
+        )
+
+    def test_windows_cuda_runtime_script_pins_wheel_versions(self) -> None:
+        # The fetch script must pin the exact NVIDIA wheel versions so a silent
+        # upstream bump (e.g. cuDNN 8.x -> 9.x, ABI-incompatible with ORT 1.18.x
+        # CUDA-11.x) cannot slip in unnoticed.
+        expected = {
+            "nvidia-cuda-runtime-cu11|11.8.89|",
+            "nvidia-cublas-cu11|11.11.3.6|",
+            "nvidia-cufft-cu11|10.9.0.58|",
+            "nvidia-cudnn-cu11|8.9.5.29|",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.WIN_CUDA_RUNTIME_SCRIPT_REQUIRED_SNIPPETS))
+        )
+
+    def test_windows_cuda_runtime_script_is_a_required_file(self) -> None:
+        self.assertTrue(
+            check_ci_contracts.WIN_CUDA_RUNTIME_SCRIPT.exists(),
+            f"required contract file missing: {check_ci_contracts.WIN_CUDA_RUNTIME_SCRIPT}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

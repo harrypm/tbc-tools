@@ -281,7 +281,9 @@ cmd_pull() {
   out="$(abs "$out")"; local cache="$out/$SUBDIR"
   local tmp; tmp="$(mktemp -d)"
   say "cloning $repo -> $tmp"
-  git clone --quiet "$repo" "$tmp"
+  # Shallow + single-branch: the cache repo also holds the multi-GB Windows
+  # CUDA runtime DLL set, so a full clone is far too slow for CI. Latest tree only.
+  git clone --depth 1 --single-branch --quiet "$repo" "$tmp"
   [ -d "$tmp/$SUBDIR" ] || die "repo has no $SUBDIR (has it been pushed yet?)"
   # cache is $out/$SUBDIR (e.g. $out/nix/cuda-11_8-x86_64-linux); create the
   # intermediate parent ($out/nix) so cp -a can place the subdir.

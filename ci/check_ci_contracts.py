@@ -12,6 +12,7 @@ MACOS_WORKFLOW = ROOT / ".github/workflows/build_macos_tools.yml"
 RELEASE_WORKFLOW = ROOT / ".github/workflows/release.yml"
 TESTS_WORKFLOW = ROOT / ".github/workflows/tests.yml"
 CUDA_CLOSURE_CACHE_SCRIPT = ROOT / "scripts/cuda-closure-cache.sh"
+WIN_CUDA_RUNTIME_SCRIPT = ROOT / "scripts/windows-cuda-runtime.sh"
 WINDOWS_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-windows.txt"
 LINUX_BUILD_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-linux.txt"
 LINUX_PYINSTALLER_SCRIPT = ROOT / "src/tbc-video-export/pyinstaller/build_linux.py"
@@ -163,6 +164,37 @@ WINDOWS_GAS_PREPROCESSOR_REQUIRED_SNIPPETS = (
     "Get-FileHash -Algorithm SHA512",
     "if: matrix.arch == 'arm64'",
 )
+# Windows x86_64 CI must bundle the CUDA 11.8 + cuDNN 8.9 runtime DLLs next to
+# onnxruntime_providers_cuda.dll so the ORT CUDA EP loads on a clean NVIDIA
+# machine (otherwise LoadLibrary fails and ORT silently falls back to CPU --
+# no GPU accel). arm64 uses CPU-only ONNX Runtime and is unaffected. The DLLs
+# are pulled from tbc-tools-ci-cache (mirrored from nvidia-*-cu11 PyPI wheels,
+# SHA256-verified by scripts/windows-cuda-runtime.sh). The ~1.6 GB set is the
+# inherent cost of shipping a working ORT CUDA EP; the release-size cost is
+# accepted so GPU acceleration works out-of-the-box.
+WINDOWS_CUDA_RUNTIME_REQUIRED_SNIPPETS = (
+    "Pull + bundle CUDA 11.8 + cuDNN 8.9 runtime DLLs (x86_64 only)",
+    "bash scripts/windows-cuda-runtime.sh pull",
+    "bash scripts/windows-cuda-runtime.sh verify",
+    "if: matrix.arch == 'x86_64'",
+    "release\\\\cudart64_110.dll",
+    "release\\\\cublas64_11.dll",
+    "release\\\\cublasLt64_11.dll",
+    "release\\\\cufft64_10.dll",
+    "release\\\\cudnn64_8.dll",
+    "release\\\\cudnn_cnn_infer64_8.dll",
+    "release\\\\cudnn_ops_infer64_8.dll",
+    "release\\\\cudnn_adv_infer64_8.dll",
+)
+# The fetch script must pin the exact NVIDIA wheel versions it pulls from, so a
+# silent upstream wheel bump (e.g. cuDNN 8.x -> 9.x, which is ABI-incompatible
+# with ORT 1.18.x CUDA-11.x) cannot slip in unnoticed.
+WIN_CUDA_RUNTIME_SCRIPT_REQUIRED_SNIPPETS = (
+    "nvidia-cuda-runtime-cu11|11.8.89|",
+    "nvidia-cublas-cu11|11.11.3.6|",
+    "nvidia-cufft-cu11|10.9.0.58|",
+    "nvidia-cudnn-cu11|8.9.5.29|",
+)
 
 
 def check_contains(path: Path, snippet: str, errors: list[str]) -> None:
@@ -203,6 +235,7 @@ def main() -> int:
         TBC_VIDEO_EXPORT_FIELD_ORDER,
         TESTS_WORKFLOW,
         CUDA_CLOSURE_CACHE_SCRIPT,
+        WIN_CUDA_RUNTIME_SCRIPT,
     ):
         if not required_file.exists():
             errors.append(f"missing required file: {required_file}")
@@ -276,6 +309,22 @@ def main() -> int:
             f"{WINDOWS_WORKFLOW}: gas-preprocessor pre-fetch step must appear exactly once "
             f"(arm64 only), found {gp_step_count}"
         )
+    # Windows x86_64 must pull + bundle the CUDA/cuDNN runtime DLLs (gated to
+    # x86_64; arm64 uses CPU-only ONNX Runtime). The step must appear exactly once.
+    for snippet in WINDOWS_CUDA_RUNTIME_REQUIRED_SNIPPETS:
+        check_contains(WINDOWS_WORKFLOW, snippet, errors)
+    cuda_rt_step_count = WINDOWS_WORKFLOW.read_text(encoding="utf-8").count(
+        "Pull + bundle CUDA 11.8 + cuDNN 8.9 runtime DLLs (x86_64 only)"
+    )
+    if cuda_rt_step_count != 1:
+        errors.append(
+            f"{WINDOWS_WORKFLOW}: CUDA runtime DLL bundle step must appear exactly once "
+            f"(x86_64 only), found {cuda_rt_step_count}"
+        )
+    # The fetch script must pin the exact wheel versions (guards against a silent
+    # cuDNN 8.x -> 9.x bump, which would break the ORT 1.18.x CUDA-11.x EP).
+    for snippet in WIN_CUDA_RUNTIME_SCRIPT_REQUIRED_SNIPPETS:
+        check_contains(WIN_CUDA_RUNTIME_SCRIPT, snippet, errors)
     # The CUDA closure cache is self-built and unsigned, so the restore must
     # import it with require-sigs disabled or Nix refuses the paths with
     # "cannot add path ... because it lacks a signature by a trusted key" and
