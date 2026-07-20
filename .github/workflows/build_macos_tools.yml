@@ -204,6 +204,22 @@ jobs:
           mkdir -p "$AAA_VENDOR_DST"
           cp -a "$AAA_VENDOR_SRC/." "$AAA_VENDOR_DST/"
           echo "Bundled AAA vendor payload to $AAA_VENDOR_DST"
+          # Copy vhs-teletext vendor payload. Same reason as AAA above: the
+          # "Build with Nix" loop uses `[ -f "$item" ]` which skips the
+          # result/bin/vendor directory, so the vendored vhs-teletext Python
+          # tree is missing from the .app. teletextintegration.cpp resolves it
+          # relative to the app dir (Contents/MacOS) at vendor/vhs-teletext, so
+          # bundle it there or ld-process-vbi's --teletext-html-dir export fails
+          # with "Could not locate vendored vhs-teletext runtime directory."
+          TELETEXT_VENDOR_SRC="result/bin/vendor/vhs-teletext"
+          TELETEXT_VENDOR_DST="dist/tbc-tools.app/Contents/MacOS/vendor/vhs-teletext"
+          if [ ! -f "$TELETEXT_VENDOR_SRC/teletext/__main__.py" ]; then
+            echo "Missing vhs-teletext vendor payload under $TELETEXT_VENDOR_SRC"
+            exit 1
+          fi
+          mkdir -p "$TELETEXT_VENDOR_DST"
+          cp -a "$TELETEXT_VENDOR_SRC/." "$TELETEXT_VENDOR_DST/"
+          echo "Bundled vhs-teletext vendor payload to $TELETEXT_VENDOR_DST"
 
       - name: Build self-contained tbc-video-export (PyInstaller)
         # Replace the CMake bash wrapper (which execs a *host* Python with host
@@ -542,6 +558,12 @@ jobs:
           fi
           if [ ! -f "dist/tbc-tools.app/Contents/MacOS/vendor/vhs_decode_auto_audio_align/Binah.dll" ]; then
             echo "Missing AAA vendor payload: dist/tbc-tools.app/Contents/MacOS/vendor/vhs_decode_auto_audio_align/Binah.dll"
+            exit 1
+          fi
+          # vhs-teletext vendor payload must be bundled at the resolver path so
+          # ld-process-vbi's teletext HTML export can find teletext/__main__.py.
+          if [ ! -f "dist/tbc-tools.app/Contents/MacOS/vendor/vhs-teletext/teletext/__main__.py" ]; then
+            echo "Missing vhs-teletext vendor payload: dist/tbc-tools.app/Contents/MacOS/vendor/vhs-teletext/teletext/__main__.py"
             exit 1
           fi
           FW_DIR="dist/tbc-tools.app/Contents/Frameworks"

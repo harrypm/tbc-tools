@@ -367,6 +367,52 @@ class ContractCoverageTests(unittest.TestCase):
             f"required contract file missing: {check_ci_contracts.WIN_CUDA_RUNTIME_SCRIPT}",
         )
 
+    def test_windows_teletext_vendor_contract_requires_bundle_step(self) -> None:
+        # The Windows release must bundle the vendored vhs-teletext Python tree
+        # at release\vendor\vhs-teletext or ld-process-vbi's teletext HTML export
+        # fails with "Could not locate vendored vhs-teletext runtime directory."
+        expected = {
+            "Copy vhs-teletext vendor payload to release directory",
+            "vhs-teletext vendor payload missing under",
+            "Bundled vhs-teletext vendor payload to $vendorDst",
+            "release\\\\vendor\\\\vhs-teletext\\\\teletext\\\\__main__.py",
+            "release\\\\vendor\\\\vhs-teletext\\\\misc\\\\teletext-noscanlines.css",
+            "release\\\\vendor\\\\vhs-teletext\\\\misc\\\\teletext2.ttf",
+            "release\\\\vendor\\\\vhs-teletext\\\\misc\\\\teletext4.ttf",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.WINDOWS_TELETEXT_VENDOR_REQUIRED_SNIPPETS))
+        )
+
+    def test_windows_workflow_has_exactly_one_teletext_vendor_step(self) -> None:
+        content = check_ci_contracts.WINDOWS_WORKFLOW.read_text(encoding="utf-8")
+        count = content.count("Copy vhs-teletext vendor payload to release directory")
+        self.assertEqual(
+            count,
+            1,
+            f"expected exactly one vhs-teletext vendor copy step in Windows workflow, found {count}",
+        )
+
+    def test_macos_teletext_vendor_contract_requires_restore(self) -> None:
+        expected = {
+            "Bundled vhs-teletext vendor payload to $TELETEXT_VENDOR_DST",
+            "result/bin/vendor/vhs-teletext",
+            "dist/tbc-tools.app/Contents/MacOS/vendor/vhs-teletext",
+            "Missing vhs-teletext vendor payload: dist/tbc-tools.app/Contents/MacOS/vendor/vhs-teletext/teletext/__main__.py",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.MACOS_TELETEXT_VENDOR_REQUIRED_SNIPPETS))
+        )
+
+    def test_macos_workflow_has_exactly_one_teletext_vendor_restore(self) -> None:
+        content = check_ci_contracts.MACOS_WORKFLOW.read_text(encoding="utf-8")
+        count = content.count("Bundled vhs-teletext vendor payload to $TELETEXT_VENDOR_DST")
+        self.assertEqual(
+            count,
+            1,
+            f"expected exactly one vhs-teletext vendor restore in macOS workflow, found {count}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

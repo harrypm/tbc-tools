@@ -217,6 +217,36 @@ WIN_CUDA_RUNTIME_SCRIPT_REQUIRED_SNIPPETS = (
     "nvidia-cufft-cu11|10.9.0.58|",
     "nvidia-cudnn-cu11|8.9.5.29|",
 )
+# Windows release must bundle the vendored vhs-teletext Python tree at
+# release\vendor\vhs-teletext so ld-process-vbi's teletextintegration.cpp
+# resolveTeletextVendorDirectory() finds teletext\__main__.py next to the exe.
+# The "Copy binaries" step flattens only *.exe/*.dll to the release root and
+# drops the Python source tree, so an explicit restore step is required (same
+# pattern as the AAA vendor payload). Without it, ld-analyse's Process VBI ->
+# --teletext-html-dir export fails on a clean Windows install with "Could not
+# locate vendored vhs-teletext runtime directory." The step is not arch-gated
+# (the tree is arch-independent Python source, same as AAA) and must appear
+# exactly once in build_windows_tools.yml.
+WINDOWS_TELETEXT_VENDOR_REQUIRED_SNIPPETS = (
+    "Copy vhs-teletext vendor payload to release directory",
+    "vhs-teletext vendor payload missing under",
+    "Bundled vhs-teletext vendor payload to $vendorDst",
+    "release\\\\vendor\\\\vhs-teletext\\\\teletext\\\\__main__.py",
+    "release\\\\vendor\\\\vhs-teletext\\\\misc\\\\teletext-noscanlines.css",
+    "release\\\\vendor\\\\vhs-teletext\\\\misc\\\\teletext2.ttf",
+    "release\\\\vendor\\\\vhs-teletext\\\\misc\\\\teletext4.ttf",
+)
+# macOS .app must bundle the same vendored vhs-teletext tree at
+# Contents/MacOS/vendor/vhs-teletext. The "Build with Nix" loop uses
+# `[ -f "$item" ]` which skips the result/bin/vendor directory (same gap as
+# AAA), so an explicit restore is required or the teletext HTML export fails
+# with "Could not locate vendored vhs-teletext runtime directory."
+MACOS_TELETEXT_VENDOR_REQUIRED_SNIPPETS = (
+    "Bundled vhs-teletext vendor payload to $TELETEXT_VENDOR_DST",
+    "result/bin/vendor/vhs-teletext",
+    "dist/tbc-tools.app/Contents/MacOS/vendor/vhs-teletext",
+    "Missing vhs-teletext vendor payload: dist/tbc-tools.app/Contents/MacOS/vendor/vhs-teletext/teletext/__main__.py",
+)
 
 
 def check_contains(path: Path, snippet: str, errors: list[str]) -> None:
@@ -342,6 +372,32 @@ def main() -> int:
         errors.append(
             f"{WINDOWS_WORKFLOW}: CUDA runtime DLL bundle step must appear exactly once "
             f"(x86_64 only), found {cuda_rt_step_count}"
+        )
+    # Windows release must bundle the vendored vhs-teletext Python tree
+    # (release\vendor\vhs-teletext) so ld-process-vbi's teletext HTML export can
+    # resolve the vendor directory next to the exe. The step is not arch-gated
+    # (arch-independent Python source) and must appear exactly once.
+    for snippet in WINDOWS_TELETEXT_VENDOR_REQUIRED_SNIPPETS:
+        check_contains(WINDOWS_WORKFLOW, snippet, errors)
+    win_teletext_step_count = WINDOWS_WORKFLOW.read_text(encoding="utf-8").count(
+        "Copy vhs-teletext vendor payload to release directory"
+    )
+    if win_teletext_step_count != 1:
+        errors.append(
+            f"{WINDOWS_WORKFLOW}: vhs-teletext vendor copy step must appear exactly once, "
+            f"found {win_teletext_step_count}"
+        )
+    # macOS .app must bundle the same vendored vhs-teletext tree at
+    # Contents/MacOS/vendor/vhs-teletext (the Nix copy loop skips directories).
+    for snippet in MACOS_TELETEXT_VENDOR_REQUIRED_SNIPPETS:
+        check_contains(MACOS_WORKFLOW, snippet, errors)
+    macos_teletext_restore_count = MACOS_WORKFLOW.read_text(encoding="utf-8").count(
+        "Bundled vhs-teletext vendor payload to $TELETEXT_VENDOR_DST"
+    )
+    if macos_teletext_restore_count != 1:
+        errors.append(
+            f"{MACOS_WORKFLOW}: vhs-teletext vendor restore must appear exactly once, "
+            f"found {macos_teletext_restore_count}"
         )
     # The fetch script must pin the exact wheel versions (guards against a silent
     # cuDNN 8.x -> 9.x bump, which would break the ORT 1.18.x CUDA-11.x EP).

@@ -241,6 +241,25 @@ jobs:
           New-Item -ItemType Directory -Force -Path $vendorDst | Out-Null
           Copy-Item -Path "$vendorSrc\\*" -Destination $vendorDst -Recurse -Force
           Write-Host "Bundled AAA vendor payload to $vendorDst"
+      - name: Copy vhs-teletext vendor payload to release directory
+        # The "Copy binaries" step flattens only *.exe/*.dll to the release root,
+        # dropping the vendored Python tree that teletextintegration.cpp's
+        # resolveTeletextVendorDirectory() looks for at <appDir>\vendor\vhs-teletext
+        # (it validates the candidate by checking for teletext\__main__.py).
+        # Without this restore, ld-process-vbi's --teletext-html-dir export fails
+        # on a clean Windows install with "Could not locate vendored vhs-teletext
+        # runtime directory." (surfaced via ld-analyse's Process VBI action).
+        # Same restore pattern as the AAA vendor payload above. The tree is
+        # arch-independent Python source, so this is not matrix-arch gated.
+        run: |
+          $vendorSrc = "build\\bin\\vendor\\vhs-teletext"
+          $vendorDst = "release\\vendor\\vhs-teletext"
+          if (-not (Test-Path "$vendorSrc\\teletext\\__main__.py")) {
+            throw "vhs-teletext vendor payload missing under $vendorSrc"
+          }
+          New-Item -ItemType Directory -Force -Path $vendorDst | Out-Null
+          Copy-Item -Path "$vendorSrc\\*" -Destination $vendorDst -Recurse -Force
+          Write-Host "Bundled vhs-teletext vendor payload to $vendorDst"
       - name: Copy ONNX Runtime DLLs to release directory
         run: |
           $onnxLibDir = "$env:ONNXRUNTIME_ROOT\\lib"
@@ -499,7 +518,11 @@ jobs:
             "release\\vcruntime140.dll",
             "release\\vcruntime140_1.dll",
             "release\\vendor\\vhs_decode_auto_audio_align\\VhsDecodeAutoAudioAlign.exe",
-            "release\\vendor\\vhs_decode_auto_audio_align\\Binah.dll"
+            "release\\vendor\\vhs_decode_auto_audio_align\\Binah.dll",
+            "release\\vendor\\vhs-teletext\\teletext\\__main__.py",
+            "release\\vendor\\vhs-teletext\\misc\\teletext-noscanlines.css",
+            "release\\vendor\\vhs-teletext\\misc\\teletext2.ttf",
+            "release\\vendor\\vhs-teletext\\misc\\teletext4.ttf"
           )
           # x86_64 bundles onnxruntime_providers_cuda.dll, whose transitive CUDA +
           # cuDNN runtime DLLs must ship next to it or the ORT CUDA EP fails to load
