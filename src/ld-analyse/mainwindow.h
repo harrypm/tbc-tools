@@ -377,6 +377,8 @@ private:
     bool sourceOperationInProgress = false;
     void updateTimelineMarkers();
     void updateNotesViewerState();
+    void setInPointAtCurrentFrame();
+    void setOutPointAtCurrentFrame();
     qint32 sliderPositionForFrame(qint32 frameNumber) const;
     qint32 frameForSliderPosition(qint32 sliderPosition) const;
     QFutureWatcher<QImage> asyncFrameRenderWatcher;

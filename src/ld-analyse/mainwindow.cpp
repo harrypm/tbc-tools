@@ -1234,6 +1234,11 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
         connect(timelineMarkerSlider, &QWidget::customContextMenuRequested,
                 this, &MainWindow::on_posHorizontalSlider_customContextMenuRequested);
     }
+    if (ui->posHorizontalSlider) {
+        ui->posHorizontalSlider->setToolTip(tr("Use [ & ] keys to set in & out points at the current frame\n"
+                                               "M — add/edit a marker comment at the current frame\n"
+                                               "C — open the marker viewer"));
+    }
     copyCurrentDisplayAction = new QAction(tr("Copy current display"), this);
     copyCurrentDisplayAction->setShortcut(QKeySequence::Copy);
     copyCurrentDisplayAction->setShortcutContext(Qt::WindowShortcut);
@@ -3922,6 +3927,36 @@ void MainWindow::updateNotesViewerState()
     notesViewerDialog->setState(state);
 }
 
+void MainWindow::setInPointAtCurrentFrame()
+{
+    if (!exportDialog || !tbcSource.getIsSourceLoaded() || tbcSource.getIsMetadataOnly()) {
+        return;
+    }
+
+    const qint32 playbackPositionValue = tbcSource.getFieldViewEnabled() ? currentFieldNumber : currentFrameNumber;
+    const qint32 totalFrames = qMax<qint32>(1, tbcSource.getNumberOfFrames());
+    const qint32 framePoint = qBound<qint32>(1, frameForSliderPosition(playbackPositionValue), totalFrames);
+    const QString framePointTimecode = frameToTimecode(framePoint);
+
+    exportDialog->setInPoint(framePoint);
+    statusBar()->showMessage(tr("Export In point set to frame %1 (%2)").arg(framePoint).arg(framePointTimecode), 3000);
+}
+
+void MainWindow::setOutPointAtCurrentFrame()
+{
+    if (!exportDialog || !tbcSource.getIsSourceLoaded() || tbcSource.getIsMetadataOnly()) {
+        return;
+    }
+
+    const qint32 playbackPositionValue = tbcSource.getFieldViewEnabled() ? currentFieldNumber : currentFrameNumber;
+    const qint32 totalFrames = qMax<qint32>(1, tbcSource.getNumberOfFrames());
+    const qint32 framePoint = qBound<qint32>(1, frameForSliderPosition(playbackPositionValue), totalFrames);
+    const QString framePointTimecode = frameToTimecode(framePoint);
+
+    exportDialog->setOutPoint(framePoint);
+    statusBar()->showMessage(tr("Export Out point set to frame %1 (%2)").arg(framePoint).arg(framePointTimecode), 3000);
+}
+
 // Set the current frame, field is updated based on frame number
 void MainWindow::setCurrentFrame(qint32 number)
 {
@@ -6303,6 +6338,10 @@ void MainWindow::on_posHorizontalSlider_customContextMenuRequested(const QPoint 
     const int totalFrames = qMax(1, tbcSource.getNumberOfFrames());
     framePoint = qBound(1, framePoint, totalFrames);
     const QString framePointTimecode = frameToTimecode(framePoint);
+    // In/Out point actions operate on the currently displayed frame, not the click position.
+    const qint32 currentPlaybackValue = tbcSource.getFieldViewEnabled() ? currentFieldNumber : currentFrameNumber;
+    const qint32 currentFramePoint = qBound<qint32>(1, frameForSliderPosition(currentPlaybackValue), totalFrames);
+    const QString currentFramePointTimecode = frameToTimecode(currentFramePoint);
     const LdDecodeMetaData::VideoParameters currentVideoParameters = tbcSource.getVideoParameters();
     QVector<UserNoteMarker> noteMarkers = userNoteMarkersFromVideoParameters(currentVideoParameters, totalFrames);
     const qint32 noteIndexAtFrame = noteMarkerIndexForFrame(noteMarkers, framePoint);
@@ -6316,11 +6355,11 @@ void MainWindow::on_posHorizontalSlider_customContextMenuRequested(const QPoint 
 
     QMenu sliderMenu(this);
     QAction *setInPointAction = sliderMenu.addAction(tr("Set In Point (%1 | %2)")
-                                                        .arg(framePoint)
-                                                        .arg(framePointTimecode));
+                                                        .arg(currentFramePoint)
+                                                        .arg(currentFramePointTimecode));
     QAction *setOutPointAction = sliderMenu.addAction(tr("Set Out Point (%1 | %2)")
-                                                         .arg(framePoint)
-                                                         .arg(framePointTimecode));
+                                                         .arg(currentFramePoint)
+                                                         .arg(currentFramePointTimecode));
     sliderMenu.addSeparator();
     QAction *setMarkerAction = sliderMenu.addAction(noteAtFrameSet
                                                         ? tr("Edit Marker (%1 | %2)...")
@@ -6358,15 +6397,9 @@ void MainWindow::on_posHorizontalSlider_customContextMenuRequested(const QPoint 
         return true;
     };
     if (selectedAction == setInPointAction) {
-        exportDialog->setInPoint(framePoint);
-        statusBar()->showMessage(tr("Export In point set to frame %1 (%2)")
-                                     .arg(framePoint)
-                                     .arg(framePointTimecode), 3000);
+        setInPointAtCurrentFrame();
     } else if (selectedAction == setOutPointAction) {
-        exportDialog->setOutPoint(framePoint);
-        statusBar()->showMessage(tr("Export Out point set to frame %1 (%2)")
-                                     .arg(framePoint)
-                                     .arg(framePointTimecode), 3000);
+        setOutPointAtCurrentFrame();
     } else if (selectedAction == setMarkerAction) {
         bool ok = false;
         const QString markerComment = QInputDialog::getText(this,
@@ -6872,7 +6905,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 
     const bool markerKeyPressed = (event->key() == Qt::Key_M)
         && (event->modifiers() == Qt::NoModifier || event->modifiers() == Qt::ShiftModifier);
-    if (!markerKeyPressed) {
+    const bool markerViewerKeyPressed = (event->key() == Qt::Key_C)
+        && (event->modifiers() == Qt::NoModifier);
+    const bool setInPointKeyPressed = (event->key() == Qt::Key_BracketLeft)
+        && (event->modifiers() == Qt::NoModifier);
+    const bool setOutPointKeyPressed = (event->key() == Qt::Key_BracketRight)
+        && (event->modifiers() == Qt::NoModifier);
+    if (!markerKeyPressed && !markerViewerKeyPressed && !setInPointKeyPressed && !setOutPointKeyPressed) {
         QMainWindow::keyPressEvent(event);
         return;
     }
@@ -6892,6 +6931,27 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
+    if (setInPointKeyPressed) {
+        setInPointAtCurrentFrame();
+        event->accept();
+        return;
+    }
+    if (setOutPointKeyPressed) {
+        setOutPointAtCurrentFrame();
+        event->accept();
+        return;
+    }
+    if (markerViewerKeyPressed) {
+        if (notesViewerDialog) {
+            updateNotesViewerState();
+            notesViewerDialog->show();
+            notesViewerDialog->raise();
+            notesViewerDialog->activateWindow();
+        }
+        event->accept();
+        return;
+    }
+
     const qint32 playbackPositionValue = tbcSource.getFieldViewEnabled() ? currentFieldNumber : currentFrameNumber;
     const qint32 totalFrames = qMax<qint32>(1, tbcSource.getNumberOfFrames());
     const qint32 framePoint = qBound<qint32>(1, frameForSliderPosition(playbackPositionValue), totalFrames);
@@ -6902,6 +6962,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     const bool noteAtFrameSet = noteIndexAtFrame >= 0;
     const QString noteCommentAtFrame = noteAtFrameSet ? noteMarkers.at(noteIndexAtFrame).comment : QString();
 
+    // M opens the Add/Edit Marker comment dialog at the current frame.
     bool ok = false;
     const QString markerComment = QInputDialog::getText(this,
                                                         noteAtFrameSet ? tr("Edit Marker") : tr("Add Marker"),
