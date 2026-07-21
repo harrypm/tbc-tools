@@ -113,7 +113,7 @@
         runtimeLibraryPath = pkgs.lib.optionalString isLinux (pkgs.lib.makeLibraryPath ([ onnxruntimePackage ] ++ cudaRuntimeDependencies));
       in
       let
-        packageVersion = "3.2.5";
+        packageVersion = "3.2.6";
         rev = if self ? rev then self.rev else "";
         shortRev = if self ? shortRev then self.shortRev else (if rev != "" then builtins.substring 0 7 rev else "unknown");
         dirtySuffix = if self ? dirtyRev then "-dirty" else "";
