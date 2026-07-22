@@ -177,6 +177,19 @@ class ContractCoverageTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(set(check_ci_contracts.BUNDLE_VERIFY_REQUIRED_SNIPPETS)))
 
+    def test_bundle_verifier_contract_includes_teletext_vendor_checks(self) -> None:
+        expected = {
+            'require_path "$ROOT/usr/bin/vendor/vhs-teletext/teletext/__main__.py"',
+            'require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"',
+            'require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext2.ttf"',
+            'require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext4.ttf"',
+            'require_path "$TARGET/bin/vendor/vhs-teletext/teletext/__main__.py"',
+            'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"',
+            'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext2.ttf"',
+            'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext4.ttf"',
+        }
+        self.assertTrue(expected.issubset(set(check_ci_contracts.BUNDLE_VERIFY_REQUIRED_SNIPPETS)))
+
     def test_bundle_verifier_contract_includes_aaa_vendor_and_elf_checks(self) -> None:
         expected = {
             'require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"',
@@ -411,6 +424,32 @@ class ContractCoverageTests(unittest.TestCase):
             count,
             1,
             f"expected exactly one vhs-teletext vendor restore in macOS workflow, found {count}",
+        )
+
+    def test_macos_universal_vendor_contract_requires_validation(self) -> None:
+        expected = {
+            "Validate universal bundled vendor payloads",
+            "$APP_UNI/Contents/MacOS/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe",
+            "$APP_UNI/Contents/MacOS/vendor/vhs_decode_auto_audio_align/Binah.dll",
+            "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/teletext/__main__.py",
+            "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/misc/teletext-noscanlines.css",
+            "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/misc/teletext2.ttf",
+            "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/misc/teletext4.ttf",
+            "Missing universal bundled payload: $required_payload",
+            "Merged bundled exporter is not a Mach-O binary: $EXPORTER_PATH",
+            "Universal tbc-video-export archs:",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.MACOS_UNIVERSAL_VENDOR_REQUIRED_SNIPPETS))
+        )
+
+    def test_macos_workflow_has_exactly_one_universal_vendor_validation_block(self) -> None:
+        content = check_ci_contracts.MACOS_WORKFLOW.read_text(encoding="utf-8")
+        count = content.count("Validate universal bundled vendor payloads")
+        self.assertEqual(
+            count,
+            1,
+            f"expected exactly one universal macOS vendor validation block, found {count}",
         )
 
 

@@ -24,6 +24,8 @@
 
 #include <cassert>
 #include <iostream>
+#include <QDir>
+#include <QFileInfo>
 
 #include "exportarguments.h"
 
@@ -53,9 +55,31 @@ void testDefaultActiveAreaFramingPolicy()
     assert(!ExportArguments::isDefaultActiveAreaFraming(QStringLiteral("user_defined"), false));
 }
 
+void testSanitizeOutputBasePath()
+{
+    cerr << "Testing ExportArguments::sanitizeOutputBasePath\n";
+
+    const QString tempDir = QDir::tempPath();
+    const QString mkvPath = QDir(tempDir).filePath(QStringLiteral("capture.side_a.mkv"));
+    const QString preservedPath = QDir(tempDir).filePath(QStringLiteral("capture.side_a.final"));
+    const QString mp4Path = QDir(tempDir).filePath(QStringLiteral("capture.side_a.MP4"));
+    const QString hiddenLikePath = QDir(tempDir).filePath(QStringLiteral(".capture"));
+
+    const QString sanitizedMkvPath = ExportArguments::sanitizeOutputBasePath(mkvPath);
+    const QString sanitizedPreservedPath = ExportArguments::sanitizeOutputBasePath(preservedPath);
+    const QString sanitizedMp4Path = ExportArguments::sanitizeOutputBasePath(mp4Path);
+    const QString sanitizedHiddenPath = ExportArguments::sanitizeOutputBasePath(hiddenLikePath);
+
+    assert(QFileInfo(sanitizedMkvPath).fileName() == QStringLiteral("capture.side_a"));
+    assert(QFileInfo(sanitizedPreservedPath).fileName() == QStringLiteral("capture.side_a.final"));
+    assert(QFileInfo(sanitizedMp4Path).fileName() == QStringLiteral("capture.side_a"));
+    assert(QFileInfo(sanitizedHiddenPath).fileName() == QStringLiteral(".capture"));
+}
+
 int main()
 {
     testDropoutDisablePolicy();
     testDefaultActiveAreaFramingPolicy();
+    testSanitizeOutputBasePath();
     return 0;
 }

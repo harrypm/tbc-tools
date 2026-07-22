@@ -123,8 +123,16 @@ BUNDLE_VERIFY_REQUIRED_SNIPPETS = (
     'require_path "$TARGET/bin/tbc-video-export"',
     'require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"',
     'require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"',
+    'require_path "$ROOT/usr/bin/vendor/vhs-teletext/teletext/__main__.py"',
+    'require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"',
+    'require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext2.ttf"',
+    'require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext4.ttf"',
     'require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"',
     'require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"',
+    'require_path "$TARGET/bin/vendor/vhs-teletext/teletext/__main__.py"',
+    'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"',
+    'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext2.ttf"',
+    'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext4.ttf"',
     'tbc-video-export is not an ELF binary',
 )
 
@@ -246,6 +254,21 @@ MACOS_TELETEXT_VENDOR_REQUIRED_SNIPPETS = (
     "result/bin/vendor/vhs-teletext",
     "dist/tbc-tools.app/Contents/MacOS/vendor/vhs-teletext",
     "Missing vhs-teletext vendor payload: dist/tbc-tools.app/Contents/MacOS/vendor/vhs-teletext/teletext/__main__.py",
+)
+# The universal macOS merge must preserve vendored payloads from the per-arch
+# app bundles and keep tbc-video-export universalized; otherwise final release
+# assets can pass per-arch checks but ship a broken universal app.
+MACOS_UNIVERSAL_VENDOR_REQUIRED_SNIPPETS = (
+    "Validate universal bundled vendor payloads",
+    "$APP_UNI/Contents/MacOS/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe",
+    "$APP_UNI/Contents/MacOS/vendor/vhs_decode_auto_audio_align/Binah.dll",
+    "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/teletext/__main__.py",
+    "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/misc/teletext-noscanlines.css",
+    "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/misc/teletext2.ttf",
+    "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/misc/teletext4.ttf",
+    "Missing universal bundled payload: $required_payload",
+    "Merged bundled exporter is not a Mach-O binary: $EXPORTER_PATH",
+    "Universal tbc-video-export archs:",
 )
 
 
@@ -398,6 +421,18 @@ def main() -> int:
         errors.append(
             f"{MACOS_WORKFLOW}: vhs-teletext vendor restore must appear exactly once, "
             f"found {macos_teletext_restore_count}"
+        )
+    # The universal macOS merge must preserve vendor payloads and the bundled
+    # exporter architecture checks; guard the explicit validation block.
+    for snippet in MACOS_UNIVERSAL_VENDOR_REQUIRED_SNIPPETS:
+        check_contains(MACOS_WORKFLOW, snippet, errors)
+    macos_universal_vendor_check_count = MACOS_WORKFLOW.read_text(encoding="utf-8").count(
+        "Validate universal bundled vendor payloads"
+    )
+    if macos_universal_vendor_check_count != 1:
+        errors.append(
+            f"{MACOS_WORKFLOW}: universal vendor payload validation block must appear exactly once, "
+            f"found {macos_universal_vendor_check_count}"
         )
     # The fetch script must pin the exact wheel versions (guards against a silent
     # cuDNN 8.x -> 9.x bump, which would break the ORT 1.18.x CUDA-11.x EP).

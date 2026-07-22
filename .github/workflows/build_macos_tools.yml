@@ -817,6 +817,38 @@ jobs:
             echo "$TOOL_ARCHS" | grep -qw x86_64 || { echo "x86_64 arch missing in universal $tool"; exit 1; }
           done
 
+          echo "Validate universal bundled vendor payloads"
+          for required_payload in \
+            "$APP_UNI/Contents/MacOS/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe" \
+            "$APP_UNI/Contents/MacOS/vendor/vhs_decode_auto_audio_align/Binah.dll" \
+            "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/teletext/__main__.py" \
+            "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/misc/teletext-noscanlines.css" \
+            "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/misc/teletext2.ttf" \
+            "$APP_UNI/Contents/MacOS/vendor/vhs-teletext/misc/teletext4.ttf"; do
+            if [ ! -f "$required_payload" ]; then
+              echo "Missing universal bundled payload: $required_payload"
+              exit 1
+            fi
+          done
+          EXPORTER_PATH="$APP_UNI/Contents/MacOS/tbc-video-export"
+          if [ ! -f "$EXPORTER_PATH" ]; then
+            echo "Missing merged bundled tool: $EXPORTER_PATH"
+            exit 1
+          fi
+          if ! file "$EXPORTER_PATH" 2>/dev/null | grep -q "Mach-O"; then
+            echo "Merged bundled exporter is not a Mach-O binary: $EXPORTER_PATH"
+            exit 1
+          fi
+          EXPORTER_ARCHS="$(lipo -archs "$EXPORTER_PATH" 2>/dev/null || true)"
+          if [ -z "$EXPORTER_ARCHS" ]; then
+            echo "Unable to read architecture for merged bundled exporter: $EXPORTER_PATH"
+            file "$EXPORTER_PATH" || true
+            exit 1
+          fi
+          echo "Universal tbc-video-export archs: $EXPORTER_ARCHS"
+          echo "$EXPORTER_ARCHS" | grep -qw arm64 || { echo "arm64 arch missing in universal tbc-video-export"; exit 1; }
+          echo "$EXPORTER_ARCHS" | grep -qw x86_64 || { echo "x86_64 arch missing in universal tbc-video-export"; exit 1; }
+
       - name: Install create-dmg
         run: |
           if ! command -v create-dmg >/dev/null 2>&1; then

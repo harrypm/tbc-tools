@@ -2809,9 +2809,10 @@ void ExportDialog::on_outputBrowseButton_clicked()
     if (selectedDirectory.isEmpty()) {
         return;
     }
-    QString baseName = QFileInfo(suggestedOutput).completeBaseName();
+    const QString sanitizedSuggestedOutput = sanitizeOutputBaseName(suggestedOutput);
+    QString baseName = QFileInfo(sanitizedSuggestedOutput).fileName();
     if (baseName.isEmpty() && !currentInputFile.isEmpty()) {
-        baseName = QFileInfo(currentInputFile).completeBaseName();
+        baseName = QFileInfo(defaultOutputBaseName(currentInputFile)).fileName();
     }
     if (baseName.isEmpty()) {
         baseName = QStringLiteral("output");
@@ -4445,13 +4446,7 @@ QString ExportDialog::proxyExportProfileName(const QString &proxyCodecId) const
 
 QString ExportDialog::sanitizeOutputBaseName(const QString &path) const
 {
-    QFileInfo info(path);
-    const QString baseName = info.completeBaseName();
-    const QString dir = info.absolutePath();
-    if (dir.isEmpty()) {
-        return baseName;
-    }
-    return QDir(dir).filePath(baseName);
+    return ExportArguments::sanitizeOutputBasePath(path);
 }
 
 QString ExportDialog::videoSystemArg(int system) const

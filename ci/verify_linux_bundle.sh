@@ -170,6 +170,11 @@ case "$MODE" in
     # AAA (Auto Audio Align) vendor payload must be bundled at the resolver path.
     require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"
     require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"
+    # vhs-teletext vendor payload must be bundled at the resolver path.
+    require_path "$ROOT/usr/bin/vendor/vhs-teletext/teletext/__main__.py"
+    require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"
+    require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext2.ttf"
+    require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext4.ttf"
     # tbc-video-export is now a self-contained PyInstaller ELF binary, not a
     # bash wrapper + package source. Verify it is an ELF executable.
     if ! head -c 4 "$ROOT/usr/bin/tbc-video-export" 2>/dev/null | grep -q $'\177ELF'; then
@@ -213,6 +218,11 @@ case "$MODE" in
     # AAA (Auto Audio Align) vendor payload must be bundled at the resolver path.
     require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"
     require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"
+    # vhs-teletext vendor payload must be bundled at the resolver path.
+    require_path "$TARGET/bin/vendor/vhs-teletext/teletext/__main__.py"
+    require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"
+    require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext2.ttf"
+    require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext4.ttf"
     # tbc-video-export is now a self-contained PyInstaller ELF binary, not a
     # bash wrapper + package source. Verify it is an ELF executable.
     if ! head -c 4 "$TARGET/bin/tbc-video-export" 2>/dev/null | grep -q $'\177ELF'; then
