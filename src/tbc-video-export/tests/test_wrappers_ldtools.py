@@ -379,6 +379,50 @@ class TestWrappersChromaDecoder:
             tbc_type=TBCType.COMBINED,
         ),
         WrapperTestCase(
+            id="secam composite explicit secam decoder opts",
+            input_tbc=f"{get_path('pal_composite')}.tbc",
+            input_opts=[
+                "--input-tbc-json",
+                str(get_path("secam_composite.tbc.json")),
+                "--chroma-decoder",
+                "secam",
+            ],
+            expected_opts=[
+                {"-f", "secam"},
+                {"--input-json", str(get_path("secam_composite.tbc.json"))},
+                {"PIPE_IN", "PIPE_OUT"},
+            ],
+            tbc_type=TBCType.COMBINED,
+        ),
+        WrapperTestCase(
+            id="mesecam composite explicit secam decoder opts",
+            input_tbc=f"{get_path('pal_composite')}.tbc",
+            input_opts=[
+                "--input-tbc-json",
+                str(get_path("mesecam_composite.tbc.json")),
+                "--chroma-decoder",
+                "secam",
+            ],
+            expected_opts=[
+                {"-f", "secam"},
+                {"--input-json", str(get_path("mesecam_composite.tbc.json"))},
+                {"PIPE_IN", "PIPE_OUT"},
+            ],
+            tbc_type=TBCType.COMBINED,
+        ),
+        WrapperTestCase(
+            id="pal svideo chroma secam decoder opts",
+            input_tbc=f"{get_path('pal_svideo')}.tbc",
+            input_opts=["--chroma-decoder", "secam"],
+            expected_opts=[
+                {"--luma-nr", "0"},
+                {"-f", "secam"},
+                {"--input-json", f"{get_path('pal_svideo')}.tbc.json"},
+                {"PIPE_IN", "PIPE_OUT"},
+            ],
+            tbc_type=TBCType.CHROMA,
+        ),
+        WrapperTestCase(
             id="pal invalid decoder (exception)",
             input_tbc=f"{get_path('pal_svideo')}.tbc",
             input_opts=["--chroma-decoder", "ntsc2d"],
@@ -541,6 +585,13 @@ class TestWrappersChromaDecoder:
                 {"PIPE_IN", "PIPE_OUT"},
             ],
             tbc_type=TBCType.COMBINED,
+        ),
+        WrapperTestCase(
+            id="ntsc secam decoder (exception)",
+            input_tbc=f"{get_path('ntsc_svideo')}.tbc",
+            input_opts=["--chroma-decoder", "secam"],
+            expected_opts=[],
+            expected_exc=pytest.raises(exceptions.InvalidChromaDecoderError),
         ),
         WrapperTestCase(
             id="ntsc invalid decoder (exception)",
