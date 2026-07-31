@@ -41,6 +41,7 @@
 
 #include "comb.h"
 #include "monodecoder.h"
+#include "secamdecoder.h"
 #include "ntscdecoder.h"
 #include "outputwriter.h"
 #include "palcolour.h"
@@ -381,6 +382,7 @@ int main(int argc, char *argv[])
     PalColour::Configuration palConfig;
     Comb::Configuration combConfig;
     MonoDecoder::MonoConfiguration monoConfig;
+    SecamDecoder::SecamConfiguration secamConfig;
     OutputWriter::Configuration outputConfig;
 
     if (parser.isSet(startFrameOption)) {
@@ -417,6 +419,7 @@ int main(int argc, char *argv[])
         const double value = parser.value(chromaGainOption).toDouble();
         palConfig.chromaGain = value;
         combConfig.chromaGain = value;
+        secamConfig.chromaGain = value;
 
         if (value < 0.0) {
             // Quit with error
@@ -435,6 +438,7 @@ int main(int argc, char *argv[])
     if (bwMode) {
         palConfig.chromaGain = 0.0;
         combConfig.chromaGain = 0.0;
+        secamConfig.chromaGain = 0.0;
     }
 
     if (parser.isSet(showMapOption)) {
@@ -548,6 +552,7 @@ int main(int argc, char *argv[])
     if (!parser.isSet(chromaGainOption) && !bwMode && videoParameters.chromaGain >= 0.0) {
         palConfig.chromaGain = videoParameters.chromaGain;
         combConfig.chromaGain = videoParameters.chromaGain;
+        secamConfig.chromaGain = videoParameters.chromaGain;
     }
     if (!parser.isSet(chromaPhaseOption) && videoParameters.chromaPhase != -1.0) {
         palConfig.chromaPhase = videoParameters.chromaPhase;
@@ -580,7 +585,7 @@ int main(int argc, char *argv[])
         decoderName = parser.value(decoderOption);
     } else if (!videoParameters.chromaDecoder.isEmpty()) {
         const QString metadataDecoder = videoParameters.chromaDecoder.toLower();
-        const QStringList validDecoders = { "pal2d", "transform2d", "transform3d", "ntsc1d", "ntsc2d", "ntsc3d", "nntransform3d", "nntsc3d", "ntsc3dnoadapt", "mono" };
+        const QStringList validDecoders = { "pal2d", "transform2d", "transform3d", "ntsc1d", "ntsc2d", "ntsc3d", "nntransform3d", "nntsc3d", "ntsc3dnoadapt", "mono", "secam" };
         if (validDecoders.contains(metadataDecoder)) {
             decoderName = metadataDecoder;
         } else {
@@ -666,6 +671,8 @@ int main(int argc, char *argv[])
 
     } else if (decoderName == "mono") {
         decoder = std::make_unique<MonoDecoder>(monoConfig);
+    } else if (decoderName == "secam") {
+        decoder = std::make_unique<SecamDecoder>(secamConfig);
     } else {
         qCritical() << "Unknown decoder" << decoderName;
         return -1;

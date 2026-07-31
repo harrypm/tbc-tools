@@ -96,6 +96,8 @@ QString chromaDecoderNameFromConfig(VideoSystem system,
             return QStringLiteral("transform3d");
         case PalColour::mono:
             return QStringLiteral("mono");
+        case PalColour::secam:
+            return QStringLiteral("secam");
         }
     }
 
