@@ -1819,6 +1819,16 @@ void TbcSource::configureChromaDecoder()
         ntscColour.updateConfiguration(decodeVideoParameters, ntscConfiguration);
     }
 	monoDecoder.updateConfiguration(decodeVideoParameters, monoConfiguration);
+    if (videoParameters.system == PAL || videoParameters.system == PAL_M) {
+        // The SECAM decoder measures each line's rest carrier inside the
+        // blanking interval, so it must see the real active/burst bounds from
+        // the metadata -- not the full-frame decode bounds, which rewrite
+        // activeVideoStart and would put the measurement window into the sync.
+        // Its output covers the full line width regardless, so the full-frame
+        // and hybrid preview modes still work.
+        secamConfiguration.chromaGain = palConfiguration.chromaGain;
+        secamDecoder.updateConfiguration(videoParameters, secamConfiguration);
+    }
 
     // Configure the OutputWriter.
     // Because we have padding disabled, this won't change the VideoParameters.
@@ -1873,6 +1883,8 @@ void TbcSource::applyChromaSettingsFromMetadata(const LdDecodeMetaData::VideoPar
                 palConfiguration.chromaFilter = PalColour::transform2DFilter;
             } else if (decoder == "transform3d") {
                 palConfiguration.chromaFilter = PalColour::transform3DFilter;
+            } else if (decoder == "secam") {
+                palConfiguration.chromaFilter = PalColour::secam;
             } else if (decoder == "mono") {
                 palConfiguration.chromaFilter = PalColour::mono;
             }
@@ -1968,7 +1980,10 @@ void TbcSource::decodeFrame()
 	if(!combine && sourceMode == BOTH_SOURCES)
 	{
 		monoDecoder.decodeFrames(inputFields, inputStartIndex, inputEndIndex, yFrames);
-		if ((getSystem() == PAL || getSystem() == PAL_M) && palConfiguration.chromaFilter != PalColour::mono) {
+		if ((getSystem() == PAL || getSystem() == PAL_M) && palConfiguration.chromaFilter == PalColour::secam) {
+			// SECAM source: the chroma TBC carries a restored studio SECAM FM block
+			secamDecoder.decodeFrames(chromaInputFields, inputStartIndex, inputEndIndex, cFrames);
+		} else if ((getSystem() == PAL || getSystem() == PAL_M) && palConfiguration.chromaFilter != PalColour::mono) {
 			// PAL source
 			palColour.decodeFrames(chromaInputFields, inputStartIndex, inputEndIndex, cFrames);
 		} else if(getSystem() == NTSC && ntscConfiguration.dimensions != 0){
@@ -1996,6 +2011,9 @@ void TbcSource::decodeFrame()
 		if (getSystem() == PAL || getSystem() == PAL_M) {
 			if(palConfiguration.chromaFilter == palColour.ChromaFilterMode::mono){
 				monoDecoder.decodeFrames(inputFields, inputStartIndex, inputEndIndex, componentFrames);
+			} else if(palConfiguration.chromaFilter == palColour.ChromaFilterMode::secam){
+				// SECAM source
+				secamDecoder.decodeFrames(inputFields, inputStartIndex, inputEndIndex, componentFrames);
 			} else {
 				// PAL source
 				palColour.decodeFrames(inputFields, inputStartIndex, inputEndIndex, componentFrames);
@@ -2512,6 +2530,8 @@ bool TbcSource::startBackgroundLoad(QString sourceFilename)
     // Configure the chroma decoder
     if (videoParameters.system == PAL || videoParameters.system == PAL_M) {
         palColour.updateConfiguration(videoParameters, palConfiguration);
+        secamConfiguration.chromaGain = palConfiguration.chromaGain;
+        secamDecoder.updateConfiguration(videoParameters, secamConfiguration);
     } else {
         if (videoParameters.ntscPhaseCompensation == -1) {
             // No metadata override: default phase compensation on for NTSC,

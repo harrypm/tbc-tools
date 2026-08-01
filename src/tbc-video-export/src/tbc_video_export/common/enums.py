@@ -88,6 +88,7 @@ class ChromaDecoder(Enum):
     PAL2D = "pal2d"
     TRANSFORM2D = "transform2d"
     TRANSFORM3D = "transform3d"
+    SECAM = "secam"
     MONO = "mono"
     NTSC1D = "ntsc1d"
     NTSC2D = "ntsc2d"

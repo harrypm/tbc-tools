@@ -335,6 +335,7 @@ void ChromaDecoderConfigDialog::updateDialog()
     ui->palFilterPalColourRadioButton->setEnabled(isSourcePal);
     ui->palFilterTransform2DRadioButton->setEnabled(isSourcePal);
     ui->palFilterTransform3DRadioButton->setEnabled(isSourcePal);
+	ui->palFilterSecamRadioButton->setEnabled(isSourcePal);
 	
 	if(isSourcePal)
 	{
@@ -359,10 +360,19 @@ void ChromaDecoderConfigDialog::updateDialog()
 			ui->chromaGainHorizontalSlider->setEnabled(true);
 			ui->chromaPhaseHorizontalSlider->setEnabled(true);
 			break;
+		case PalColour::secam:
+			ui->palFilterSecamRadioButton->setChecked(true);
+			ui->chromaGainHorizontalSlider->setEnabled(true);
+			// SECAM carries the colour difference signals as frequency, not
+			// as a subcarrier phase, so there is no chroma phase to shift.
+			ui->chromaPhaseHorizontalSlider->setEnabled(false);
+			break;
 		}
 	}
 
-    const bool isTransform = ((palConfiguration.chromaFilter != PalColour::palColourFilter) && (palConfiguration.chromaFilter != PalColour::mono) );
+    const bool isTransform = ((palConfiguration.chromaFilter != PalColour::palColourFilter)
+                              && (palConfiguration.chromaFilter != PalColour::mono)
+                              && (palConfiguration.chromaFilter != PalColour::secam));
 
     ui->thresholdLabel->setEnabled(isSourcePal && isTransform);
 
@@ -568,6 +578,8 @@ void ChromaDecoderConfigDialog::on_palFilterButtonGroup_buttonClicked(QAbstractB
 {
 	if (button == ui->palMonoRadioButton){
 		palConfiguration.chromaFilter = PalColour::mono;
+    } else if (button == ui->palFilterSecamRadioButton) {
+        palConfiguration.chromaFilter = PalColour::secam;
     } else if (button == ui->palFilterPalColourRadioButton) {
         palConfiguration.chromaFilter = PalColour::palColourFilter;
     } else if (button == ui->palFilterTransform2DRadioButton) {

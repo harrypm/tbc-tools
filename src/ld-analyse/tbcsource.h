@@ -32,6 +32,7 @@
 #include "palcolour.h"
 #include "comb.h"
 #include "monodecoder.h"
+#include "secamdecoder.h"
 
 struct YuvRangeSettings;
 
@@ -217,6 +218,7 @@ private:
 
     // Chroma decoder objects
     PalColour palColour;
+    SecamDecoder secamDecoder;
     Comb ntscColour;
 	MonoDecoder monoDecoder;
     OutputWriter outputWriter;
@@ -273,6 +275,7 @@ private:
 
     // Chroma decoder configuration
     PalColour::Configuration palConfiguration;
+    SecamDecoder::SecamConfiguration secamConfiguration;
     Comb::Configuration ntscConfiguration;
 	MonoDecoder::MonoConfiguration monoConfiguration;
     OutputWriter::Configuration outputConfiguration;

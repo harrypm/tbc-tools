@@ -92,6 +92,7 @@ class WrapperLDChromaDecoder(Wrapper):
                     ChromaDecoder.PAL2D,
                     ChromaDecoder.TRANSFORM2D,
                     ChromaDecoder.TRANSFORM3D,
+                    ChromaDecoder.SECAM,
                 }:
                     raise exceptions.InvalidChromaDecoderError(
                         f"{decoder} is not a valid decoder for "
