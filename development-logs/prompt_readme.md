@@ -3392,3 +3392,35 @@ ninja: Entering directory `/home/harry/tbc-tools/build'
 Command: date -u +%Y-%m-%dT%H:%M:%SZ
 Output:
 2026-03-01T13:51:54Z
+
+## 2026-08-01T08:38:54Z
+User input:
+git pull, fix SECAM decoder option so its in its own tab for settting selection
+
+Command: git -C /home/harry/tbc-tools pull --no-rebase --no-edit
+Note: local main (1 commit: aa3dcac bundle validation) and origin/main (5 commits: SECAM chroma decoder PR #27) had diverged from 4b379a2; merged with the 'ort' strategy.
+Output:
+Auto-merging src/ld-analyse/exportdialog.cpp
+Merge made by the 'ort' strategy.
+ 16 files changed, 703 insertions(+), 6 deletions(-)
+ create mode 100644 src/ld-chroma-decoder/secamdecoder.cpp
+ create mode 100644 src/ld-chroma-decoder/secamdecoder.h
+ (merge commit created on local main)
+
+Edits (edit_files):
+- src/ld-analyse/chromadecoderconfigdialog.ui: removed palFilterSecamRadioButton item from palTab; added a new secamTab (title "SECAM") to standardTabs containing a "Chroma filter:" label, the SECAM radio button (kept in palFilterButtonGroup so it stays mutually exclusive with the PAL Mono/PalColour2D/Transform2D/Transform3D filter choices that all set palConfiguration.chromaFilter), and a trailing vertical spacer (verticalSpacer_12). Fixed resulting indentation of the following verticalSpacer_7 item in palTab.
+- src/ld-analyse/chromadecoderconfigdialog.cpp: in setConfiguration(), tab auto-selection now routes to ui->secamTab when system is PAL/PAL_M and palConfiguration.chromaFilter == PalColour::secam (NTSC -> ntscTab, else palTab). All other SECAM handling (setEnabled(isSourcePal), setChecked in the chromaFilter switch, on_palFilterButtonGroup_buttonClicked -> PalColour::secam, chroma phase slider disabled for SECAM) is unchanged and still works because the widget object name is unchanged.
+
+Command: nix develop -c ninja -C build bin/ld-analyse
+Output:
+ninja: Entering directory 'build'
+[1/29] Automatic MOC and UIC for target lddecode-chroma
+[5/29] Building CXX object src/ld-chroma-decoder/CMakeFiles/lddecode-chroma.dir/secamdecoder.cpp.o
+[9/29] Automatic MOC and UIC for target ld-analyse
+[24/29] Building CXX object src/ld-analyse/CMakeFiles/ld-analyse.dir/chromadecoderconfigdialog.cpp.o
+[29/29] Linking CXX executable bin/ld-analyse
+Result: compiled + linked cleanly; bin/ld-analyse produced. uic regenerated ui_chromadecoderconfigdialog.h with secamTab. NOT yet visually verified by user.
+
+Command: date -u +%Y-%m-%dT%H:%M:%SZ
+Output:
+2026-08-01T08:38:54Z

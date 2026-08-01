@@ -162,6 +162,8 @@ void ChromaDecoderConfigDialog::setConfiguration(VideoSystem _system, const PalC
     // Select the tab corresponding to the current standard automatically
     if (system == NTSC) {
         ui->standardTabs->setCurrentWidget(ui->ntscTab);
+    } else if (palConfiguration.chromaFilter == PalColour::secam) {
+        ui->standardTabs->setCurrentWidget(ui->secamTab);
     } else {
         ui->standardTabs->setCurrentWidget(ui->palTab);
     }
