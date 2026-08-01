@@ -394,6 +394,16 @@
         </widget>
        </item>
        <item>
+        <widget class="QRadioButton" name="palFilterSecamRadioButton">
+         <property name="text">
+          <string>SECAM</string>
+         </property>
+         <attribute name="buttonGroup">
+          <string notr="true">palFilterButtonGroup</string>
+         </attribute>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer_7">
          <property name="orientation">
           <enum>Qt::Vertical</enum>

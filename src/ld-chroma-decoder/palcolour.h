@@ -53,7 +53,10 @@ public:
         // 3D Transform PAL frequency-domain filter
         transform3DFilter,
 		//mono decoder
-		mono
+		mono,
+		// SECAM FM decoder (see secamdecoder.h) -- not a PalColour filter,
+		// but selected through the same per-source chroma decoder chooser
+		secam
     };
 
     struct Configuration {

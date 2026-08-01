@@ -134,6 +134,7 @@ set(lddecode_chroma_sources
     framecanvas.cpp
     outputwriter.cpp
     palcolour.cpp
+    secamdecoder.cpp
     sourcefield.cpp
     transformpal.cpp
     transformpal2d.cpp
@@ -179,6 +180,7 @@ add_executable(ld-chroma-decoder
     monodecoder.cpp
     ntscdecoder.cpp
     paldecoder.cpp
+    secamdecoder.cpp
 )
 
 set_target_properties(lddecode-chroma PROPERTIES AUTOMOC ON)
