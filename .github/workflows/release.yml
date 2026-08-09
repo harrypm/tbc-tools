@@ -99,14 +99,19 @@ jobs:
           if [ "${TAG_EXISTS}" = "true" ]; then
             if [ "${ALLOW_EXISTING_TAG_REBUILD}" != "true" ]; then
               echo "Tag '${RELEASE_TAG}' already exists on origin. Refusing to rebuild by default to prevent stale releases." >&2
-              echo "Bump version/tag, or explicitly set allow_existing_tag_rebuild=true for an intentional rebuild." >&2
+              echo "To re-cut this version from current main, delete the stale tag first:" >&2
+              echo "  gh api -X DELETE repos/${{ github.repository }}/git/refs/tags/${RELEASE_TAG}" >&2
+              echo "or explicitly set allow_existing_tag_rebuild=true for an intentional in-place rebuild." >&2
               exit 1
             fi
             echo "Tag '${RELEASE_TAG}' already exists on origin; allow_existing_tag_rebuild=true so continuing intentionally."
           else
+            # Tag was deleted (e.g. for a re-cut) but a GitHub Release object may
+            # still exist. Delete the orphaned release so the re-cut publishes
+            # cleanly instead of failing; the upload job recreates it fresh.
             if gh release view "${RELEASE_TAG}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-              echo "Release '${RELEASE_TAG}' exists without a tag, which is unexpected." >&2
-              exit 1
+              echo "Release '${RELEASE_TAG}' exists without a tag (tag was deleted for a re-cut); deleting the orphaned release so the re-cut publishes cleanly." >&2
+              gh release delete "${RELEASE_TAG}" --repo "${{ github.repository }}" --yes
             fi
           fi
 
