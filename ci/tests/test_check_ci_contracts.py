@@ -177,10 +177,11 @@ class ContractCoverageTests(unittest.TestCase):
             "Manual release mode is only allowed from refs/heads/main",
             "Refusing to rebuild by default to prevent stale releases.",
             "Release integrity check failed:",
-            "make_latest=true",
+            "gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --latest",
             "tbc-tools_${RELEASE_TAG}_commit.txt",
         }
         self.assertTrue(expected.issubset(set(check_ci_contracts.RELEASE_REQUIRED_SNIPPETS)))
+
     def test_bundle_verifier_contract_includes_found_and_launch_checks(self) -> None:
         expected = {
             'run_smoke_test "x86-appimage-extract-and-run-tbc-video-export"',

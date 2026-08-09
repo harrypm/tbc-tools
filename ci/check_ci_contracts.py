@@ -122,7 +122,7 @@ RELEASE_REQUIRED_SNIPPETS = (
     "Manual release mode is only allowed from refs/heads/main",
     "Refusing to rebuild by default to prevent stale releases.",
     "Release integrity check failed:",
-    "make_latest=true",
+    "gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --latest",
     "tbc-tools_${RELEASE_TAG}_commit.txt",
 )
 

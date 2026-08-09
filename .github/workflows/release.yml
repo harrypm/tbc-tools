@@ -407,15 +407,16 @@ jobs:
               --notes-file "$NOTES_FILE"
           fi
 
-      - name: Mark release as latest
-        run: |
-          RELEASE_ID="$(gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" --json id --jq '.id')"
-          gh api \
-            --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-            -f make_latest=true >/dev/null
-
       - name: Upload release assets
         run: |
           gh release upload "$RELEASE_TAG" ./artifacts/release/* --repo "${{ github.repository }}" --clobber
+
+      - name: Mark release as latest
+        # Best-effort: the assets are already uploaded by this point, so a
+        # latest-pointer hiccup must never block the release. Use the idiomatic
+        # `gh release edit --latest` rather than a raw API PATCH (the raw
+        # make_latest form-field path was unreliable and failed the whole job).
+        continue-on-error: true
+        run: |
+          gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --latest
+          echo "Marked $RELEASE_TAG as the latest release."
