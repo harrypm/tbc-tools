@@ -167,6 +167,20 @@ class ContractCoverageTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(set(check_ci_contracts.RELEASE_REQUIRED_SNIPPETS)))
 
+    def test_release_contract_requires_stale_release_guards(self) -> None:
+        # Manual create_release must run from main, block existing-tag rebuilds
+        # by default, validate the tag commit against the intended source commit,
+        # emit a release commit provenance asset, and force make_latest=true so
+        # the GitHub "latest release" pointer tracks the newest tag.
+        expected = {
+            "allow_existing_tag_rebuild:",
+            "Manual release mode is only allowed from refs/heads/main",
+            "Refusing to rebuild by default to prevent stale releases.",
+            "Release integrity check failed:",
+            "make_latest=true",
+            "tbc-tools_${RELEASE_TAG}_commit.txt",
+        }
+        self.assertTrue(expected.issubset(set(check_ci_contracts.RELEASE_REQUIRED_SNIPPETS)))
     def test_bundle_verifier_contract_includes_found_and_launch_checks(self) -> None:
         expected = {
             'run_smoke_test "x86-appimage-extract-and-run-tbc-video-export"',

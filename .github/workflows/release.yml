@@ -14,6 +14,11 @@ on:
         required: false
         default: false
         type: boolean
+      allow_existing_tag_rebuild:
+        description: "Allow rebuilding/re-publishing an existing release tag (unsafe; default false)"
+        required: false
+        default: false
+        type: boolean
       version:
         description: "Version to release when enabled (example: 0.6.0 or v0.6.0)"
         required: false
@@ -29,12 +34,19 @@ jobs:
       release_tag: ${{ steps.resolve.outputs.release_tag }}
       checkout_ref: ${{ steps.resolve.outputs.checkout_ref }}
       publish_release: ${{ steps.resolve.outputs.publish_release }}
+      source_commit: ${{ steps.resolve.outputs.source_commit }}
     steps:
       - name: Determine release mode
         id: mode
         run: |
+          SOURCE_COMMIT=""
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SOURCE_COMMIT="${{ github.sha }}"
             if [ "${{ github.event.inputs.create_release }}" = "true" ]; then
+              if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+                echo "Manual release mode is only allowed from refs/heads/main (current ref: ${{ github.ref }})." >&2
+                exit 1
+              fi
               RAW_INPUT="${{ github.event.inputs.version }}"
               if [ -z "$RAW_INPUT" ]; then
                 echo "version is required when create_release is enabled."
@@ -60,6 +72,7 @@ jobs:
 
           echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
           echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
+          echo "source_commit=${SOURCE_COMMIT}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         if: ${{ steps.mode.outputs.mode == 'manual_release' }}
@@ -74,6 +87,7 @@ jobs:
         if: ${{ steps.mode.outputs.mode == 'manual_release' }}
         env:
           RELEASE_TAG: ${{ steps.mode.outputs.release_tag }}
+          ALLOW_EXISTING_TAG_REBUILD: ${{ github.event.inputs.allow_existing_tag_rebuild }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           TAG_EXISTS=false
@@ -83,7 +97,12 @@ jobs:
           echo "tag_exists=${TAG_EXISTS}" >> "$GITHUB_OUTPUT"
 
           if [ "${TAG_EXISTS}" = "true" ]; then
-            echo "Tag '${RELEASE_TAG}' already exists on origin; refreshing the release from the existing tag."
+            if [ "${ALLOW_EXISTING_TAG_REBUILD}" != "true" ]; then
+              echo "Tag '${RELEASE_TAG}' already exists on origin. Refusing to rebuild by default to prevent stale releases." >&2
+              echo "Bump version/tag, or explicitly set allow_existing_tag_rebuild=true for an intentional rebuild." >&2
+              exit 1
+            fi
+            echo "Tag '${RELEASE_TAG}' already exists on origin; allow_existing_tag_rebuild=true so continuing intentionally."
           else
             if gh release view "${RELEASE_TAG}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
               echo "Release '${RELEASE_TAG}' exists without a tag, which is unexpected." >&2
@@ -159,7 +178,12 @@ jobs:
         env:
           MODE: ${{ steps.mode.outputs.mode }}
           MODE_RELEASE_TAG: ${{ steps.mode.outputs.release_tag }}
+          MODE_SOURCE_COMMIT: ${{ steps.mode.outputs.source_commit }}
         run: |
+          SOURCE_COMMIT="${MODE_SOURCE_COMMIT}"
+          if [ "$MODE" = "manual_release" ]; then
+            SOURCE_COMMIT="$(git rev-parse HEAD)"
+          fi
           PUBLISH_RELEASE="true"
           if [ "$MODE" = "build_only" ]; then
             RELEASE_TAG=""
@@ -184,11 +208,26 @@ jobs:
               echo "Tag refs/tags/${RELEASE_TAG} does not exist on origin."
               exit 1
             fi
+            TAG_COMMIT="$(git ls-remote --exit-code --tags "https://github.com/${{ github.repository }}.git" "refs/tags/${RELEASE_TAG}^{}" | awk '{print $1}')"
+            if [ -z "$TAG_COMMIT" ]; then
+              TAG_COMMIT="$(git ls-remote --exit-code --tags "https://github.com/${{ github.repository }}.git" "refs/tags/${RELEASE_TAG}" | awk '{print $1}')"
+            fi
+            if [ -z "$TAG_COMMIT" ]; then
+              echo "Unable to resolve commit for tag refs/tags/${RELEASE_TAG}." >&2
+              exit 1
+            fi
+            if [ -n "$SOURCE_COMMIT" ] && [ "$TAG_COMMIT" != "$SOURCE_COMMIT" ]; then
+              echo "Release integrity check failed: source commit ${SOURCE_COMMIT} != tag commit ${TAG_COMMIT} for ${RELEASE_TAG}." >&2
+              echo "Refusing to build release assets from a stale/mismatched tag." >&2
+              exit 1
+            fi
+            SOURCE_COMMIT="${TAG_COMMIT}"
             CHECKOUT_REF="refs/tags/${RELEASE_TAG}"
           fi
           echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=${CHECKOUT_REF}" >> "$GITHUB_OUTPUT"
           echo "publish_release=${PUBLISH_RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "source_commit=${SOURCE_COMMIT}" >> "$GITHUB_OUTPUT"
   build-linux:
     name: Build Linux binaries
     uses: ./.github/workflows/build_linux_tools.yml
@@ -287,6 +326,12 @@ jobs:
           mv ./artifacts/tbc-tools_x86_64.dmg "./artifacts/release/tbc-tools_${RELEASE_TAG}_macos_x86_64.dmg"
           mv ./artifacts/tbc-tools_arm64.dmg "./artifacts/release/tbc-tools_${RELEASE_TAG}_macos_arm64.dmg"
           mv ./artifacts/tbc-tools_universal.dmg "./artifacts/release/tbc-tools_${RELEASE_TAG}_macos_universal.dmg"
+
+          RELEASE_COMMIT="$(git rev-list -n 1 "${RELEASE_TAG}")"
+          {
+            echo "tag=${RELEASE_TAG}"
+            echo "commit=${RELEASE_COMMIT}"
+          } > "./artifacts/release/tbc-tools_${RELEASE_TAG}_commit.txt"
       - name: Determine previous release tag
         id: previous-tag
         run: |
@@ -356,6 +401,15 @@ jobs:
               --title "$RELEASE_TAG" \
               --notes-file "$NOTES_FILE"
           fi
+
+      - name: Mark release as latest
+        run: |
+          RELEASE_ID="$(gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" --json id --jq '.id')"
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+            -f make_latest=true >/dev/null
 
       - name: Upload release assets
         run: |
