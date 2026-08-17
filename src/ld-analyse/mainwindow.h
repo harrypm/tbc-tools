@@ -54,6 +54,7 @@
 #include "metadataconversiondialog.h"
 #include "metadatastatusdialog.h"
 #include "configuration.h"
+#include "updatechecker.h"
 #include "tbcsource.h"
 
 namespace Ui {
@@ -91,6 +92,7 @@ private slots:
     void on_actionField_timing_scope_triggered();
     void on_actionTBC_Tools_Wiki_triggered();
     void on_actionAbout_ld_analyse_triggered();
+    void on_actionCheck_for_Updates_triggered();
     void on_actionVBI_triggered();
     void on_actionDropout_analysis_triggered();
     void on_actionVisible_Dropout_analysis_triggered();
@@ -289,6 +291,16 @@ private:
     bool chapterSkipHoldTriggered = false;
     bool suppressStartButtonClick = false;
     bool suppressEndButtonClick = false;
+
+    // Update checker
+    UpdateChecker *updateChecker = nullptr;
+    bool updateCheckSilent = false; // true for the automatic weekly check (suppresses non-update popups)
+    void maybePerformWeeklyUpdateCheck();
+    void recordUpdateCheckAttempt();
+    void showUpdateAvailableDialog(const QString &latestVersion, const QString &releaseUrl, const QString &releaseName);
+    void onUpdateAvailable(const QString &latestVersion, const QString &releaseUrl, const QString &releaseName);
+    void onUpdateUpToDate(const QString &currentVersion, const QString &latestVersion, const QString &releaseUrl);
+    void onUpdateCheckFailed(const QString &errorString);
 
     // Update GUI methods
     void setGuiEnabled(bool enabled);

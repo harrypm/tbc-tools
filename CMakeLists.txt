@@ -122,7 +122,7 @@ set(CMAKE_AUTOMOC ON)
 include(GNUInstallDirs)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Svg)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Svg Network)
 message(STATUS "Qt Version: ${QT_VERSION}")
 
 find_package(PkgConfig REQUIRED)

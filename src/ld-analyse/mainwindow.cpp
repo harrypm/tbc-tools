@@ -1641,6 +1641,17 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
     });
     // Button press/release signals for chroma seek mode are auto-connected by Qt's auto-connection mechanism
 
+    // Update checker - manual checks via the Help menu plus an automatic weekly
+    // background check. The auto check is deferred so it never delays startup.
+    updateChecker = new UpdateChecker(this);
+    connect(updateChecker, &UpdateChecker::updateAvailable,
+            this, &MainWindow::onUpdateAvailable);
+    connect(updateChecker, &UpdateChecker::upToDate,
+            this, &MainWindow::onUpdateUpToDate);
+    connect(updateChecker, &UpdateChecker::checkFailed,
+            this, &MainWindow::onUpdateCheckFailed);
+    QTimer::singleShot(3000, this, [this]() { maybePerformWeeklyUpdateCheck(); });
+
     // Set the GUI to unloaded
     updateGuiUnloaded();
     
@@ -5287,6 +5298,169 @@ void MainWindow::on_actionTBC_Tools_Wiki_triggered()
 void MainWindow::on_actionAbout_ld_analyse_triggered()
 {
     aboutDialog->show();
+}
+
+// Check for updates - manual trigger from the Help menu
+void MainWindow::on_actionCheck_for_Updates_triggered()
+{
+    if (!updateChecker) {
+        return;
+    }
+    // Manual checks always present their full result to the user.
+    updateCheckSilent = false;
+    if (statusBar()) {
+        statusBar()->showMessage(tr("Checking GitHub for updates..."), 0);
+    }
+    updateChecker->checkForUpdates();
+}
+
+// Automatic background check, throttled to once per week via the stored timestamp.
+void MainWindow::maybePerformWeeklyUpdateCheck()
+{
+    if (!updateChecker) {
+        return;
+    }
+    if (!configuration.getUpdateCheckEnabled()) {
+        return;
+    }
+
+    // Skip the automatic check for unversioned/dev builds to avoid noisy prompts.
+    const QString currentVersion = QString::fromUtf8(APP_VERSION);
+    if (currentVersion.isEmpty() || currentVersion == QStringLiteral("0.0.0")) {
+        return;
+    }
+
+    const QString lastTimestamp = configuration.getLastUpdateCheckTimestamp();
+    if (!lastTimestamp.isEmpty()) {
+        const QDateTime lastCheck = QDateTime::fromString(lastTimestamp, Qt::ISODate);
+        if (lastCheck.isValid()) {
+            const qint64 secsSinceLastCheck = lastCheck.secsTo(QDateTime::currentDateTimeUtc());
+            const qint64 weekSeconds = 7 * 24 * 60 * 60;
+            if (secsSinceLastCheck < weekSeconds) {
+                tbcDebugStream() << "MainWindow::maybePerformWeeklyUpdateCheck(): last check"
+                                 << secsSinceLastCheck << "s ago, not due yet";
+                return;
+            }
+        }
+    }
+
+    tbcDebugStream() << "MainWindow::maybePerformWeeklyUpdateCheck(): performing weekly update check";
+    updateCheckSilent = true;
+    updateChecker->checkForUpdates();
+}
+
+// Persist the timestamp of this check attempt so the weekly throttle works.
+void MainWindow::recordUpdateCheckAttempt()
+{
+    configuration.setLastUpdateCheckTimestamp(QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+    configuration.writeConfiguration();
+}
+
+void MainWindow::onUpdateAvailable(const QString &latestVersion, const QString &releaseUrl, const QString &releaseName)
+{
+    recordUpdateCheckAttempt();
+    if (statusBar()) {
+        statusBar()->clearMessage();
+    }
+
+    if (updateCheckSilent) {
+        // Honour a previously-saved "Skip this version" for the automatic check.
+        if (!latestVersion.isEmpty()
+            && latestVersion == configuration.getSkippedUpdateVersion()) {
+            tbcDebugStream() << "MainWindow::onUpdateAvailable(): version" << latestVersion
+                             << "skipped by user; suppressing automatic prompt";
+            return;
+        }
+    }
+
+    showUpdateAvailableDialog(latestVersion, releaseUrl, releaseName);
+}
+
+void MainWindow::onUpdateUpToDate(const QString &currentVersion, const QString &latestVersion, const QString &releaseUrl)
+{
+    Q_UNUSED(releaseUrl)
+    recordUpdateCheckAttempt();
+    if (statusBar()) {
+        statusBar()->clearMessage();
+    }
+
+    if (updateCheckSilent) {
+        if (statusBar()) {
+            statusBar()->showMessage(tr("tbc-tools is up to date (v%1).").arg(currentVersion), 5000);
+        }
+        tbcDebugStream() << "MainWindow::onUpdateUpToDate(): up to date (" << currentVersion << ")";
+        return;
+    }
+
+    QMessageBox::information(this, tr("Up to date"),
+        tr("You are running the latest version of tbc-tools.\n\n"
+           "Installed: %1\nLatest: %2").arg(currentVersion, latestVersion));
+}
+
+void MainWindow::onUpdateCheckFailed(const QString &errorString)
+{
+    recordUpdateCheckAttempt();
+    if (statusBar()) {
+        statusBar()->clearMessage();
+    }
+
+    tbcDebugStream() << "MainWindow::onUpdateCheckFailed():" << errorString;
+
+    if (updateCheckSilent) {
+        // Stay quiet on automatic failures - the user can still check manually.
+        return;
+    }
+
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Warning);
+    box.setWindowTitle(tr("Update check failed"));
+    box.setText(tr("Could not check for updates."));
+    box.setInformativeText(errorString + QStringLiteral("\n\n") +
+        tr("You can view the latest release in your browser instead."));
+    QPushButton *openButton = box.addButton(tr("Open releases page"), QMessageBox::AcceptRole);
+    box.addButton(QMessageBox::Close);
+    box.exec();
+    if (box.clickedButton() == openButton) {
+        QDesktopServices::openUrl(QUrl(UpdateChecker::releasesUrl()));
+    }
+}
+
+void MainWindow::showUpdateAvailableDialog(const QString &latestVersion, const QString &releaseUrl, const QString &releaseName)
+{
+    const QString currentVersion = QString::fromUtf8(APP_VERSION);
+
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Information);
+    box.setWindowTitle(tr("Update available"));
+    box.setText(tr("A new version of tbc-tools is available."));
+    QString info = tr("Installed: %1\nLatest: %2").arg(currentVersion, latestVersion);
+    if (!releaseName.isEmpty()) {
+        info += QStringLiteral("\n") + releaseName;
+    }
+    info += QStringLiteral("\n\n") + tr("Would you like to open the release page to download it?");
+    box.setInformativeText(info);
+
+    QPushButton *downloadButton = box.addButton(tr("Download"), QMessageBox::AcceptRole);
+    QPushButton *skipButton = box.addButton(tr("Skip this version"), QMessageBox::ActionRole);
+    QPushButton *laterButton = box.addButton(tr("Remind me later"), QMessageBox::RejectRole);
+    box.exec();
+
+    QAbstractButton *clicked = box.clickedButton();
+    if (clicked == downloadButton) {
+        const QUrl url(releaseUrl.isEmpty() ? UpdateChecker::releasesUrl() : releaseUrl);
+        if (!QDesktopServices::openUrl(url)) {
+            QMessageBox::warning(this, tr("Warning"),
+                tr("Could not open the release URL:\n%1").arg(url.toString()));
+        }
+    } else if (clicked == skipButton) {
+        configuration.setSkippedUpdateVersion(latestVersion);
+        configuration.writeConfiguration();
+        if (statusBar()) {
+            statusBar()->showMessage(tr("Skipped version %1. You can still check manually via Help > Check for Updates.").arg(latestVersion), 6000);
+        }
+    } else if (clicked == laterButton) {
+        // No-op; the timestamp was already recorded so it won't prompt again for a week.
+    }
 }
 void MainWindow::on_actionTeletext_Viewer_triggered()
 {

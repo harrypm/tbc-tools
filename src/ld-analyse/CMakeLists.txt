@@ -31,6 +31,7 @@ set(ld-analyse_SOURCES
     fieldtimingdialog.cpp fieldtimingdialog.h
     fieldtimingwidget.cpp fieldtimingwidget.h
     aboutdialog.cpp aboutdialog.ui
+    updatechecker.cpp updatechecker.h
     videoparametersdialog.cpp videoparametersdialog.ui
     chromadecoderconfigdialog.cpp chromadecoderconfigdialog.ui
     tbcsource.cpp
@@ -68,7 +69,7 @@ target_include_directories(ld-analyse PRIVATE
 )
 
 target_link_libraries(ld-analyse PRIVATE
-    Qt::Core Qt::Gui Qt::Widgets Qt::Svg
+    Qt::Core Qt::Gui Qt::Widgets Qt::Svg Qt::Network
     lddecode-library lddecode-chroma
 )
 add_executable(tbc-efm-handler

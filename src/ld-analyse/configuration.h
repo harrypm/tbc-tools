@@ -79,6 +79,14 @@ public:
     void setExportBoundaryThickness(qint32 exportBoundaryThickness);
     qint32 getExportBoundaryThickness(void);
 
+    // Get and set methods - update checker
+    void setUpdateCheckEnabled(bool updateCheckEnabled);
+    bool getUpdateCheckEnabled(void);
+    void setLastUpdateCheckTimestamp(QString lastUpdateCheckTimestamp);
+    QString getLastUpdateCheckTimestamp(void);
+    void setSkippedUpdateVersion(QString skippedUpdateVersion);
+    QString getSkippedUpdateVersion(void);
+
 signals:
 
 public slots:
@@ -120,12 +128,20 @@ private:
         qint32 exportBoundaryThickness;
     };
 
+    // Update checker options
+    struct UpdateCheck {
+        bool enabled;                     // Master toggle for the weekly automatic check
+        QString lastCheckTimestamp;       // ISO-8601 UTC of the last attempted check (empty = never)
+        QString skippedVersion;           // Normalised version the user dismissed (empty = none)
+    };
+
     // Overall settings structure
     struct Settings {
         qint32 version;
         Directories directories;
         Windows windows;
         ViewOptions viewOptions;
+        UpdateCheck updateCheck;
     } settings;
 
     void setDefault(void);

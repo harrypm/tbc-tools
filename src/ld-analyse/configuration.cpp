@@ -81,6 +81,13 @@ void Configuration::writeConfiguration(void)
     configuration->setValue("exportBoundaryThickness", settings.viewOptions.exportBoundaryThickness);
     configuration->endGroup();
 
+    // Update checker
+    configuration->beginGroup("updateCheck");
+    configuration->setValue("enabled", settings.updateCheck.enabled);
+    configuration->setValue("lastCheckTimestamp", settings.updateCheck.lastCheckTimestamp);
+    configuration->setValue("skippedVersion", settings.updateCheck.skippedVersion);
+    configuration->endGroup();
+
     // Sync the settings with disk
     tbcDebugStream() << "Configuration::writeConfiguration(): Writing configuration to disk";
     configuration->sync();
@@ -128,6 +135,13 @@ void Configuration::readConfiguration(void)
     if (settings.viewOptions.exportBoundaryThickness < 1) settings.viewOptions.exportBoundaryThickness = 1;
     if (settings.viewOptions.exportBoundaryThickness > 8) settings.viewOptions.exportBoundaryThickness = 8;
     configuration->endGroup();
+
+    // Update checker (additive keys - older config files fall back to defaults)
+    configuration->beginGroup("updateCheck");
+    settings.updateCheck.enabled = configuration->value("enabled", true).toBool();
+    settings.updateCheck.lastCheckTimestamp = configuration->value("lastCheckTimestamp", QString()).toString();
+    settings.updateCheck.skippedVersion = configuration->value("skippedVersion", QString()).toString();
+    configuration->endGroup();
 }
 
 void Configuration::setDefault(void)
@@ -162,6 +176,11 @@ void Configuration::setDefault(void)
     settings.viewOptions.resizeFrameWithWindow = true;
     settings.viewOptions.showExportBoundary = true;
     settings.viewOptions.exportBoundaryThickness = 4;
+
+    // Update checker
+    settings.updateCheck.enabled = true;
+    settings.updateCheck.lastCheckTimestamp = QString();
+    settings.updateCheck.skippedVersion = QString();
 
     // Write the configuration
     writeConfiguration();
@@ -389,4 +408,35 @@ void Configuration::setExportBoundaryThickness(qint32 exportBoundaryThickness)
 qint32 Configuration::getExportBoundaryThickness(void)
 {
     return settings.viewOptions.exportBoundaryThickness;
+}
+
+// Update checker
+void Configuration::setUpdateCheckEnabled(bool updateCheckEnabled)
+{
+    settings.updateCheck.enabled = updateCheckEnabled;
+}
+
+bool Configuration::getUpdateCheckEnabled(void)
+{
+    return settings.updateCheck.enabled;
+}
+
+void Configuration::setLastUpdateCheckTimestamp(QString lastUpdateCheckTimestamp)
+{
+    settings.updateCheck.lastCheckTimestamp = lastUpdateCheckTimestamp;
+}
+
+QString Configuration::getLastUpdateCheckTimestamp(void)
+{
+    return settings.updateCheck.lastCheckTimestamp;
+}
+
+void Configuration::setSkippedUpdateVersion(QString skippedUpdateVersion)
+{
+    settings.updateCheck.skippedVersion = skippedUpdateVersion;
+}
+
+QString Configuration::getSkippedUpdateVersion(void)
+{
+    return settings.updateCheck.skippedVersion;
 }

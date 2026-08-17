@@ -777,6 +777,7 @@
     </property>
     <addaction name="actionTBC_Tools_Wiki"/>
     <addaction name="separator"/>
+    <addaction name="actionCheck_for_Updates"/>
     <addaction name="actionAbout_ld_analyse"/>
    </widget>
    <widget class="QMenu" name="menuView">
@@ -839,6 +840,20 @@
   <action name="actionAbout_ld_analyse">
    <property name="text">
     <string>About ld-analyse...</string>
+   </property>
+  </action>
+  <action name="actionCheck_for_Updates">
+   <property name="text">
+    <string>Check for Updates...</string>
+   </property>
+   <property name="toolTip">
+    <string>Check GitHub for a newer tbc-tools release</string>
+   </property>
+   <property name="statusTip">
+    <string>Query GitHub for the latest tbc-tools release and link to the release page</string>
+   </property>
+   <property name="whatsThis">
+    <string>Connects to GitHub and compares the latest published release tag against the installed build version, then links to the release page.</string>
    </property>
   </action>
   <action name="actionOpen_TBC_file">
