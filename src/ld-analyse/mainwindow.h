@@ -55,6 +55,7 @@
 #include "metadatastatusdialog.h"
 #include "configuration.h"
 #include "updatechecker.h"
+#include "pluginmanagerdialog.h"
 #include "tbcsource.h"
 
 namespace Ui {
@@ -93,6 +94,7 @@ private slots:
     void on_actionTBC_Tools_Wiki_triggered();
     void on_actionAbout_ld_analyse_triggered();
     void on_actionCheck_for_Updates_triggered();
+    void on_actionPlugins_triggered();
     void on_actionVBI_triggered();
     void on_actionDropout_analysis_triggered();
     void on_actionVisible_Dropout_analysis_triggered();
@@ -295,6 +297,7 @@ private:
     // Update checker
     UpdateChecker *updateChecker = nullptr;
     bool updateCheckSilent = false; // true for the automatic weekly check (suppresses non-update popups)
+    PluginManagerDialog *pluginManagerDialog = nullptr;
     void maybePerformWeeklyUpdateCheck();
     void recordUpdateCheckAttempt();
     void showUpdateAvailableDialog(const QString &latestVersion, const QString &releaseUrl, const QString &releaseName);

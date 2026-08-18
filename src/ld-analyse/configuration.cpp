@@ -88,6 +88,16 @@ void Configuration::writeConfiguration(void)
     configuration->setValue("skippedVersion", settings.updateCheck.skippedVersion);
     configuration->endGroup();
 
+    // CUDA plugin registry
+    configuration->beginGroup("cudaPlugin");
+    configuration->setValue("installedVersion", settings.cudaPlugin.installedVersion);
+    configuration->setValue("releaseTag", settings.cudaPlugin.releaseTag);
+    configuration->setValue("sha256", settings.cudaPlugin.sha256);
+    configuration->setValue("enabled", settings.cudaPlugin.enabled);
+    configuration->setValue("trusted", settings.cudaPlugin.trusted);
+    configuration->setValue("installPath", settings.cudaPlugin.installPath);
+    configuration->endGroup();
+
     // Sync the settings with disk
     tbcDebugStream() << "Configuration::writeConfiguration(): Writing configuration to disk";
     configuration->sync();
@@ -142,6 +152,16 @@ void Configuration::readConfiguration(void)
     settings.updateCheck.lastCheckTimestamp = configuration->value("lastCheckTimestamp", QString()).toString();
     settings.updateCheck.skippedVersion = configuration->value("skippedVersion", QString()).toString();
     configuration->endGroup();
+
+    // CUDA plugin registry (additive keys - older config files fall back to defaults)
+    configuration->beginGroup("cudaPlugin");
+    settings.cudaPlugin.installedVersion = configuration->value("installedVersion", QString()).toString();
+    settings.cudaPlugin.releaseTag = configuration->value("releaseTag", QString()).toString();
+    settings.cudaPlugin.sha256 = configuration->value("sha256", QString()).toString();
+    settings.cudaPlugin.enabled = configuration->value("enabled", false).toBool();
+    settings.cudaPlugin.trusted = configuration->value("trusted", false).toBool();
+    settings.cudaPlugin.installPath = configuration->value("installPath", QString()).toString();
+    configuration->endGroup();
 }
 
 void Configuration::setDefault(void)
@@ -181,6 +201,14 @@ void Configuration::setDefault(void)
     settings.updateCheck.enabled = true;
     settings.updateCheck.lastCheckTimestamp = QString();
     settings.updateCheck.skippedVersion = QString();
+
+    // CUDA plugin registry
+    settings.cudaPlugin.installedVersion = QString();
+    settings.cudaPlugin.releaseTag = QString();
+    settings.cudaPlugin.sha256 = QString();
+    settings.cudaPlugin.enabled = false;
+    settings.cudaPlugin.trusted = false;
+    settings.cudaPlugin.installPath = QString();
 
     // Write the configuration
     writeConfiguration();
@@ -439,4 +467,65 @@ void Configuration::setSkippedUpdateVersion(QString skippedUpdateVersion)
 QString Configuration::getSkippedUpdateVersion(void)
 {
     return settings.updateCheck.skippedVersion;
+}
+
+// CUDA plugin registry
+void Configuration::setCudaPluginInstalledVersion(QString version)
+{
+    settings.cudaPlugin.installedVersion = version;
+}
+
+QString Configuration::getCudaPluginInstalledVersion(void)
+{
+    return settings.cudaPlugin.installedVersion;
+}
+
+void Configuration::setCudaPluginReleaseTag(QString tag)
+{
+    settings.cudaPlugin.releaseTag = tag;
+}
+
+QString Configuration::getCudaPluginReleaseTag(void)
+{
+    return settings.cudaPlugin.releaseTag;
+}
+
+void Configuration::setCudaPluginSha256(QString sha256)
+{
+    settings.cudaPlugin.sha256 = sha256;
+}
+
+QString Configuration::getCudaPluginSha256(void)
+{
+    return settings.cudaPlugin.sha256;
+}
+
+void Configuration::setCudaPluginEnabled(bool enabled)
+{
+    settings.cudaPlugin.enabled = enabled;
+}
+
+bool Configuration::getCudaPluginEnabled(void)
+{
+    return settings.cudaPlugin.enabled;
+}
+
+void Configuration::setCudaPluginTrusted(bool trusted)
+{
+    settings.cudaPlugin.trusted = trusted;
+}
+
+bool Configuration::getCudaPluginTrusted(void)
+{
+    return settings.cudaPlugin.trusted;
+}
+
+void Configuration::setCudaPluginInstallPath(QString path)
+{
+    settings.cudaPlugin.installPath = path;
+}
+
+QString Configuration::getCudaPluginInstallPath(void)
+{
+    return settings.cudaPlugin.installPath;
 }

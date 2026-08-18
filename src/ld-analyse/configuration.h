@@ -87,6 +87,20 @@ public:
     void setSkippedUpdateVersion(QString skippedUpdateVersion);
     QString getSkippedUpdateVersion(void);
 
+    // Get and set methods - CUDA plugin registry
+    void setCudaPluginInstalledVersion(QString version);
+    QString getCudaPluginInstalledVersion(void);
+    void setCudaPluginReleaseTag(QString tag);
+    QString getCudaPluginReleaseTag(void);
+    void setCudaPluginSha256(QString sha256);
+    QString getCudaPluginSha256(void);
+    void setCudaPluginEnabled(bool enabled);
+    bool getCudaPluginEnabled(void);
+    void setCudaPluginTrusted(bool trusted);
+    bool getCudaPluginTrusted(void);
+    void setCudaPluginInstallPath(QString path);
+    QString getCudaPluginInstallPath(void);
+
 signals:
 
 public slots:
@@ -135,6 +149,16 @@ private:
         QString skippedVersion;           // Normalised version the user dismissed (empty = none)
     };
 
+    // CUDA plugin registry entry (one plugin: the CUDA runtime for nnTransform3D GPU accel)
+    struct CudaPlugin {
+        QString installedVersion;         // Normalised version string (empty = not installed)
+        QString releaseTag;               // GitHub release tag the package came from (e.g. cuda-plugin-v1)
+        QString sha256;                   // Aggregate SHA-256 of the installed package (verification digest)
+        bool enabled;                     // Whether the plugin should be loaded at runtime
+        bool trusted;                     // User-granted trust (must be true before download/load)
+        QString installPath;              // Absolute path where the plugin DLLs/SOs were installed
+    };
+
     // Overall settings structure
     struct Settings {
         qint32 version;
@@ -142,6 +166,7 @@ private:
         Windows windows;
         ViewOptions viewOptions;
         UpdateCheck updateCheck;
+        CudaPlugin cudaPlugin;
     } settings;
 
     void setDefault(void);

@@ -5300,6 +5300,18 @@ void MainWindow::on_actionAbout_ld_analyse_triggered()
     aboutDialog->show();
 }
 
+// Show the CUDA plugin manager
+void MainWindow::on_actionPlugins_triggered()
+{
+    if (!pluginManagerDialog) {
+        pluginManagerDialog = new PluginManagerDialog(this);
+        pluginManagerDialog->setWindowFlag(Qt::Window, true);
+    }
+    pluginManagerDialog->show();
+    pluginManagerDialog->raise();
+    pluginManagerDialog->activateWindow();
+}
+
 // Check for updates - manual trigger from the Help menu
 void MainWindow::on_actionCheck_for_Updates_triggered()
 {

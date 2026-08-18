@@ -32,6 +32,8 @@ set(ld-analyse_SOURCES
     fieldtimingwidget.cpp fieldtimingwidget.h
     aboutdialog.cpp aboutdialog.ui
     updatechecker.cpp updatechecker.h
+    cudapluginmanager.cpp cudapluginmanager.h
+    pluginmanagerdialog.cpp pluginmanagerdialog.h
     videoparametersdialog.cpp videoparametersdialog.ui
     chromadecoderconfigdialog.cpp chromadecoderconfigdialog.ui
     tbcsource.cpp

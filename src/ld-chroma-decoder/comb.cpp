@@ -177,6 +177,29 @@ qint32 getNnIntraOpThreads()
     }
     return value;
 }
+// Candidate directories where the opt-in CUDA plugin (a runtime package of the
+// CUDA 11.8 + cuDNN 8.9 DLLs/SOs + the ORT CUDA EP provider library) may be
+// installed. Searched front-to-back; the first dir that contains the provider
+// library wins. Modelled on resolveTeletextVendorDirectory()'s app-relative
+// search. An explicit TBC_CUDA_PLUGIN_DIR env var wins over all defaults so
+// power users / CI can point at a staged plugin without installing it.
+QStringList cudaPluginCandidateDirectories()
+{
+    QStringList dirs;
+    const QString envDir = qEnvironmentVariable("TBC_CUDA_PLUGIN_DIR").trimmed();
+    if (!envDir.isEmpty()) {
+        dirs.append(QDir::cleanPath(envDir));
+    }
+    const QString appDir = QCoreApplication::applicationDirPath();
+    if (!appDir.isEmpty()) {
+        dirs.append(QDir(appDir).filePath(QStringLiteral("plugins/cuda")));
+        dirs.append(QDir(appDir).filePath(QStringLiteral("cuda-plugin")));
+    }
+    dirs.removeAll(QString());
+    dirs.removeDuplicates();
+    return dirs;
+}
+
 bool ensureCudaDriverLoaded(QString &errorMessage)
 {
 #ifdef __linux__
@@ -247,6 +270,104 @@ bool ensureCudaDriverLoaded(QString &errorMessage)
     return true;
 }
 
+// On Linux, ORT loads libonnxruntime_providers_cuda.so itself via dlopen. That
+// SO transitively needs libcudart/libcufft/libcublas/libcudnn, which on a clean
+// machine are not on the loader search path. glibc caches LD_LIBRARY_PATH at
+// startup, so setenv() after startup does not help. The reliable approach: dlopen
+// each .so in the plugin dir by full path with RTLD_NOW | RTLD_GLOBAL before ORT
+// resolves the CUDA EP, so the provider SO's DT_NEEDED entries resolve from the
+// already-globally-loaded set. ORT's own dlopen("libonnxruntime_providers_cuda.so")
+// then finds it already loaded (by soname) and does not re-search.
+bool ensureLinuxOnnxCudaProviderLoaded(QString &errorMessage)
+{
+#ifdef __linux__
+    static std::once_flag pluginLoadOnce;
+    static bool pluginReady = false;
+    static QString pluginError;
+    static bool attempted = false;
+
+    if (attempted) {
+        if (!pluginReady) {
+            errorMessage = pluginError;
+        }
+        return pluginReady;
+    }
+
+    std::call_once(pluginLoadOnce, []() {
+        attempted = true;
+        const QStringList pluginDirs = cudaPluginCandidateDirectories();
+        QString resolvedPluginDir;
+        QString providerSoPath;
+        constexpr const char *kProviderSo = "libonnxruntime_providers_cuda.so";
+        for (const QString &dir : pluginDirs) {
+            const QDir pluginDir(dir);
+            const QString candidate = pluginDir.filePath(QString::fromUtf8(kProviderSo));
+            if (QFileInfo::exists(candidate)) {
+                resolvedPluginDir = dir;
+                providerSoPath = candidate;
+                break;
+            }
+        }
+        if (providerSoPath.isEmpty()) {
+            // No plugin installed. Not an error -- ORT will fall back to CPU or
+            // find the provider via its own search path (ONNXRUNTIME_ROOT/lib).
+            pluginReady = true;
+            return;
+        }
+
+        // Dlopen the CUDA runtime .so's in the plugin dir with RTLD_GLOBAL so
+        // the provider SO's transitive deps resolve. Scan in dependency order:
+        // cudart first, then cufft/cublas/cudnn, then the provider last.
+        const QStringList runtimeSonamePrefixes = {
+            QStringLiteral("libcudart.so"),
+            QStringLiteral("libcufft.so"),
+            QStringLiteral("libcublasLt.so"),
+            QStringLiteral("libcublas.so"),
+            QStringLiteral("libcudnn_ops_infer.so"),
+            QStringLiteral("libcudnn_cnn_infer.so"),
+            QStringLiteral("libcudnn.so"),
+        };
+        const QDir pluginDir(resolvedPluginDir);
+        const QFileInfoList entries = pluginDir.entryInfoList(QDir::Files | QDir::NoSymLinks, QDir::Name);
+        for (const QString &prefix : runtimeSonamePrefixes) {
+            for (const QFileInfo &entry : entries) {
+                const QString name = entry.fileName();
+                if (name.startsWith(prefix)) {
+                    dlerror();
+                    void *handle = dlopen(entry.absoluteFilePath().toUtf8().constData(), RTLD_NOW | RTLD_GLOBAL);
+                    if (handle == nullptr) {
+                        const char *msg = dlerror();
+                        pluginError = QStringLiteral("failed to load CUDA plugin %1: %2")
+                            .arg(name, QString::fromUtf8(msg != nullptr ? msg : "unknown dlopen error"));
+                        return;
+                    }
+                    break; // one match per prefix
+                }
+            }
+        }
+        // Finally load the ORT CUDA EP provider itself.
+        dlerror();
+        void *providerHandle = dlopen(providerSoPath.toUtf8().constData(), RTLD_NOW | RTLD_GLOBAL);
+        if (providerHandle == nullptr) {
+            const char *msg = dlerror();
+            pluginError = QStringLiteral("failed to load ONNX Runtime CUDA provider from %1: %2")
+                .arg(providerSoPath, QString::fromUtf8(msg != nullptr ? msg : "unknown dlopen error"));
+            return;
+        }
+        tbcDebugStream() << "ensureLinuxOnnxCudaProviderLoaded(): loaded CUDA plugin from" << resolvedPluginDir;
+        pluginReady = true;
+    });
+
+    if (!pluginReady) {
+        errorMessage = pluginError;
+    }
+    return pluginReady;
+#else
+    Q_UNUSED(errorMessage)
+    return true;
+#endif
+}
+
 bool ensureWindowsOnnxCudaProviderLoaded(QString &errorMessage)
 {
 #ifdef _WIN32
@@ -310,22 +431,45 @@ bool ensureWindowsOnnxCudaProviderLoaded(QString &errorMessage)
                 }
             }
 
+            // For a plugin directory, add it to the DLL search path so the
+            // provider DLL's transitive CUDA runtime imports (cudart64_110,
+            // cublas64_11, cufft64_10, cudnn64_8, ...) resolve from the plugin
+            // dir rather than only the exe dir / system dirs. SetDllDirectoryW
+            // is process-global and applies to subsequent LoadLibrary calls +
+            // their transitive DT_NEEDED resolution. Reset to nullptr after so
+            // we don't permanently alter the process search path.
+            if (!directory.isEmpty()) {
+                SetDllDirectoryW(reinterpret_cast<LPCWSTR>(directory.utf16()));
+            }
+
             QString sharedError;
             if (!tryLoadLibrary(sharedPath, sharedError)) {
                 pairError = QStringLiteral("failed to load %1: %2").arg(sharedPath, sharedError);
+                if (!directory.isEmpty()) SetDllDirectoryW(nullptr);
                 return false;
             }
 
             QString cudaError;
             if (!tryLoadLibrary(cudaPath, cudaError)) {
                 pairError = QStringLiteral("failed to load %1: %2").arg(cudaPath, cudaError);
+                if (!directory.isEmpty()) SetDllDirectoryW(nullptr);
                 return false;
             }
 
+            if (!directory.isEmpty()) SetDllDirectoryW(nullptr);
             return true;
         };
 
         QStringList candidateDirectories;
+        // Plugin dirs first: if a CUDA plugin is installed there, its provider
+        // DLL + transitive CUDA runtime DLLs resolve from the plugin dir via
+        // SetDllDirectoryW (applied inside tryLoadProviderPair for a non-empty
+        // plugin dir). This is the opt-in GPU path.
+        const QStringList pluginDirs = cudaPluginCandidateDirectories();
+        for (const QString &dir : pluginDirs) {
+            candidateDirectories.append(dir);
+        }
+
         const QString appDir = QCoreApplication::applicationDirPath();
         if (!appDir.isEmpty()) {
             candidateDirectories.append(appDir);
@@ -371,6 +515,9 @@ bool appendCudaExecutionProvider(Ort::SessionOptions &options, QString &errorMes
         return false;
     }
     if (!ensureWindowsOnnxCudaProviderLoaded(errorMessage)) {
+        return false;
+    }
+    if (!ensureLinuxOnnxCudaProviderLoaded(errorMessage)) {
         return false;
     }
 
