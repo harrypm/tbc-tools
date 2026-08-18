@@ -94,7 +94,7 @@ private slots:
     void on_actionTBC_Tools_Wiki_triggered();
     void on_actionAbout_ld_analyse_triggered();
     void on_actionCheck_for_Updates_triggered();
-    void on_actionNnTransform3D_Cuda_triggered();
+    void on_actionPluginManager_triggered();
     void on_actionVBI_triggered();
     void on_actionDropout_analysis_triggered();
     void on_actionVisible_Dropout_analysis_triggered();

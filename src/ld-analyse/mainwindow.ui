@@ -784,7 +784,7 @@
     <property name="title">
      <string>Plugins</string>
     </property>
-    <addaction name="actionNnTransform3D_Cuda"/>
+    <addaction name="actionPluginManager"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -849,15 +849,15 @@
     <string>About ld-analyse...</string>
    </property>
   </action>
-  <action name="actionNnTransform3D_Cuda">
+  <action name="actionPluginManager">
    <property name="text">
-    <string>nnTransform3D CUDA...</string>
+    <string>Plugin Manager...</string>
    </property>
    <property name="toolTip">
-    <string>Manage the CUDA runtime plugin for nnTransform3D GPU acceleration</string>
+    <string>Open the Plugin Manager to view and manage available runtime plugins</string>
    </property>
    <property name="statusTip">
-    <string>Install, update, or remove the opt-in CUDA runtime plugin for nnTransform3D</string>
+    <string>Open the Plugin Manager (CUDA runtime plugin for nnTransform3D, and others)</string>
    </property>
   </action>
   <action name="actionCheck_for_Updates">

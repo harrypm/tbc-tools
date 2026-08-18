@@ -185,14 +185,41 @@ void CudaPluginManager::handleReleaseReply(QNetworkReply *reply)
     m_requestInFlight = false;
     reply->deleteLater();
 
-    if (reply->error() != QNetworkReply::NoError) {
-        emit releaseCheckFailed(tr("Network error: %1").arg(reply->errorString()));
+    // Check the HTTP status code first so we can give a clear, actionable
+    // message instead of Qt's terse "server replied:" errorString. The
+    // /releases/latest endpoint returns 404 when the repo has no published
+    // releases yet (the common case before the first cuda-plugin-vX release
+    // is published by the publish_cuda_plugin workflow).
+    const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (statusCode == 404) {
+        emit releaseCheckFailed(
+            tr("No CUDA plugin release has been published yet on %1/%2. "
+               "A maintainer needs to run the \"Publish CUDA plugin\" workflow "
+               "to publish a cuda-plugin-vX release before the plugin can be installed.")
+                .arg(cacheRepositoryOwner, cacheRepositoryName));
         return;
     }
-
-    const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (statusCode == 403) {
+        // GitHub's unauthenticated API rate limit (60 req/hr) or an abuse
+        // detection trigger. The reply body usually contains the reason.
+        const QByteArray body = reply->readAll();
+        QString detail;
+        QJsonParseError parseError;
+        const QJsonDocument doc = QJsonDocument::fromJson(body, &parseError);
+        if (parseError.error == QJsonParseError::NoError && doc.isObject()) {
+            detail = doc.object().value(QStringLiteral("message")).toString();
+        }
+        emit releaseCheckFailed(
+            tr("GitHub API rate limit reached (HTTP 403). Try again later.%1")
+                .arg(detail.isEmpty() ? QString() : QStringLiteral("\n%1").arg(detail)));
+        return;
+    }
     if (statusCode != 200) {
         emit releaseCheckFailed(tr("GitHub returned HTTP status %1.").arg(statusCode));
+        return;
+    }
+    if (reply->error() != QNetworkReply::NoError) {
+        emit releaseCheckFailed(tr("Network error: %1").arg(reply->errorString()));
         return;
     }
 
