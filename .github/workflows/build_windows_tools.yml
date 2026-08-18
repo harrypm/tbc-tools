@@ -271,28 +271,6 @@ jobs:
             Get-ChildItem -Path $onnxLibDir -Filter "onnxruntime_providers_*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination release\\
           }
 
-      - name: Pull + bundle CUDA 11.8 + cuDNN 8.9 runtime DLLs (x86_64 only)
-        # onnxruntime_providers_cuda.dll (bundled above for x86_64) directly imports
-        # cudart64_110.dll, cublas64_11.dll, cublasLt64_11.dll, cufft64_10.dll and
-        # cudnn64_8.dll; cudnn64_8.dll then lazy-loads the cudnn_*_infer64_8.dll
-        # sub-libraries. Without these next to the exe, LoadLibrary fails on a clean
-        # Windows machine and ORT silently falls back to the CPU EP (no GPU accel).
-        # Pull the pre-staged set from the dedicated tbc-tools-ci-cache repo (sourced
-        # from NVIDIA's public nvidia-*-cu11 PyPI wheels, SHA256-verified) so the
-        # Windows x64 build does not re-download ~1.6 GB from PyPI each run. arm64
-        # uses CPU-only ONNX Runtime and is unaffected.
-        if: matrix.arch == 'x86_64'
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/windows-cuda-runtime.sh pull --out ./win-cuda-cache
-          bash scripts/windows-cuda-runtime.sh verify --out ./win-cuda-cache
-          cp -a win-cuda-cache/dlls/*.dll release/
-          mkdir -p release/LICENSES
-          cp -a win-cuda-cache/LICENSES/. release/LICENSES/ 2>/dev/null || true
-          echo "Bundled CUDA 11.8 + cuDNN 8.9 runtime DLLs into release/"
-          ls -la release/cudart64_110.dll release/cublas64_11.dll release/cudnn64_8.dll
-
       - name: Copy Qt plugins to release directory
         run: Copy-Item -Recurse -Exclude *.pdb -Path build\\vcpkg_installed\\${{ matrix.vcpkg_triplet }}\\Qt6\\plugins\\* -Destination release\\
 
@@ -356,9 +334,6 @@ jobs:
 
       - name: Copy license files to release directory
         run: |
-          # -Force: the x86_64 CUDA runtime DLL bundle step above pre-creates
-          # release\LICENSES for the NVIDIA copyright files; without -Force this
-          # throws "item already exists" on x86_64. Idempotent on arm64 (creates it).
           New-Item -ItemType Directory -Force -Path release\\LICENSES
           "brotli", `
           "bzip2", `

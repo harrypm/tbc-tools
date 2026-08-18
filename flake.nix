@@ -119,6 +119,70 @@
         dirtySuffix = if self ? dirtyRev then "-dirty" else "";
         branch = if self ? ref then self.ref else "nix";
         nixCommit = "${shortRev}${dirtySuffix}";
+        # mkTbcTools: single derivation factory. withCuda=false (default release,
+        # CI test/release jobs) builds CPU-only - no nvcc, no CUDA buildInputs,
+        # -DLDCHROMA_ENABLE_CUDA=OFF - so default `nix build .#` skips CUDA kernel
+        # compilation and the pinned CUDA 11.8 closure restore. withCuda=true
+        # (packages.cuda, used only by the CUDA-plugin publish job) enables the
+        # legacy custom-kernel build + CUDA toolchain. Both still link the ORT GPU
+        # prebuilt so the ORT CUDA EP can be loaded at runtime when the CUDA plugin
+        # (runtime DLLs/SOs) is present; withCuda=false simply does not *compile*
+        # the nnTransform3D_kernel.cu custom kernel (Path 2), consistent with how
+        # macOS/non-CUDA builds already behave.
+        mkTbcTools = { withCuda }:
+          pkgs.stdenv.mkDerivation {
+            pname = "tbc-tools";
+            version = packageVersion;
+            src = pkgs.lib.cleanSourceWith {
+              src = ./.;
+              filter = path: type:
+                let
+                  base = builtins.baseNameOf path;
+                in
+                  !(base == ".git" || base == "build" || base == "result");
+            };
+
+            nativeBuildInputs = with pkgs; [
+              cmake
+              ninja
+              pkg-config
+              qt6.wrapQtAppsHook
+            ] ++ pkgs.lib.optionals (enableCuda && withCuda) [
+              cudaPackages.cuda_nvcc
+            ];
+
+            buildInputs = with pkgs; [
+              qt6.qtbase
+              qt6.qtsvg
+              fftw
+              flacPackage
+              ffmpeg
+              sqlite
+              libGL
+              onnxruntimePackage
+            ] ++ pkgs.lib.optionals (enableCuda && withCuda) [
+              cudaPackages.cudatoolkit
+              cudaPackages.cuda_cudart
+              cudaPackages.libcufft
+              cudaPackages.libcurand
+              cudaPackages.libcublas
+              cudaCudnnPackage
+            ];
+
+            cmakeBuildType = "Release";
+            cmakeFlags = [
+              "-DCMAKE_BUILD_TYPE=Release"
+              "-DEZPWD_DIR=${ezpwdSrc}/c++"
+              "-DAPP_BRANCH=${branch}"
+              "-DAPP_COMMIT=${nixCommit}"
+              "-DLDCHROMA_ENABLE_CUDA=${if withCuda then "ON" else "OFF"}"
+            ] ++ pkgs.lib.optionals (isLinux || isDarwin) [
+              "-DONNXRUNTIME_ROOT=${onnxruntimePackage}"
+            ] ++ pkgs.lib.optionals (enableCuda && withCuda) [
+              "-DCUDAToolkit_ROOT=${cudaPackages.cudatoolkit}"
+              "-DCMAKE_CUDA_HOST_COMPILER=${cudaHostCompiler}/bin/g++"
+            ];
+          };
       in
       assert pkgs.lib.assertMsg
         (!enableCuda || pkgs.lib.versionAtLeast cudaPackages.cudatoolkit.version "11.8")
@@ -141,63 +205,11 @@
         "CUDA toolkit must be 11.8.x for GTX-1000-series (Pascal) support — got ${cudaPackages.cudatoolkit.version}";
       {
         packages.ffmpeg = pkgs.ffmpeg;
-        packages.default = pkgs.stdenv.mkDerivation {
-          pname = "tbc-tools";
-          version = packageVersion;
-          src = pkgs.lib.cleanSourceWith {
-            src = ./.;
-            filter = path: type:
-              let
-                base = builtins.baseNameOf path;
-              in
-                !(base == ".git" || base == "build" || base == "result");
-          };
-
-          nativeBuildInputs = with pkgs; [
-            cmake
-            ninja
-            pkg-config
-            qt6.wrapQtAppsHook
-          ] ++ pkgs.lib.optionals enableCuda [
-            cudaPackages.cuda_nvcc
-          ];
-
-          buildInputs = with pkgs; [
-            qt6.qtbase
-            qt6.qtsvg
-            fftw
-            flacPackage
-            ffmpeg
-            sqlite
-            libGL
-            onnxruntimePackage
-          ] ++ pkgs.lib.optionals enableCuda [
-            cudaPackages.cudatoolkit
-            cudaPackages.cuda_cudart
-            cudaPackages.libcufft
-            cudaPackages.libcurand
-            cudaPackages.libcublas
-            cudaCudnnPackage
-          ];
-
-          cmakeBuildType = "Release";
-          cmakeFlags = [
-            "-DCMAKE_BUILD_TYPE=Release"
-            "-DEZPWD_DIR=${ezpwdSrc}/c++"
-            "-DAPP_BRANCH=${branch}"
-            "-DAPP_COMMIT=${nixCommit}"
-          ] ++ pkgs.lib.optionals isDarwin [
-            "-DLDCHROMA_ENABLE_CUDA=OFF"
-            "-DONNXRUNTIME_ROOT=${onnxruntimePackage}"
-          ] ++ pkgs.lib.optionals isLinux [
-            "-DONNXRUNTIME_ROOT=${onnxruntimePackage}"
-          ] ++ pkgs.lib.optionals enableCuda [
-            "-DCUDAToolkit_ROOT=${cudaPackages.cudatoolkit}"
-            "-DCMAKE_CUDA_HOST_COMPILER=${cudaHostCompiler}/bin/g++"
-          ] ++ pkgs.lib.optionals (isLinux && !enableCuda) [
-            "-DLDCHROMA_ENABLE_CUDA=OFF"
-          ];
-        };
+        packages.default = mkTbcTools { withCuda = false; };
+        # CUDA-enabled build (legacy custom kernel + CUDA toolchain). Only
+        # available where the pinned CUDA 11.8 closure exists (Linux x86_64);
+        # used by the CUDA-plugin publish CI job, not by default releases.
+        packages.cuda = if enableCuda then mkTbcTools { withCuda = true; } else null;
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [

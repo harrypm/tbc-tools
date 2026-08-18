@@ -173,23 +173,15 @@ LD_ANALYSE_REQUIRED_SNIPPETS = (
 TBC_VIDEO_EXPORT_REQUIRED_SNIPPETS = (
     "default=FieldOrder.AUTO",
 )
-# Linux x86_64 CI (build_linux_tools.yml build-tbc-tools + tests.yml full-build-test)
-# must self-serve the pinned CUDA 11.8 closure from the dedicated tbc-tools-ci-cache
-# repo via scripts/cuda-closure-cache.sh pull+restore, so cache.nixos.org GC or the
-# Nixpkgs 25.05 removal of cudaPackages_11_8 cannot break GTX-1000-series CUDA builds.
-# The restore is best-effort (continue-on-error) with a cache.nixos.org fallback, so
-# the contract only requires the step + commands to be present, not a hard failure.
-LINUX_CUDA_CACHE_REQUIRED_SNIPPETS = (
-    "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache",
-    "bash scripts/cuda-closure-cache.sh pull",
-    "bash scripts/cuda-closure-cache.sh restore",
-    "tbc-tools-ci-cache",
-)
-TESTS_CUDA_CACHE_REQUIRED_SNIPPETS = (
-    "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache",
-    "bash scripts/cuda-closure-cache.sh pull",
-    "bash scripts/cuda-closure-cache.sh restore",
-)
+# CUDA is stripped from default releases (flake.nix packages.default builds with
+# -DLDCHROMA_ENABLE_CUDA=OFF), so the default Linux/Windows/tests CI jobs no
+# longer restore the CUDA closure or bundle CUDA runtime DLLs. GPU acceleration
+# for nnTransform3D is an opt-in runtime plugin (a CUDA plugin package published
+# to tbc-tools-ci-cache Releases; Phase 4 adds the plugin-publish job + a
+# contract for it). The CUDA closure cache script (scripts/cuda-closure-cache.sh)
+# and Windows CUDA runtime script (scripts/windows-cuda-runtime.sh) remain
+# required infrastructure for the plugin-publish job; their content is still
+# validated below (require-sigs + pinned wheel versions).
 # Windows arm64 CI must pre-fetch gas-preprocessor.pl into the vcpkg downloads
 # dir (SHA512-validated, from CDN mirrors) so a raw.githubusercontent.com HTTP
 # 429 / outage cannot fail the arm64 ffmpeg build. The vcpkg ffmpeg port only
@@ -204,28 +196,6 @@ WINDOWS_GAS_PREPROCESSOR_REQUIRED_SNIPPETS = (
     "raw.githubusercontent.com/FFmpeg/gas-preprocessor",
     "Get-FileHash -Algorithm SHA512",
     "if: matrix.arch == 'arm64'",
-)
-# Windows x86_64 CI must bundle the CUDA 11.8 + cuDNN 8.9 runtime DLLs next to
-# onnxruntime_providers_cuda.dll so the ORT CUDA EP loads on a clean NVIDIA
-# machine (otherwise LoadLibrary fails and ORT silently falls back to CPU --
-# no GPU accel). arm64 uses CPU-only ONNX Runtime and is unaffected. The DLLs
-# are pulled from tbc-tools-ci-cache (mirrored from nvidia-*-cu11 PyPI wheels,
-# SHA256-verified by scripts/windows-cuda-runtime.sh). The ~1.6 GB set is the
-# inherent cost of shipping a working ORT CUDA EP; the release-size cost is
-# accepted so GPU acceleration works out-of-the-box.
-WINDOWS_CUDA_RUNTIME_REQUIRED_SNIPPETS = (
-    "Pull + bundle CUDA 11.8 + cuDNN 8.9 runtime DLLs (x86_64 only)",
-    "bash scripts/windows-cuda-runtime.sh pull",
-    "bash scripts/windows-cuda-runtime.sh verify",
-    "if: matrix.arch == 'x86_64'",
-    "release\\\\cudart64_110.dll",
-    "release\\\\cublas64_11.dll",
-    "release\\\\cublasLt64_11.dll",
-    "release\\\\cufft64_10.dll",
-    "release\\\\cudnn64_8.dll",
-    "release\\\\cudnn_cnn_infer64_8.dll",
-    "release\\\\cudnn_ops_infer64_8.dll",
-    "release\\\\cudnn_adv_infer64_8.dll",
 )
 # The fetch script must pin the exact NVIDIA wheel versions it pulls from, so a
 # silent upstream wheel bump (e.g. cuDNN 8.x -> 9.x, which is ABI-incompatible
@@ -376,13 +346,6 @@ def main() -> int:
     check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_is_tff", errors)
     check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_top_pad_lines", errors)
 
-    # Linux x86_64 CI must self-serve the pinned CUDA 11.8 closure from
-    # tbc-tools-ci-cache (best-effort, with cache.nixos.org fallback).
-    for snippet in LINUX_CUDA_CACHE_REQUIRED_SNIPPETS:
-        check_contains(LINUX_WORKFLOW, snippet, errors)
-    for snippet in TESTS_CUDA_CACHE_REQUIRED_SNIPPETS:
-        check_contains(TESTS_WORKFLOW, snippet, errors)
-    # Windows arm64 must pre-fetch gas-preprocessor.pl (insulate from
     # raw.githubusercontent.com 429). Step is gated to arm64 and must appear
     # exactly once in build_windows_tools.yml.
     for snippet in WINDOWS_GAS_PREPROCESSOR_REQUIRED_SNIPPETS:
@@ -394,18 +357,6 @@ def main() -> int:
         errors.append(
             f"{WINDOWS_WORKFLOW}: gas-preprocessor pre-fetch step must appear exactly once "
             f"(arm64 only), found {gp_step_count}"
-        )
-    # Windows x86_64 must pull + bundle the CUDA/cuDNN runtime DLLs (gated to
-    # x86_64; arm64 uses CPU-only ONNX Runtime). The step must appear exactly once.
-    for snippet in WINDOWS_CUDA_RUNTIME_REQUIRED_SNIPPETS:
-        check_contains(WINDOWS_WORKFLOW, snippet, errors)
-    cuda_rt_step_count = WINDOWS_WORKFLOW.read_text(encoding="utf-8").count(
-        "Pull + bundle CUDA 11.8 + cuDNN 8.9 runtime DLLs (x86_64 only)"
-    )
-    if cuda_rt_step_count != 1:
-        errors.append(
-            f"{WINDOWS_WORKFLOW}: CUDA runtime DLL bundle step must appear exactly once "
-            f"(x86_64 only), found {cuda_rt_step_count}"
         )
     # Windows release must bundle the vendored vhs-teletext Python tree
     # (release\vendor\vhs-teletext) so ld-process-vbi's teletext HTML export can
@@ -454,21 +405,6 @@ def main() -> int:
     # "cannot add path ... because it lacks a signature by a trusted key" and
     # CI silently falls back to cache.nixos.org (no insulation).
     check_contains(CUDA_CLOSURE_CACHE_SCRIPT, "--option require-sigs false", errors)
-    # The cache restore step must only appear once in build_linux_tools.yml
-    # (x86_64 CUDA job) -- never in the arm64 job, where enableCuda=false and
-    # restoring an x86_64 closure would fail. Exactly one occurrence.
-    check_count_at_least(
-        LINUX_WORKFLOW, "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache", 1, errors
-    )
-    linux_step_count = LINUX_WORKFLOW.read_text(encoding="utf-8").count(
-        "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache"
-    )
-    if linux_step_count != 1:
-        errors.append(
-            f"{LINUX_WORKFLOW}: CUDA cache restore step must appear exactly once "
-            f"(x86_64 job only), found {linux_step_count}"
-        )
-
     if errors:
         print("CI contract checks failed:")
         for error in errors:

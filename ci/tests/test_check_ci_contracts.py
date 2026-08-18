@@ -266,25 +266,40 @@ class ContractCoverageTests(unittest.TestCase):
             )
             self.assertEqual(errors, [])
 
-    def test_linux_cuda_cache_contract_requires_pull_restore_step(self) -> None:
-        expected = {
-            "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache",
-            "bash scripts/cuda-closure-cache.sh pull",
-            "bash scripts/cuda-closure-cache.sh restore",
-            "tbc-tools-ci-cache",
-        }
-        self.assertTrue(
-            expected.issubset(set(check_ci_contracts.LINUX_CUDA_CACHE_REQUIRED_SNIPPETS))
+    def test_cuda_workflow_step_requirements_removed_from_contract(self) -> None:
+        # CUDA is stripped from default releases (LDCHROMA_ENABLE_CUDA=OFF), so
+        # the contract no longer carries CUDA workflow-step requirements. Guard
+        # against accidental re-addition of the removed tuples.
+        for removed_attr in (
+            "LINUX_CUDA_CACHE_REQUIRED_SNIPPETS",
+            "TESTS_CUDA_CACHE_REQUIRED_SNIPPETS",
+            "WINDOWS_CUDA_RUNTIME_REQUIRED_SNIPPETS",
+        ):
+            self.assertFalse(
+                hasattr(check_ci_contracts, removed_attr),
+                f"{removed_attr} should be removed from the contract (CUDA is now a plugin)",
+            )
+
+    def test_default_linux_workflow_has_no_cuda_closure_restore_step(self) -> None:
+        # The default Linux x86_64 release build is CUDA-off, so it must NOT
+        # restore the CUDA 11.8 closure. Guard against accidental re-addition.
+        content = check_ci_contracts.LINUX_WORKFLOW.read_text(encoding="utf-8")
+        count = content.count("Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache")
+        self.assertEqual(
+            count,
+            0,
+            f"default Linux workflow must not restore the CUDA closure (CUDA is off), found {count}",
         )
 
-    def test_tests_cuda_cache_contract_requires_pull_restore_step(self) -> None:
-        expected = {
-            "Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache",
-            "bash scripts/cuda-closure-cache.sh pull",
-            "bash scripts/cuda-closure-cache.sh restore",
-        }
-        self.assertTrue(
-            expected.issubset(set(check_ci_contracts.TESTS_CUDA_CACHE_REQUIRED_SNIPPETS))
+    def test_tests_workflow_has_no_cuda_closure_restore_step(self) -> None:
+        # The tests workflow builds the default (CUDA-off) package, so it must
+        # NOT restore the CUDA 11.8 closure. Guard against accidental re-addition.
+        content = check_ci_contracts.TESTS_WORKFLOW.read_text(encoding="utf-8")
+        count = content.count("Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache")
+        self.assertEqual(
+            count,
+            0,
+            f"tests workflow must not restore the CUDA closure (CUDA is off), found {count}",
         )
 
     def test_cuda_closure_cache_script_and_tests_workflow_are_required_files(self) -> None:
@@ -297,16 +312,6 @@ class ContractCoverageTests(unittest.TestCase):
         for path in required_paths:
             self.assertTrue(path.exists(), f"required contract file missing: {path}")
 
-    def test_linux_workflow_has_exactly_one_cuda_cache_restore_step(self) -> None:
-        # The restore step must appear exactly once (x86_64 job only) -- never
-        # in the arm64 job where enableCuda=false.
-        content = check_ci_contracts.LINUX_WORKFLOW.read_text(encoding="utf-8")
-        count = content.count("Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache")
-        self.assertEqual(
-            count,
-            1,
-            f"expected exactly one CUDA cache restore step in Linux workflow, found {count}",
-        )
 
     def test_windows_gas_preprocessor_contract_requires_insulation_step(self) -> None:
         expected = {
@@ -343,36 +348,18 @@ class ContractCoverageTests(unittest.TestCase):
             "cuda-closure-cache.sh restore must use --option require-sigs false for the unsigned local cache",
         )
 
-    def test_windows_cuda_runtime_contract_requires_bundle_step(self) -> None:
-        expected = {
-            "Pull + bundle CUDA 11.8 + cuDNN 8.9 runtime DLLs (x86_64 only)",
-            "bash scripts/windows-cuda-runtime.sh pull",
-            "bash scripts/windows-cuda-runtime.sh verify",
-            "if: matrix.arch == 'x86_64'",
-            "release\\\\cudart64_110.dll",
-            "release\\\\cublas64_11.dll",
-            "release\\\\cublasLt64_11.dll",
-            "release\\\\cufft64_10.dll",
-            "release\\\\cudnn64_8.dll",
-            "release\\\\cudnn_cnn_infer64_8.dll",
-            "release\\\\cudnn_ops_infer64_8.dll",
-            "release\\\\cudnn_adv_infer64_8.dll",
-        }
-        self.assertTrue(
-            expected.issubset(set(check_ci_contracts.WINDOWS_CUDA_RUNTIME_REQUIRED_SNIPPETS))
-        )
-
-    def test_windows_workflow_has_exactly_one_cuda_runtime_bundle_step(self) -> None:
-        # The CUDA runtime DLL bundle step is gated to x86_64 and must appear
-        # exactly once in build_windows_tools.yml.
+    def test_default_windows_workflow_has_no_cuda_runtime_bundle_step(self) -> None:
+        # The default Windows x86_64 release is CPU-only-at-runtime (CUDA is an
+        # opt-in plugin), so it must NOT bundle the CUDA runtime DLLs. Guard
+        # against accidental re-addition of the ~1.6 GB bundle step.
         content = check_ci_contracts.WINDOWS_WORKFLOW.read_text(encoding="utf-8")
         count = content.count(
             "Pull + bundle CUDA 11.8 + cuDNN 8.9 runtime DLLs (x86_64 only)"
         )
         self.assertEqual(
             count,
-            1,
-            f"expected exactly one CUDA runtime DLL bundle step in Windows workflow, found {count}",
+            0,
+            f"default Windows workflow must not bundle CUDA runtime DLLs (CPU-only release), found {count}",
         )
 
     def test_windows_cuda_runtime_script_pins_wheel_versions(self) -> None:
