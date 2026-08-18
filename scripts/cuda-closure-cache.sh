@@ -299,7 +299,7 @@ write_readme() {
 tbc-tools CUDA 11.8 closure cache
 =================================
 Pinned source: nixpkgs nixos-24.11 (rev ${NIXPKGS_REV})
-Target: GTX-1000-series (Pascal) CUDA support for ld-decode-tools.
+Target: GTX-1000-series (Pascal) CUDA support for tbc-tools.
 
 This directory is a Nix binary cache (narinfo + nar/ files). Any nar larger
 than 95 MiB was split into chunks under <nar>.parts/ with an index, so the

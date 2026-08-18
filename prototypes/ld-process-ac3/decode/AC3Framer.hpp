@@ -8,7 +8,7 @@
  * to original author. (Copyright (C) 2021-2022)
  * https://bitbucket.org/staffanulfberg/ldaudio/src/master/
  *
- * This file is part of ld-decode-tools.
+ * This file is part of tbc-tools.
  *
  * ld-process-ac3 is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as

@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2026 Simon Inns
  *
- * This file is part of ld-decode-tools.
+ * This file is part of tbc-tools.
  ******************************************************************************/
 
 #include <QApplication>
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
     // Set application name and version
     QCoreApplication::setApplicationName("tbc-audio-align");
-    QCoreApplication::setApplicationVersion(QString("ld-decode-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
+    QCoreApplication::setApplicationVersion(QString("tbc-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
     QCoreApplication::setOrganizationDomain("domesday86.com");
 
     // Set up the command line parser

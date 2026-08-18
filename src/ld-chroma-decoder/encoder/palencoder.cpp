@@ -5,7 +5,7 @@
     ld-chroma-encoder - Composite video encoder
     Copyright (C) 2019-2022 Adam Sampson
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-chroma-encoder is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

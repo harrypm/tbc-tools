@@ -1,5 +1,5 @@
 {
-  description = "ld-decode-tools (Nix flake)";
+  description = "tbc-tools (Nix flake)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -142,7 +142,7 @@
       {
         packages.ffmpeg = pkgs.ffmpeg;
         packages.default = pkgs.stdenv.mkDerivation {
-          pname = "ld-decode-tools";
+          pname = "tbc-tools";
           version = packageVersion;
           src = pkgs.lib.cleanSourceWith {
             src = ./.;

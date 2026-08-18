@@ -2,12 +2,12 @@
 
     navigation.h
 
-    ld-decode-tools TBC library
+    tbc-tools TBC library
     Copyright (C) 2019-2023 Adam Sampson
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
-    ld-decode-tools is free software: you can redistribute it and/or
+    tbc-tools is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as
     published by the Free Software Foundation, either version 3 of the
     License, or (at your option) any later version.

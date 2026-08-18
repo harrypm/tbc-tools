@@ -2,11 +2,11 @@
 
     testfilter.cpp
 
-    ld-decode-tools filter library
+    tbc-tools filter library
     Copyright (C) 2014-5 Chad Page
     Copyright (C) 2019 Adam Sampson
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-chroma-decoder is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

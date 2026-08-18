@@ -5,7 +5,7 @@
     vfs-verifier - Acorn VFS (Domesday) image verifier
     Copyright (C) 2025 Simon Inns
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     This application is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as
@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
     // Set application name and version
     QCoreApplication::setApplicationName("vfs-verifier");
     QCoreApplication::setApplicationVersion(
-            QString("ld-decode-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
+            QString("tbc-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
     QCoreApplication::setOrganizationDomain("domesday86.com");
 
     // Set up the command line parser

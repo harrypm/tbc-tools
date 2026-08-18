@@ -1,12 +1,12 @@
 /******************************************************************************
  * tbcsource.h
- * ld-analyse - TBC output analysis GUI
+ * tbc-analyse - TBC output analysis GUI
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2018-2025 Simon Inns
  * SPDX-FileCopyrightText: 2021-2022 Adam Sampson
  *
- * This file is part of ld-decode-tools.
+ * This file is part of tbc-tools.
  ******************************************************************************/
 
 #ifndef TBCSOURCE_H

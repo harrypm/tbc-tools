@@ -6,7 +6,7 @@
     Copyright (C) 2018-2025 Simon Inns
     Copyright (C) 2019-2020 Adam Sampson
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-dropout-correct is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

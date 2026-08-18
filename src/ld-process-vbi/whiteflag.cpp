@@ -5,7 +5,7 @@
     ld-process-vbi - VBI and IEC NTSC specific processor for ld-decode
     Copyright (C) 2018-2021 Simon Inns
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-process-vbi is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

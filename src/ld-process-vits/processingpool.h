@@ -5,7 +5,7 @@
     ld-process-vits - Vertical Interval Test Signal processing
     Copyright (C) 2020-2025 Simon Inns
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-process-vits is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

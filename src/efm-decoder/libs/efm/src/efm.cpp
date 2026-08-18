@@ -5,7 +5,7 @@
     EFM-library - EFM Frame type classes
     Copyright (C) 2025 Simon Inns
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-efm-decoder is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

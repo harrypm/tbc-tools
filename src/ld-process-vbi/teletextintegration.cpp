@@ -6,7 +6,7 @@
     Copyright (C) 2018-2026 Simon Inns
     Copyright (C) 2026 Harry Munday
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-process-vbi is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

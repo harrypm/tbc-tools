@@ -1,6 +1,6 @@
 /******************************************************************************
  * updatechecker.h
- * ld-analyse - TBC output analysis GUI
+ * tbc-analyse - TBC output analysis GUI
  *
  * SPDX-License-Identifier: GPL-3.0-or-lter
  * SPDX-FileCopyrightText: 2026 Harry Munday

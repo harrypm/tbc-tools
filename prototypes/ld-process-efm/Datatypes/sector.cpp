@@ -5,7 +5,7 @@
     ld-process-efm - EFM data decoder
     Copyright (C) 2019-2022 Simon Inns
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-process-efm is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

@@ -40,12 +40,12 @@ if(NOT REL_PATH MATCHES "^\\.\\." AND
        cmake -DCMAKE_BUILD_TYPE=Release ..
     
     3. Out-of-tree build:
-       mkdir ../ld-decode-tools-build
-       cd ../ld-decode-tools-build
-       cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ../ld-decode-tools")
+       mkdir ../tbc-tools-build
+       cd ../tbc-tools-build
+       cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ../tbc-tools")
 endif()
 
-project(ld-decode-tools)
+project(tbc-tools)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake_modules")
 include(CTest)

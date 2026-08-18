@@ -5,7 +5,7 @@
     efm-decoder-f2 - EFM T-values to F2 Section decoder
     Copyright (C) 2025 Simon Inns
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     This application is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

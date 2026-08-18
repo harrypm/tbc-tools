@@ -1,11 +1,11 @@
 /******************************************************************************
  * efmhandlerdialog.h
- * ld-analyse - Dedicated EFM/AC3 handling workflow GUI
+ * tbc-analyse - Dedicated EFM/AC3 handling workflow GUI
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2026 Simon Inns
  *
- * This file is part of ld-decode-tools.
+ * This file is part of tbc-tools.
  ******************************************************************************/
 
 #ifndef EFMHANDLERDIALOG_H

@@ -1,11 +1,11 @@
 /******************************************************************************
  * sqliteio.cpp
- * ld-decode-tools TBC library
+ * tbc-tools TBC library
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2025 Simon Inns
  *
- * This file is part of ld-decode-tools.
+ * This file is part of tbc-tools.
  ******************************************************************************/
 
 #include "sqliteio.h"

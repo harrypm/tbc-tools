@@ -1,13 +1,13 @@
 /******************************************************************************
  * lddecodemetadata.h
- * ld-decode-tools TBC library
+ * tbc-tools TBC library
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2018-2025 Simon Inns
  * SPDX-FileCopyrightText: 2022 Ryan Holtz
  * SPDX-FileCopyrightText: 2022-2023 Adam Sampson
  *
- * This file is part of ld-decode-tools.
+ * This file is part of tbc-tools.
  ******************************************************************************/
 
 #ifndef LDDECODEMETADATA_H

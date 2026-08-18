@@ -1,12 +1,12 @@
 /******************************************************************************
  * chromadecoderconfigdialog.cpp
- * ld-analyse - TBC output analysis GUI
+ * tbc-analyse - TBC output analysis GUI
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2019-2025 Simon Inns
  * SPDX-FileCopyrightText: 2020-2022 Adam Sampson
  *
- * This file is part of ld-decode-tools.
+ * This file is part of tbc-tools.
  ******************************************************************************/
 
 #include "chromadecoderconfigdialog.h"

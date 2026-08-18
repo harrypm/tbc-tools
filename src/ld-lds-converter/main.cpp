@@ -5,7 +5,7 @@
     ld-lds-converter - 10-bit .lds to FLAC/s16 converter for ld-decode
     Copyright (C) 2019-2026 Simon Inns
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-lds-converter is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as
@@ -461,7 +461,7 @@ int main(int argc, char *argv[])
         tbc::ui::enforceInputWidgetContrast(a);
 
         QCoreApplication::setApplicationName("ld-lds-converter");
-        QCoreApplication::setApplicationVersion(QString("ld-decode-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
+        QCoreApplication::setApplicationVersion(QString("tbc-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
         QCoreApplication::setOrganizationDomain("domesday86.com");
 
         QCommandLineParser parser;
@@ -530,7 +530,7 @@ int main(int argc, char *argv[])
 
     // Set application name and version
     QCoreApplication::setApplicationName("ld-lds-converter");
-    QCoreApplication::setApplicationVersion(QString("ld-decode-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
+    QCoreApplication::setApplicationVersion(QString("tbc-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
     QCoreApplication::setOrganizationDomain("domesday86.com");
 
     // Set up the command line parser

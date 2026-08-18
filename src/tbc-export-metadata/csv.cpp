@@ -5,7 +5,7 @@
     tbc-export-metadata - Export JSON metadata into other formats
     Copyright (C) 2018-2019 Simon Inns
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     tbc-export-metadata is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

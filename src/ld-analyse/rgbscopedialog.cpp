@@ -1,10 +1,10 @@
 /******************************************************************************
  * rgbscopedialog.cpp
- * ld-analyse - TBC output analysis GUI
+ * tbc-analyse - TBC output analysis GUI
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * This file is part of ld-decode-tools.
+ * This file is part of tbc-tools.
  ******************************************************************************/
 
 #include "rgbscopedialog.h"

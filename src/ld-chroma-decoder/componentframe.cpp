@@ -5,7 +5,7 @@
     ld-chroma-decoder - Colourisation filter for ld-decode
     Copyright (C) 2021 Adam Sampson
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-chroma-decoder is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

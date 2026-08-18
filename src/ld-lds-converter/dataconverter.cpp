@@ -5,7 +5,7 @@
     ld-lds-converter - 10-bit to 16-bit .lds converter for ld-decode
     Copyright (C) 2019 Simon Inns
 
-    This file is part of ld-decode-tools.
+    This file is part of tbc-tools.
 
     ld-lds-converter is free software: you can redistribute it and/or
     modify it under the terms of the GNU General Public License as

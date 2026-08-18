@@ -1,11 +1,11 @@
 /******************************************************************************
  * dropoutanalysisdialog.cpp
- * ld-analyse - TBC output analysis GUI
+ * tbc-analyse - TBC output analysis GUI
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2018-2025 Simon Inns
  *
- * This file is part of ld-decode-tools.
+ * This file is part of tbc-tools.
  ******************************************************************************/
 
 #include "dropoutanalysisdialog.h"
