@@ -177,7 +177,7 @@ class ContractCoverageTests(unittest.TestCase):
             "Manual release mode is only allowed from refs/heads/main",
             "Refusing to rebuild by default to prevent stale releases.",
             "Release integrity check failed:",
-            "gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --latest",
+            'gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --latest',
             "tbc-tools_${RELEASE_TAG}_commit.txt",
         }
         self.assertTrue(expected.issubset(set(check_ci_contracts.RELEASE_REQUIRED_SNIPPETS)))
