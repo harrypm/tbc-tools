@@ -1,0 +1,135 @@
+name: "Publish CUDA plugin"
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin_version:
+        description: "Plugin version (e.g. 1.0.0); the release tag will be cuda-plugin-v{version}"
+        required: true
+        default: "1.0.0"
+  push:
+    tags:
+      - "cuda-plugin-v*"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  CACHE_REPOSITORY: "harrypm/tbc-tools-ci-cache"
+  ORT_VERSION: "1.18.1"
+
+jobs:
+  build-and-publish:
+    name: Build + publish CUDA plugin packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+
+      - name: Resolve plugin version + tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.plugin_version }}"
+          else
+            # Tag push: cuda-plugin-v1.0.0 -> version 1.0.0
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#cuda-plugin-v}"
+          fi
+          echo "PLUGIN_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "PLUGIN_TAG=cuda-plugin-v$VERSION" >> "$GITHUB_ENV"
+          echo "Resolved plugin version: $VERSION (tag: cuda-plugin-v$VERSION)"
+
+      - name: Install Nix
+        shell: bash
+        run: |
+          curl -L https://nixos.org/nix/install | sh -s -- --no-daemon --yes
+          echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+          {
+            echo "NIX_CONFIG<<EOF"
+            echo "experimental-features = nix-command flakes"
+            echo "access-tokens = github.com=${{ github.token }}"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache
+        # The cuda-plugin-linux-deps attr needs the CUDA 11.8 closure in the
+        # local Nix store (cuDNN 8.9 .so files come from there). Best-effort
+        # with cache.nixos.org fallback.
+        shell: bash
+        continue-on-error: true
+        run: |
+          set +e
+          bash scripts/cuda-closure-cache.sh pull --out ./cuda-cache
+          pull_rc=$?
+          if [ "$pull_rc" -ne 0 ]; then
+            echo "::warning::CUDA closure pull failed (rc=$pull_rc); falling back to cache.nixos.org."
+            exit 0
+          fi
+          bash scripts/cuda-closure-cache.sh restore --out ./cuda-cache
+          restore_rc=$?
+          if [ "$restore_rc" -ne 0 ]; then
+            echo "::warning::CUDA closure restore failed (rc=$restore_rc); falling back to cache.nixos.org."
+            exit 0
+          fi
+          echo "CUDA 11.8 closure restored."
+
+      - name: Build Linux plugin deps (Nix store .so staging)
+        shell: bash
+        run: |
+          nix build .#cuda-plugin-linux-deps --out-link cuda-deps
+          echo "Staged .so files:"
+          ls -la cuda-deps/
+
+      - name: Build Linux + Windows plugin packages
+        shell: bash
+        run: |
+          bash scripts/cuda-plugin-package.sh build-all \
+            --out ./cuda-plugin-out \
+            --version "$PLUGIN_VERSION" \
+            --deps-dir ./cuda-deps
+          echo "=== outputs ==="
+          ls -la cuda-plugin-out/
+
+      - name: Verify manifest JSON validity
+        shell: bash
+        run: |
+          for manifest in cuda-plugin-out/*-manifest.json; do
+            echo "Checking $manifest"
+            python3 -c "import json; json.load(open('$manifest')); print('  valid JSON, files:', len(json.load(open('$manifest'))['files']))"
+          done
+
+      - name: Publish packages + manifests to tbc-tools-ci-cache Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.CI_CACHE_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          ASSETS=(
+            cuda-plugin-out/tbc-tools-cuda-plugin-linux-x86_64.tar.gz
+            cuda-plugin-out/tbc-cuda-plugin-linux-x86_64-manifest.json
+            cuda-plugin-out/tbc-tools-cuda-plugin-windows-x86_64.zip
+            cuda-plugin-out/tbc-cuda-plugin-windows-x86_64-manifest.json
+          )
+          # Create the release on the cache repo, or upload to an existing one.
+          if gh release create "$PLUGIN_TAG" "${ASSETS[@]}" \
+            --repo "$CACHE_REPOSITORY" \
+            --title "CUDA plugin $PLUGIN_VERSION" \
+            --notes "CUDA 11.8 + cuDNN 8.9 runtime plugin for nnTransform3D GPU acceleration.
+
+          Packages:
+          - tbc-tools-cuda-plugin-linux-x86_64.tar.gz
+          - tbc-tools-cuda-plugin-windows-x86_64.zip
+
+          Each package includes the ORT CUDA EP provider + the trimmed CUDA runtime
+          (cudnn_adv_infer dropped as unused by the conv-only chroma_net_v2 model).
+          SHA-256 verified against the manifest JSON at install time by the GUI plugin manager."; then
+            echo "Created release $PLUGIN_TAG + uploaded assets."
+          else
+            echo "Release $PLUGIN_TAG already exists; uploading assets with --clobber."
+            gh release upload "$PLUGIN_TAG" --repo "$CACHE_REPOSITORY" --clobber "${ASSETS[@]}"
+          fi
+          echo "Published $PLUGIN_TAG to $CACHE_REPOSITORY"

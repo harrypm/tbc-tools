@@ -210,6 +210,26 @@
         # available where the pinned CUDA 11.8 closure exists (Linux x86_64);
         # used by the CUDA-plugin publish CI job, not by default releases.
         packages.cuda = if enableCuda then mkTbcTools { withCuda = true; } else null;
+        # Staged CUDA 11.8 runtime + cuDNN 8.9 .so files for the Linux x86_64
+        # CUDA plugin package. cuDNN 8.9 has no Linux PyPI wheel (only win_amd64),
+        # so the Linux plugin package sources its .so files from the Nix store
+        # (the pinned cudaPackages_11_8 / cudnn_8_9). The publish CI job does
+        # `nix build .#cuda-plugin-linux-deps` and passes the output to
+        # scripts/cuda-plugin-package.sh build-linux --deps-dir. Only the ORT
+        # CUDA EP provider .so is fetched separately (from the ORT GPU prebuilt).
+        packages.cuda-plugin-linux-deps =
+          if enableCuda
+          then pkgs.runCommand "cuda-plugin-linux-deps" { } ''
+            mkdir -p $out
+            cp ${cudaPackages.cuda_cudart.lib}/lib/libcudart.so.11.0 $out/
+            cp ${cudaPackages.libcublas.lib}/lib/libcublas.so.11 $out/
+            cp ${cudaPackages.libcublas.lib}/lib/libcublasLt.so.11 $out/
+            cp ${cudaPackages.libcufft.lib}/lib/libcufft.so.10 $out/
+            cp ${cudaCudnnPackage.lib}/lib/libcudnn.so.8 $out/
+            cp ${cudaCudnnPackage.lib}/lib/libcudnn_cnn_infer.so.8 $out/
+            cp ${cudaCudnnPackage.lib}/lib/libcudnn_ops_infer.so.8 $out/
+          ''
+          else null;
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [

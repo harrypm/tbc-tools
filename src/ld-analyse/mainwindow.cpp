@@ -5300,8 +5300,8 @@ void MainWindow::on_actionAbout_ld_analyse_triggered()
     aboutDialog->show();
 }
 
-// Show the CUDA plugin manager
-void MainWindow::on_actionPlugins_triggered()
+// Show the CUDA plugin manager (Plugins > nnTransform3D CUDA...)
+void MainWindow::on_actionNnTransform3D_Cuda_triggered()
 {
     if (!pluginManagerDialog) {
         pluginManagerDialog = new PluginManagerDialog(this);

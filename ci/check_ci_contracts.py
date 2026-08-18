@@ -13,6 +13,8 @@ RELEASE_WORKFLOW = ROOT / ".github/workflows/release.yml"
 TESTS_WORKFLOW = ROOT / ".github/workflows/tests.yml"
 CUDA_CLOSURE_CACHE_SCRIPT = ROOT / "scripts/cuda-closure-cache.sh"
 WIN_CUDA_RUNTIME_SCRIPT = ROOT / "scripts/windows-cuda-runtime.sh"
+CUDA_PLUGIN_PUBLISH_WORKFLOW = ROOT / ".github/workflows/publish_cuda_plugin.yml"
+CUDA_PLUGIN_PACKAGE_SCRIPT = ROOT / "scripts/cuda-plugin-package.sh"
 WINDOWS_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-windows.txt"
 LINUX_BUILD_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-linux.txt"
 LINUX_PYINSTALLER_SCRIPT = ROOT / "src/tbc-video-export/pyinstaller/build_linux.py"
@@ -206,6 +208,37 @@ WIN_CUDA_RUNTIME_SCRIPT_REQUIRED_SNIPPETS = (
     "nvidia-cufft-cu11|10.9.0.58|",
     "nvidia-cudnn-cu11|8.9.5.29|",
 )
+# The CUDA plugin publish workflow (.github/workflows/publish_cuda_plugin.yml)
+# builds + publishes the opt-in CUDA runtime plugin packages + manifests to
+# tbc-tools-ci-cache Releases under a cuda-plugin-vX tag. It must use the
+# cuda-plugin-package.sh script, build the Nix-store deps for Linux, produce
+# both platform packages + their manifests, and publish via gh release.
+CUDA_PLUGIN_PUBLISH_REQUIRED_SNIPPETS = (
+    "workflow_dispatch:",
+    'cuda-plugin-v*',
+    "bash scripts/cuda-plugin-package.sh build-all",
+    "nix build .#cuda-plugin-linux-deps",
+    "tbc-tools-cuda-plugin-linux-x86_64.tar.gz",
+    "tbc-tools-cuda-plugin-windows-x86_64.zip",
+    "tbc-cuda-plugin-linux-x86_64-manifest.json",
+    "tbc-cuda-plugin-windows-x86_64-manifest.json",
+    "gh release create",
+    "CACHE_REPOSITORY",
+    "CI_CACHE_REPO_TOKEN",
+)
+# The packaging script must pin the same NVIDIA wheel versions + the ORT version,
+# and produce the trimmed 7-file set (cudnn_adv_infer dropped as unused by the
+# conv-only chroma_net_v2.onnx model).
+CUDA_PLUGIN_PACKAGE_SCRIPT_REQUIRED_SNIPPETS = (
+    "nvidia-cuda-runtime-cu11|11.8.89",
+    "nvidia-cublas-cu11|11.11.3.6",
+    "nvidia-cufft-cu11|10.9.0.58",
+    "nvidia-cudnn-cu11|8.9.5.29",
+    "ORT_VERSION=",
+    "libonnxruntime_providers_cuda.so",
+    "onnxruntime_providers_cuda.dll",
+    "--deps-dir",
+)
 # Windows release must bundle the vendored vhs-teletext Python tree at
 # release\vendor\vhs-teletext so ld-process-vbi's teletextintegration.cpp
 # resolveTeletextVendorDirectory() finds teletext\__main__.py next to the exe.
@@ -292,6 +325,8 @@ def main() -> int:
         TESTS_WORKFLOW,
         CUDA_CLOSURE_CACHE_SCRIPT,
         WIN_CUDA_RUNTIME_SCRIPT,
+        CUDA_PLUGIN_PUBLISH_WORKFLOW,
+        CUDA_PLUGIN_PACKAGE_SCRIPT,
     ):
         if not required_file.exists():
             errors.append(f"missing required file: {required_file}")
@@ -400,6 +435,14 @@ def main() -> int:
     # cuDNN 8.x -> 9.x bump, which would break the ORT 1.18.x CUDA-11.x EP).
     for snippet in WIN_CUDA_RUNTIME_SCRIPT_REQUIRED_SNIPPETS:
         check_contains(WIN_CUDA_RUNTIME_SCRIPT, snippet, errors)
+    # The CUDA plugin publish workflow must build + publish both platform
+    # packages + manifests to tbc-tools-ci-cache Releases.
+    for snippet in CUDA_PLUGIN_PUBLISH_REQUIRED_SNIPPETS:
+        check_contains(CUDA_PLUGIN_PUBLISH_WORKFLOW, snippet, errors)
+    # The packaging script must pin the NVIDIA wheel versions + produce the
+    # trimmed provider set.
+    for snippet in CUDA_PLUGIN_PACKAGE_SCRIPT_REQUIRED_SNIPPETS:
+        check_contains(CUDA_PLUGIN_PACKAGE_SCRIPT, snippet, errors)
     # The CUDA closure cache is self-built and unsigned, so the restore must
     # import it with require-sigs disabled or Nix refuses the paths with
     # "cannot add path ... because it lacks a signature by a trusted key" and

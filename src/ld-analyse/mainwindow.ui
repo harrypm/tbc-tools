@@ -778,8 +778,13 @@
     <addaction name="actionTBC_Tools_Wiki"/>
     <addaction name="separator"/>
     <addaction name="actionCheck_for_Updates"/>
-    <addaction name="actionPlugins"/>
     <addaction name="actionAbout_ld_analyse"/>
+   </widget>
+   <widget class="QMenu" name="menuPlugins">
+    <property name="title">
+     <string>Plugins</string>
+    </property>
+    <addaction name="actionNnTransform3D_Cuda"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -820,6 +825,7 @@
    <addaction name="menuScopes"/>
    <addaction name="menuWindow"/>
    <addaction name="menuTools"/>
+   <addaction name="menuPlugins"/>
    <addaction name="menuThemes"/>
    <addaction name="menuHelp"/>
   </widget>
@@ -843,15 +849,15 @@
     <string>About ld-analyse...</string>
    </property>
   </action>
-  <action name="actionPlugins">
+  <action name="actionNnTransform3D_Cuda">
    <property name="text">
-    <string>Plugins...</string>
+    <string>nnTransform3D CUDA...</string>
    </property>
    <property name="toolTip">
     <string>Manage the CUDA runtime plugin for nnTransform3D GPU acceleration</string>
    </property>
    <property name="statusTip">
-    <string>Install, update, or remove the opt-in CUDA runtime plugin</string>
+    <string>Install, update, or remove the opt-in CUDA runtime plugin for nnTransform3D</string>
    </property>
   </action>
   <action name="actionCheck_for_Updates">
