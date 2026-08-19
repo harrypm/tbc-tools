@@ -364,18 +364,20 @@ bool ensureLinuxOnnxCudaProviderLoaded(QString &errorMessage)
         // provider .so can resolve ORT-internal symbols like Provider_GetHost.
         // The main library was loaded at startup by the dynamic linker with
         // RTLD_LOCAL (default for linked libraries), so its symbols aren't in
-        // the global table. RTLD_NOLOAD | RTLD_GLOBAL finds the already-loaded
-        // library and promotes its symbols without re-loading.
+        // the global table. dlopen with RTLD_GLOBAL finds the already-loaded
+        // library (by soname) and promotes its symbols to global scope without
+        // re-loading. (RTLD_NOLOAD is not used — it's deprecated/removed on
+        // glibc 2.34+ and causes "invalid mode" errors on glibc 2.40.)
         dlerror();
-        void *ortMainHandle = dlopen("libonnxruntime.so.1.18.1", RTLD_NOLOAD | RTLD_GLOBAL);
+        void *ortMainHandle = dlopen("libonnxruntime.so.1.18.1", RTLD_GLOBAL);
         if (ortMainHandle == nullptr) {
             // Try alternate sonames (some builds use a different version suffix).
-            ortMainHandle = dlopen("libonnxruntime.so", RTLD_NOLOAD | RTLD_GLOBAL);
+            ortMainHandle = dlopen("libonnxruntime.so", RTLD_GLOBAL);
         }
         if (ortMainHandle == nullptr) {
             const char *msg = dlerror();
             pluginError = QStringLiteral("could not promote libonnxruntime symbols to global: %1")
-                .arg(QString::fromUtf8(msg != nullptr ? msg : "dlopen RTLD_NOLOAD failed"));
+                .arg(QString::fromUtf8(msg != nullptr ? msg : "dlopen failed"));
             return;
         }
 
