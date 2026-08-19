@@ -44,6 +44,7 @@
 #include <vector>
 #ifdef __linux__
 #include <dlfcn.h>
+#include <link.h>
 #endif
 #ifdef _WIN32
 #include <windows.h>
@@ -364,16 +365,28 @@ bool ensureLinuxOnnxCudaProviderLoaded(QString &errorMessage)
         // provider .so can resolve ORT-internal symbols like Provider_GetHost.
         // The main library was loaded at startup by the dynamic linker with
         // RTLD_LOCAL (default for linked libraries), so its symbols aren't in
-        // the global table. dlopen with RTLD_GLOBAL finds the already-loaded
-        // library (by soname) and promotes its symbols to global scope without
-        // re-loading. (RTLD_NOLOAD is not used — it's deprecated/removed on
-        // glibc 2.34+ and causes "invalid mode" errors on glibc 2.40.)
-        dlerror();
-        void *ortMainHandle = dlopen("libonnxruntime.so.1.18.1", RTLD_GLOBAL);
-        if (ortMainHandle == nullptr) {
-            // Try alternate sonames (some builds use a different version suffix).
-            ortMainHandle = dlopen("libonnxruntime.so", RTLD_GLOBAL);
+        // the global table. We can't dlopen by soname (the Nix wrapper doesn't
+        // put it on the standard search path), so use dl_iterate_phdr to find
+        // the full path of the already-loaded library, then dlopen it by full
+        // path with RTLD_GLOBAL to promote its symbols.
+        QString ortLibPath;
+        dl_iterate_phdr([](struct dl_phdr_info *info, size_t, void *data) -> int {
+            auto *path = static_cast<QString *>(data);
+            if (info->dlpi_name != nullptr) {
+                const QString name = QString::fromUtf8(info->dlpi_name);
+                if (name.contains(QStringLiteral("libonnxruntime"))) {
+                    *path = name;
+                    return 1; // stop iterating
+                }
+            }
+            return 0; // continue
+        }, &ortLibPath);
+        if (ortLibPath.isEmpty()) {
+            pluginError = QStringLiteral("could not find loaded libonnxruntime via dl_iterate_phdr");
+            return;
         }
+        dlerror();
+        void *ortMainHandle = dlopen(ortLibPath.toUtf8().constData(), RTLD_GLOBAL);
         if (ortMainHandle == nullptr) {
             const char *msg = dlerror();
             pluginError = QStringLiteral("could not promote libonnxruntime symbols to global: %1")
