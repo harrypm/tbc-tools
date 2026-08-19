@@ -156,9 +156,11 @@ build_linux() {
 
   printf '\n  ]\n}\n' >> "$manifest"
 
-  # Create the tar.gz package.
+  # Create the tar.gz package. Archive the files flat (no linux-x86_64/
+  # prefix) so the manager's `tar -xf -C <installDir` lands them directly in
+  # the install dir root, matching the manifest's flat filenames.
   local archive="$out/tbc-tools-cuda-plugin-linux-x86_64.tar.gz"
-  tar -czf "$archive" -C "$out" linux-x86_64
+  tar -czf "$archive" -C "$pkgdir" .
   say "Linux package: $archive ($(du -h "$archive" | awk '{print $1}'))"
   say "Linux manifest: $manifest"
   rm -rf "$tmp"
@@ -252,9 +254,11 @@ build_windows() {
 
   printf '\n  ]\n}\n' >> "$manifest"
 
-  # Create the zip package.
+  # Create the zip package. Archive the files flat (no windows-x86_64/
+  # prefix) so the manager's `tar -xf -C <installDir` lands them directly in
+  # the install dir root, matching the manifest's flat filenames.
   local archive="$out/tbc-tools-cuda-plugin-windows-x86_64.zip"
-  (cd "$out" && zip -qr "$archive" windows-x86_64)
+  (cd "$pkgdir" && zip -qr "$archive" .)
   say "Windows package: $archive ($(du -h "$archive" | awk '{print $1}'))"
   say "Windows manifest: $manifest"
   rm -rf "$tmp"

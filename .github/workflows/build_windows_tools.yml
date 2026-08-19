@@ -499,22 +499,13 @@ jobs:
             "release\\vendor\\vhs-teletext\\misc\\teletext2.ttf",
             "release\\vendor\\vhs-teletext\\misc\\teletext4.ttf"
           )
-          # x86_64 bundles onnxruntime_providers_cuda.dll, whose transitive CUDA +
-          # cuDNN runtime DLLs must ship next to it or the ORT CUDA EP fails to load
-          # on a clean NVIDIA machine (silent CPU fallback, no GPU accel). arm64 uses
-          # CPU-only ONNX Runtime and does not need these.
-          if ("${{ matrix.arch }}" -eq "x86_64") {
-            $required += @(
-              "release\\cudart64_110.dll",
-              "release\\cublas64_11.dll",
-              "release\\cublasLt64_11.dll",
-              "release\\cufft64_10.dll",
-              "release\\cudnn64_8.dll",
-              "release\\cudnn_cnn_infer64_8.dll",
-              "release\\cudnn_ops_infer64_8.dll",
-              "release\\cudnn_adv_infer64_8.dll"
-            )
-          }
+          # CUDA runtime DLLs are NOT in the required list: the default Windows
+          # x86_64 release ships CPU-only-at-runtime (onnxruntime_providers_cuda.dll
+          # is still copied by the "Copy ONNX Runtime DLLs" step but LoadLibrary
+          # fails without the CUDA runtime DLLs and ORT silently falls back to the
+          # CPU EP, which is the intended default-release behaviour). GPU accel is
+          # an opt-in CUDA plugin (a tbc-tools-cuda-plugin-windows-x64.zip published
+          # to tbc-tools-ci-cache Releases by the Publish CUDA plugin workflow).
           $missing = @()
           foreach ($f in $required) { if (-not (Test-Path $f)) { $missing += $f } }
           if ($missing.Count -gt 0) {
