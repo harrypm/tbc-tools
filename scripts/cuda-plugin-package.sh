@@ -6,7 +6,7 @@
 #
 # Each platform package contains:
 #   - The ORT CUDA EP provider library (libonnxruntime_providers_cuda.so / .dll)
-#   - The CUDA 11.8 runtime libs (cudart, cublas, cublasLt, cufft)
+#   - The CUDA 11.8 runtime libs (cudart, cublas, cublasLt, cufft, curand)
 #   - The cuDNN 8.9 inference libs (cudnn, cudnn_cnn_infer, cudnn_ops_infer)
 #     -- cudnn_adv_infer is DROPPED (unused by the conv-only chroma_net_v2.onnx model)
 #   - NVIDIA License.txt files
@@ -47,6 +47,7 @@ declare -a PKGS=(
   "nvidia-cuda-runtime-cu11|11.8.89"
   "nvidia-cublas-cu11|11.11.3.6"
   "nvidia-cufft-cu11|10.9.0.58"
+  "nvidia-curand-cu11|10.3.0.86"
   "nvidia-cudnn-cu11|8.9.5.29"
 )
 
@@ -135,6 +136,7 @@ build_linux() {
   local first=1
   # Copy the CUDA runtime + cuDNN .so files from the Nix-store deps dir.
   local so_files=("libcudart.so.11.0" "libcublas.so.11" "libcublasLt.so.11" "libcufft.so.10"
+                  "libcurand.so.10"
                   "libcudnn.so.8" "libcudnn_cnn_infer.so.8" "libcudnn_ops_infer.so.8")
   for so in "${so_files[@]}"; do
     [ -f "$deps_dir/$so" ] || die "missing .so in deps-dir: $so"
@@ -185,6 +187,7 @@ build_windows() {
     ["nvidia-cublas-cu11"]="nvidia/cublas/bin/cublas64_11.dll"
     ["nvidia-cublas-cu11-Lt"]="nvidia/cublas/bin/cublasLt64_11.dll"
     ["nvidia-cufft-cu11"]="nvidia/cufft/bin/cufft64_10.dll"
+    ["nvidia-curand-cu11"]="nvidia/curand/bin/curand64_10.dll"
     ["nvidia-cudnn-cu11"]="nvidia/cudnn/bin/cudnn64_8.dll"
     ["nvidia-cudnn-cu11-cnn"]="nvidia/cudnn/bin/cudnn_cnn_infer64_8.dll"
     ["nvidia-cudnn-cu11-ops"]="nvidia/cudnn/bin/cudnn_ops_infer64_8.dll"
@@ -217,6 +220,12 @@ build_windows() {
         done
         ;;
       nvidia-cufft-cu11)
+        local src="${win_libs[$pkg]}"; local base="${src##*/}"
+        unzip -p "$wheel" "$src" > "$pkgdir/$base" 2>/dev/null || true
+        local sha size; sha="$(sha256_of "$pkgdir/$base")"; size="$(stat -c '%s' "$pkgdir/$base")"
+        manifest_add_file "$manifest" "$base" "$sha" "$size" "$first"; first=0
+        ;;
+      nvidia-curand-cu11)
         local src="${win_libs[$pkg]}"; local base="${src##*/}"
         unzip -p "$wheel" "$src" > "$pkgdir/$base" 2>/dev/null || true
         local sha size; sha="$(sha256_of "$pkgdir/$base")"; size="$(stat -c '%s' "$pkgdir/$base")"

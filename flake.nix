@@ -225,6 +225,7 @@
             cp ${cudaPackages.libcublas.lib}/lib/libcublas.so.11 $out/
             cp ${cudaPackages.libcublas.lib}/lib/libcublasLt.so.11 $out/
             cp ${cudaPackages.libcufft.lib}/lib/libcufft.so.10 $out/
+            cp ${cudaPackages.libcurand.lib}/lib/libcurand.so.10 $out/
             cp ${cudaCudnnPackage.lib}/lib/libcudnn.so.8 $out/
             cp ${cudaCudnnPackage.lib}/lib/libcudnn_cnn_infer.so.8 $out/
             cp ${cudaCudnnPackage.lib}/lib/libcudnn_ops_infer.so.8 $out/
