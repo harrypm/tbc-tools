@@ -360,9 +360,30 @@ bool ensureLinuxOnnxCudaProviderLoaded(QString &errorMessage)
                 }
             }
         }
-        // Finally load the ORT CUDA EP provider itself.
+        // Promote the main libonnxruntime.so's symbols to global scope so the
+        // provider .so can resolve ORT-internal symbols like Provider_GetHost.
+        // The main library was loaded at startup by the dynamic linker with
+        // RTLD_LOCAL (default for linked libraries), so its symbols aren't in
+        // the global table. RTLD_NOLOAD | RTLD_GLOBAL finds the already-loaded
+        // library and promotes its symbols without re-loading.
         dlerror();
-        void *providerHandle = dlopen(providerSoPath.toUtf8().constData(), RTLD_NOW | RTLD_GLOBAL);
+        void *ortMainHandle = dlopen("libonnxruntime.so.1.18.1", RTLD_NOLOAD | RTLD_GLOBAL);
+        if (ortMainHandle == nullptr) {
+            // Try alternate sonames (some builds use a different version suffix).
+            ortMainHandle = dlopen("libonnxruntime.so", RTLD_NOLOAD | RTLD_GLOBAL);
+        }
+        if (ortMainHandle == nullptr) {
+            const char *msg = dlerror();
+            pluginError = QStringLiteral("could not promote libonnxruntime symbols to global: %1")
+                .arg(QString::fromUtf8(msg != nullptr ? msg : "dlopen RTLD_NOLOAD failed"));
+            return;
+        }
+
+        // Finally load the ORT CUDA EP provider itself. Use RTLD_LAZY so
+        // ORT-internal symbols that are only called later don't fail at load
+        // time, and RTLD_GLOBAL so ORT's own dlopen finds it by soname.
+        dlerror();
+        void *providerHandle = dlopen(providerSoPath.toUtf8().constData(), RTLD_LAZY | RTLD_GLOBAL);
         if (providerHandle == nullptr) {
             const char *msg = dlerror();
             pluginError = QStringLiteral("failed to load ONNX Runtime CUDA provider from %1: %2")
