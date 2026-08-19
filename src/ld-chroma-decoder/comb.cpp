@@ -361,51 +361,27 @@ bool ensureLinuxOnnxCudaProviderLoaded(QString &errorMessage)
                 }
             }
         }
-        // Promote the main libonnxruntime.so's symbols to global scope so the
-        // provider .so can resolve ORT-internal symbols like Provider_GetHost.
-        // The main library was loaded at startup by the dynamic linker with
-        // RTLD_LOCAL (default for linked libraries), so its symbols aren't in
-        // the global table. We can't dlopen by soname (the Nix wrapper doesn't
-        // put it on the standard search path), so use dl_iterate_phdr to find
-        // the full path of the already-loaded library, then dlopen it by full
-        // path with RTLD_GLOBAL to promote its symbols.
-        QString ortLibPath;
-        dl_iterate_phdr([](struct dl_phdr_info *info, size_t, void *data) -> int {
-            auto *path = static_cast<QString *>(data);
-            if (info->dlpi_name != nullptr) {
-                const QString name = QString::fromUtf8(info->dlpi_name);
-                if (name.contains(QStringLiteral("libonnxruntime"))) {
-                    *path = name;
-                    return 1; // stop iterating
-                }
-            }
-            return 0; // continue
-        }, &ortLibPath);
-        if (ortLibPath.isEmpty()) {
-            pluginError = QStringLiteral("could not find loaded libonnxruntime via dl_iterate_phdr");
-            return;
+        // Don't pre-load the provider .so ourselves. The provider .so has
+        // BIND_NOW and references Provider_GetHost, a hidden symbol in the
+        // main libonnxruntime.so that can only be resolved through ORT's
+        // internal provider bridge (not standard dynamic linking). Pre-loading
+        // it via dlopen fails (undefined symbol) or segfaults (if BIND_NOW is
+        // patched out and the deferred symbol is called).
+        //
+        // Instead: set LD_LIBRARY_PATH to include the plugin dir so ORT's own
+        // dlopen("libonnxruntime_providers_cuda.so") can find it. glibc caches
+        // LD_LIBRARY_PATH at startup, but setenv() before the FIRST dlopen call
+        // in the process can still influence the search path on some glibc
+        // versions. If that fails, ORT will fall back to CPU (graceful).
+        const QString currentLdLibPath = qgetenv("LD_LIBRARY_PATH").constData();
+        QString newLdLibPath = resolvedPluginDir;
+        if (!currentLdLibPath.isEmpty()) {
+            newLdLibPath += QStringLiteral(":") + currentLdLibPath;
         }
-        dlerror();
-        void *ortMainHandle = dlopen(ortLibPath.toUtf8().constData(), RTLD_LAZY | RTLD_GLOBAL);
-        if (ortMainHandle == nullptr) {
-            const char *msg = dlerror();
-            pluginError = QStringLiteral("could not promote libonnxruntime symbols to global: %1")
-                .arg(QString::fromUtf8(msg != nullptr ? msg : "dlopen failed"));
-            return;
-        }
-
-        // Finally load the ORT CUDA EP provider itself. Use RTLD_LAZY so
-        // ORT-internal symbols that are only called later don't fail at load
-        // time, and RTLD_GLOBAL so ORT's own dlopen finds it by soname.
-        dlerror();
-        void *providerHandle = dlopen(providerSoPath.toUtf8().constData(), RTLD_LAZY | RTLD_GLOBAL);
-        if (providerHandle == nullptr) {
-            const char *msg = dlerror();
-            pluginError = QStringLiteral("failed to load ONNX Runtime CUDA provider from %1: %2")
-                .arg(providerSoPath, QString::fromUtf8(msg != nullptr ? msg : "unknown dlopen error"));
-            return;
-        }
-        tbcDebugStream() << "ensureLinuxOnnxCudaProviderLoaded(): loaded CUDA plugin from" << resolvedPluginDir;
+        qputenv("LD_LIBRARY_PATH", newLdLibPath.toUtf8());
+        tbcDebugStream() << "ensureLinuxOnnxCudaProviderLoaded(): set LD_LIBRARY_PATH to include"
+                         << resolvedPluginDir
+                         << "(CUDA runtime .so pre-loaded with RTLD_GLOBAL)";
         pluginReady = true;
     });
 
