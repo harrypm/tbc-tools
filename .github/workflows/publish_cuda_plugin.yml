@@ -57,7 +57,11 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
           echo "NIX_PATH=nixpkgs=channel:nixos-unstable" >> "$GITHUB_ENV"
-          echo "NIX_SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt" >> "$GITHUB_ENV"
+          # ubuntu-latest ships the CA bundle at /etc/ssl/certs/ca-certificates.crt
+          # (not /etc/pki/tls/certs/ca-bundle.crt, which is the Oracle Linux path
+          # used by build_linux_tools.yml's containerized job). Setting the wrong
+          # path makes Nix fail to fetch flake inputs over HTTPS.
+          echo "NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt" >> "$GITHUB_ENV"
 
       - name: Restore pinned CUDA 11.8 closure from tbc-tools-ci-cache
         # The cuda-plugin-linux-deps attr needs the CUDA 11.8 closure in the
