@@ -386,7 +386,7 @@ bool ensureLinuxOnnxCudaProviderLoaded(QString &errorMessage)
             return;
         }
         dlerror();
-        void *ortMainHandle = dlopen(ortLibPath.toUtf8().constData(), RTLD_GLOBAL);
+        void *ortMainHandle = dlopen(ortLibPath.toUtf8().constData(), RTLD_LAZY | RTLD_GLOBAL);
         if (ortMainHandle == nullptr) {
             const char *msg = dlerror();
             pluginError = QStringLiteral("could not promote libonnxruntime symbols to global: %1")
