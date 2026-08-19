@@ -56,6 +56,7 @@
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QStringList>
 
 #include "chroma_net_v2_onnx_data.h"
@@ -180,15 +181,27 @@ qint32 getNnIntraOpThreads()
 // Candidate directories where the opt-in CUDA plugin (a runtime package of the
 // CUDA 11.8 + cuDNN 8.9 DLLs/SOs + the ORT CUDA EP provider library) may be
 // installed. Searched front-to-back; the first dir that contains the provider
-// library wins. Modelled on resolveTeletextVendorDirectory()'s app-relative
-// search. An explicit TBC_CUDA_PLUGIN_DIR env var wins over all defaults so
-// power users / CI can point at a staged plugin without installing it.
+// library wins. An explicit TBC_CUDA_PLUGIN_DIR env var wins over all defaults
+// so power users / CI can point at a staged plugin without installing it.
+//
+// The primary default is a writable, update-persistent location:
+//   Linux:   ~/.local/share/tbc-tools/plugins/cuda  (XDG_DATA_HOME)
+//   Windows: %LOCALAPPDATA%/tbc-tools/plugins/cuda
+//   macOS:   ~/Library/Application Support/tbc-tools/plugins/cuda
+// (the app dir is read-only for Nix/AppImage/Windows-installed builds, so the
+// plugin is installed to AppDataLocation by the Plugin Manager and survives
+// app updates). The app-relative plugins/cuda + cuda-plugin paths are kept as
+// fallbacks for portable/unzipped builds where the app dir is writable.
 QStringList cudaPluginCandidateDirectories()
 {
     QStringList dirs;
     const QString envDir = qEnvironmentVariable("TBC_CUDA_PLUGIN_DIR").trimmed();
     if (!envDir.isEmpty()) {
         dirs.append(QDir::cleanPath(envDir));
+    }
+    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!appData.isEmpty()) {
+        dirs.append(QDir(appData).filePath(QStringLiteral("plugins/cuda")));
     }
     const QString appDir = QCoreApplication::applicationDirPath();
     if (!appDir.isEmpty()) {

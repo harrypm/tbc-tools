@@ -53,11 +53,19 @@ CudaPluginManager::~CudaPluginManager() = default;
 
 QString CudaPluginManager::defaultInstallDirectory()
 {
-    const QString appDir = QCoreApplication::applicationDirPath();
-    if (appDir.isEmpty()) {
-        return QDir::homePath() + QStringLiteral("/.tbc-tools/plugins/cuda");
+    // Use a writable, OS-appropriate, update-persistent location so the
+    // installed plugin survives an app update (the app dir is read-only for
+    // Nix/AppImage/Windows-installed builds). QStandardPaths::AppDataLocation
+    // resolves to:
+    //   Linux:   ~/.local/share/tbc-tools/   (XDG_DATA_HOME or default)
+    //   Windows: %LOCALAPPDATA%/tbc-tools/
+    //   macOS:   ~/Library/Application Support/tbc-tools/
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!base.isEmpty()) {
+ return QDir(base).filePath(QStringLiteral("plugins/cuda"));
     }
-    return QDir(appDir).filePath(QStringLiteral("plugins/cuda"));
+    // Fallback if AppDataLocation is empty (rare).
+    return QDir::homePath() + QStringLiteral("/.tbc-tools/plugins/cuda");
 }
 
 QString CudaPluginManager::currentPlatform()
