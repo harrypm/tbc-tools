@@ -335,6 +335,7 @@ bool ensureLinuxOnnxCudaProviderLoaded(QString &errorMessage)
         const QStringList runtimeSonamePrefixes = {
             QStringLiteral("libcudart.so"),
             QStringLiteral("libcufft.so"),
+            QStringLiteral("libcurand.so"),
             QStringLiteral("libcublasLt.so"),
             QStringLiteral("libcublas.so"),
             QStringLiteral("libcudnn_ops_infer.so"),
