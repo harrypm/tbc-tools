@@ -153,6 +153,43 @@ build_linux() {
   curl -fsSL -o "$ort_tgz" "$ort_url"
   tar -xzf "$ort_tgz" -C "$tmp" "onnxruntime-linux-x64-gpu-${ORT_VERSION}/lib/libonnxruntime_providers_cuda.so"
   cp "$tmp/onnxruntime-linux-x64-gpu-${ORT_VERSION}/lib/libonnxruntime_providers_cuda.so" "$pkgdir/"
+
+  # Remove BIND_NOW from the provider .so. The provider .so references
+  # Provider_GetHost, a hidden symbol in the main libonnxruntime.so that
+  # can only be resolved through ORT's internal provider bridge (not
+  # standard dynamic linking). With BIND_NOW, dlopen(RTLD_NOW) forces
+  # immediate resolution of .rela.plt entries (including Provider_GetHost)
+  # and fails. Removing BIND_NOW allows .rela.plt entries to be deferred
+  # (even with RTLD_NOW), so ORT's bridge resolves them when the provider
+  # is actually initialized. patchelf doesn't support --remove-bindnow in
+  # all versions, so patch the ELF DT_FLAGS directly with Python.
+  python3 -c '
+import struct, sys
+path = sys.argv[1]
+with open(path, "rb") as f: data = bytearray(f.read())
+e_phoff = struct.unpack_from("<Q", data, 0x20)[0]
+e_phentsize = struct.unpack_from("<H", data, 0x36)[0]
+e_phnum = struct.unpack_from("<H", data, 0x38)[0]
+DT_FLAGS = 30; DT_FLAGS_1 = 0x6ffffffb; DF_BIND_NOW = 0x8; DF_1_NOW = 0x1
+for i in range(e_phnum):
+    ph_off = e_phoff + i * e_phentsize
+    if struct.unpack_from("<I", data, ph_off)[0] != 2: continue
+    p_off = struct.unpack_from("<Q", data, ph_off + 8)[0]
+    p_fs = struct.unpack_from("<Q", data, ph_off + 0x20)[0]
+    for j in range(0, p_fs, 16):
+        tag = struct.unpack_from("<q", data, p_off + j)[0]
+        val_off = p_off + j + 8
+        if tag == DT_FLAGS:
+            v = struct.unpack_from("<Q", data, val_off)[0]
+            if v & DF_BIND_NOW: struct.pack_into("<Q", data, val_off, v & ~DF_BIND_NOW)
+        elif tag == DT_FLAGS_1:
+            v = struct.unpack_from("<Q", data, val_off)[0]
+            if v & DF_1_NOW: struct.pack_into("<Q", data, val_off, v & ~DF_1_NOW)
+        elif tag == 0: break
+with open(path, "wb") as f: f.write(data)
+' "$pkgdir/libonnxruntime_providers_cuda.so"
+  say "  patched BIND_NOW from libonnxruntime_providers_cuda.so"
+
   local psha psize; psha="$(sha256_of "$pkgdir/libonnxruntime_providers_cuda.so")"; psize="$(stat -c '%s' "$pkgdir/libonnxruntime_providers_cuda.so")"
   manifest_add_file "$manifest" "libonnxruntime_providers_cuda.so" "$psha" "$psize" "$first"; first=0
 
