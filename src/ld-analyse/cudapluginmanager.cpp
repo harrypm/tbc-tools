@@ -55,16 +55,18 @@ QString CudaPluginManager::defaultInstallDirectory()
 {
     // Use a writable, OS-appropriate, update-persistent location so the
     // installed plugin survives an app update (the app dir is read-only for
-    // Nix/AppImage/Windows-installed builds). QStandardPaths::AppDataLocation
-    // resolves to:
-    //   Linux:   ~/.local/share/tbc-tools/   (XDG_DATA_HOME or default)
-    //   Windows: %LOCALAPPDATA%/tbc-tools/
-    //   macOS:   ~/Library/Application Support/tbc-tools/
-    const QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    // Nix/AppImage/Windows-installed builds). Use GenericDataLocation + a
+    // fixed "/tbc-tools/plugins/cuda" suffix (NOT AppDataLocation, which
+    // appends the per-binary application name and would put ld-analyse's
+    // plugin dir at a different path than ld-chroma-decoder's).
+    //   Linux:   ~/.local/share/tbc-tools/plugins/cuda  (XDG_DATA_HOME)
+    //   Windows: %LOCALAPPDATA%/tbc-tools/plugins/cuda
+    //   macOS:   ~/Library/Application Support/tbc-tools/plugins/cuda
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
     if (!base.isEmpty()) {
- return QDir(base).filePath(QStringLiteral("plugins/cuda"));
+        return QDir(base).filePath(QStringLiteral("tbc-tools/plugins/cuda"));
     }
-    // Fallback if AppDataLocation is empty (rare).
+    // Fallback if GenericDataLocation is empty (rare).
     return QDir::homePath() + QStringLiteral("/.tbc-tools/plugins/cuda");
 }
 

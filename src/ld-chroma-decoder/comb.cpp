@@ -188,10 +188,11 @@ qint32 getNnIntraOpThreads()
 //   Linux:   ~/.local/share/tbc-tools/plugins/cuda  (XDG_DATA_HOME)
 //   Windows: %LOCALAPPDATA%/tbc-tools/plugins/cuda
 //   macOS:   ~/Library/Application Support/tbc-tools/plugins/cuda
-// (the app dir is read-only for Nix/AppImage/Windows-installed builds, so the
-// plugin is installed to AppDataLocation by the Plugin Manager and survives
-// app updates). The app-relative plugins/cuda + cuda-plugin paths are kept as
-// fallbacks for portable/unzipped builds where the app dir is writable.
+// Use GenericDataLocation + a fixed "/tbc-tools/plugins/cuda" suffix (NOT
+// AppDataLocation, which appends the per-binary application name and would
+// put ld-analyse's plugin dir at a different path than ld-chroma-decoder's).
+// The app-relative plugins/cuda + cuda-plugin paths are kept as fallbacks for
+// portable/unzipped builds where the app dir is writable.
 QStringList cudaPluginCandidateDirectories()
 {
     QStringList dirs;
@@ -199,9 +200,9 @@ QStringList cudaPluginCandidateDirectories()
     if (!envDir.isEmpty()) {
         dirs.append(QDir::cleanPath(envDir));
     }
-    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    if (!appData.isEmpty()) {
-        dirs.append(QDir(appData).filePath(QStringLiteral("plugins/cuda")));
+    const QString genericData = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (!genericData.isEmpty()) {
+        dirs.append(QDir(genericData).filePath(QStringLiteral("tbc-tools/plugins/cuda")));
     }
     const QString appDir = QCoreApplication::applicationDirPath();
     if (!appDir.isEmpty()) {
