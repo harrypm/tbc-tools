@@ -137,12 +137,20 @@ if(NOT TARGET onnxruntime::onnxruntime)
         ${ONNXRUNTIME_ROOT}
         $ENV{ONNXRUNTIME_ROOT}
     )
+    list(FILTER _ONNXRUNTIME_SEARCH_ROOTS EXCLUDE REGEX "^$")
+    list(REMOVE_DUPLICATES _ONNXRUNTIME_SEARCH_ROOTS)
+    unset(ONNXRUNTIME_INCLUDE_DIR CACHE)
+    unset(ONNXRUNTIME_LIBRARY CACHE)
+    if(WIN32)
+        unset(ONNXRUNTIME_DLL CACHE)
+    endif()
     find_path(ONNXRUNTIME_INCLUDE_DIR
         NAMES onnxruntime_cxx_api.h
         PATHS
             ${_ONNXRUNTIME_SEARCH_ROOTS}
         PATH_SUFFIXES
             include
+        NO_DEFAULT_PATH
     )
     find_library(ONNXRUNTIME_LIBRARY
         NAMES onnxruntime
@@ -150,6 +158,7 @@ if(NOT TARGET onnxruntime::onnxruntime)
             ${_ONNXRUNTIME_SEARCH_ROOTS}
         PATH_SUFFIXES
             lib
+        NO_DEFAULT_PATH
     )
     if(WIN32)
         find_file(ONNXRUNTIME_DLL
@@ -159,6 +168,7 @@ if(NOT TARGET onnxruntime::onnxruntime)
             PATH_SUFFIXES
                 bin
                 lib
+            NO_DEFAULT_PATH
         )
     endif()
 
@@ -184,6 +194,84 @@ if(NOT TARGET onnxruntime::onnxruntime)
     unset(_ONNXRUNTIME_SEARCH_ROOTS)
     unset(ONNXRUNTIME_DLL)
 endif()
+
+function(stage_windows_onnxruntime_runtime target_name)
+    if(NOT WIN32)
+        return()
+    endif()
+    if(NOT TARGET onnxruntime::onnxruntime)
+        return()
+    endif()
+
+    add_custom_command(TARGET ${target_name} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:onnxruntime::onnxruntime>"
+            "$<TARGET_FILE_DIR:${target_name}>"
+        VERBATIM
+    )
+endfunction()
+
+function(stage_windows_qt_platform_runtime target_name)
+    if(NOT WIN32)
+        return()
+    endif()
+    if(NOT TARGET Qt::Core)
+        return()
+    endif()
+
+    set(_qt_platform_plugin "")
+
+    if(DEFINED Qt6_DIR AND EXISTS "${Qt6_DIR}")
+        get_filename_component(_qt6_share_dir "${Qt6_DIR}" DIRECTORY)
+        get_filename_component(_qt6_prefix_dir "${_qt6_share_dir}" DIRECTORY)
+        set(_qt6_candidate "${_qt6_prefix_dir}/Qt6/plugins/platforms/qwindows.dll")
+        if(EXISTS "${_qt6_candidate}")
+            set(_qt_platform_plugin "${_qt6_candidate}")
+        endif()
+    endif()
+
+    if(NOT _qt_platform_plugin)
+        get_target_property(_qt_core_imported_release Qt::Core IMPORTED_LOCATION_RELEASE)
+        if(_qt_core_imported_release)
+            get_filename_component(_qt_core_bin_dir "${_qt_core_imported_release}" DIRECTORY)
+            get_filename_component(_qt_core_prefix_dir "${_qt_core_bin_dir}" DIRECTORY)
+            set(_qt_core_candidate "${_qt_core_prefix_dir}/plugins/platforms/qwindows.dll")
+            if(EXISTS "${_qt_core_candidate}")
+                set(_qt_platform_plugin "${_qt_core_candidate}")
+            endif()
+        endif()
+    endif()
+
+    if(NOT _qt_platform_plugin)
+        get_target_property(_qt_core_imported_default Qt::Core IMPORTED_LOCATION)
+        if(_qt_core_imported_default)
+            get_filename_component(_qt_core_bin_dir "${_qt_core_imported_default}" DIRECTORY)
+            get_filename_component(_qt_core_prefix_dir "${_qt_core_bin_dir}" DIRECTORY)
+            set(_qt_core_candidate "${_qt_core_prefix_dir}/plugins/platforms/qwindows.dll")
+            if(EXISTS "${_qt_core_candidate}")
+                set(_qt_platform_plugin "${_qt_core_candidate}")
+            endif()
+        endif()
+    endif()
+
+    if(NOT _qt_platform_plugin)
+        message(FATAL_ERROR "Could not locate Qt platform plugin qwindows.dll for target ${target_name}.")
+    endif()
+
+    set(_qt_conf_local "${CMAKE_BINARY_DIR}/qt.conf")
+    file(WRITE "${_qt_conf_local}" "[Paths]\nPrefix = .\nPlugins = .\n")
+
+    add_custom_command(TARGET ${target_name} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target_name}>/platforms"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${_qt_platform_plugin}"
+            "$<TARGET_FILE_DIR:${target_name}>/platforms"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${_qt_conf_local}"
+            "$<TARGET_FILE_DIR:${target_name}>/qt.conf"
+        VERBATIM
+    )
+endfunction()
 
 # Build metadata (set by Nix or other build systems)
 set(APP_BRANCH "nix" CACHE STRING "Build source identifier")

@@ -74,6 +74,8 @@ target_link_libraries(ld-analyse PRIVATE
     Qt::Core Qt::Gui Qt::Widgets Qt::Svg Qt::Network
     lddecode-library lddecode-chroma
 )
+stage_windows_onnxruntime_runtime(ld-analyse)
+stage_windows_qt_platform_runtime(ld-analyse)
 add_executable(tbc-efm-handler
     efmhandler-main.cpp
     efmhandlerdialog.cpp

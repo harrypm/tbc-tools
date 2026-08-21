@@ -193,6 +193,7 @@ target_link_libraries(ld-chroma-decoder PRIVATE
     lddecode-library
     lddecode-chroma
 )
+stage_windows_onnxruntime_runtime(ld-chroma-decoder)
 if(LDCHROMA_HAS_CUDA)
     target_link_libraries(ld-chroma-decoder PRIVATE
         CUDA::cufft
