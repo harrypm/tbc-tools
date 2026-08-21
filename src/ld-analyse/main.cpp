@@ -221,6 +221,14 @@ int main(int argc, char *argv[])
 {
     // Install the local debug message handler with Qt system warning filtering
     qInstallMessageHandler(filteredDebugOutputHandler);
+#ifdef Q_OS_WIN
+    // Prefer the native Schannel TLS backend for HTTPS requests in local
+    // Windows builds. This avoids OpenSSL backend dependency issues from
+    // blocking update checks when OpenSSL runtime DLLs are not staged.
+    if (qEnvironmentVariableIsEmpty("QT_TLS_BACKEND")) {
+        qputenv("QT_TLS_BACKEND", QByteArrayLiteral("schannel"));
+    }
+#endif
     configureBundledQtPluginPaths(argc, argv);
 
     tbc::ui::normalizeUnsupportedStyleOverrideToFusion();

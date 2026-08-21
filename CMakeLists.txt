@@ -219,53 +219,97 @@ function(stage_windows_qt_platform_runtime target_name)
         return()
     endif()
 
-    set(_qt_platform_plugin "")
+    set(_qt_plugins_root "")
+    set(_qt_runtime_bin_dir "")
 
     if(DEFINED Qt6_DIR AND EXISTS "${Qt6_DIR}")
         get_filename_component(_qt6_share_dir "${Qt6_DIR}" DIRECTORY)
         get_filename_component(_qt6_prefix_dir "${_qt6_share_dir}" DIRECTORY)
-        set(_qt6_candidate "${_qt6_prefix_dir}/Qt6/plugins/platforms/qwindows.dll")
-        if(EXISTS "${_qt6_candidate}")
-            set(_qt_platform_plugin "${_qt6_candidate}")
+        set(_qt6_plugins_candidate "${_qt6_prefix_dir}/Qt6/plugins")
+        if(EXISTS "${_qt6_plugins_candidate}/platforms/qwindows.dll")
+            set(_qt_plugins_root "${_qt6_plugins_candidate}")
+            set(_qt_runtime_bin_dir "${_qt6_prefix_dir}/bin")
         endif()
     endif()
 
-    if(NOT _qt_platform_plugin)
+    if(NOT _qt_plugins_root)
         get_target_property(_qt_core_imported_release Qt::Core IMPORTED_LOCATION_RELEASE)
         if(_qt_core_imported_release)
             get_filename_component(_qt_core_bin_dir "${_qt_core_imported_release}" DIRECTORY)
             get_filename_component(_qt_core_prefix_dir "${_qt_core_bin_dir}" DIRECTORY)
-            set(_qt_core_candidate "${_qt_core_prefix_dir}/plugins/platforms/qwindows.dll")
-            if(EXISTS "${_qt_core_candidate}")
-                set(_qt_platform_plugin "${_qt_core_candidate}")
+            set(_qt_core_plugins_candidate "${_qt_core_prefix_dir}/plugins")
+            if(EXISTS "${_qt_core_plugins_candidate}/platforms/qwindows.dll")
+                set(_qt_plugins_root "${_qt_core_plugins_candidate}")
+                set(_qt_runtime_bin_dir "${_qt_core_bin_dir}")
             endif()
         endif()
     endif()
 
-    if(NOT _qt_platform_plugin)
+    if(NOT _qt_plugins_root)
         get_target_property(_qt_core_imported_default Qt::Core IMPORTED_LOCATION)
         if(_qt_core_imported_default)
             get_filename_component(_qt_core_bin_dir "${_qt_core_imported_default}" DIRECTORY)
             get_filename_component(_qt_core_prefix_dir "${_qt_core_bin_dir}" DIRECTORY)
-            set(_qt_core_candidate "${_qt_core_prefix_dir}/plugins/platforms/qwindows.dll")
-            if(EXISTS "${_qt_core_candidate}")
-                set(_qt_platform_plugin "${_qt_core_candidate}")
+            set(_qt_core_plugins_candidate "${_qt_core_prefix_dir}/plugins")
+            if(EXISTS "${_qt_core_plugins_candidate}/platforms/qwindows.dll")
+                set(_qt_plugins_root "${_qt_core_plugins_candidate}")
+                set(_qt_runtime_bin_dir "${_qt_core_bin_dir}")
             endif()
         endif()
     endif()
 
-    if(NOT _qt_platform_plugin)
-        message(FATAL_ERROR "Could not locate Qt platform plugin qwindows.dll for target ${target_name}.")
+    if(NOT _qt_plugins_root)
+        message(FATAL_ERROR "Could not locate Qt plugin runtime root (with platforms/qwindows.dll) for target ${target_name}.")
     endif()
 
     set(_qt_conf_local "${CMAKE_BINARY_DIR}/qt.conf")
     file(WRITE "${_qt_conf_local}" "[Paths]\nPrefix = .\nPlugins = .\n")
 
+    set(_qt_optional_plugin_dirs
+        generic
+        iconengines
+        imageformats
+        networkinformation
+        sqldrivers
+        styles
+        tls
+    )
+    set(_qt_plugin_copy_commands)
+    foreach(_qt_plugin_dir IN LISTS _qt_optional_plugin_dirs)
+        if(EXISTS "${_qt_plugins_root}/${_qt_plugin_dir}")
+            list(APPEND _qt_plugin_copy_commands
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${_qt_plugins_root}/${_qt_plugin_dir}"
+                    "$<TARGET_FILE_DIR:${target_name}>/${_qt_plugin_dir}"
+            )
+        endif()
+    endforeach()
+
+    set(_qt_optional_runtime_dlls
+        libcrypto-3-x64.dll
+        libssl-3-x64.dll
+    )
+    set(_qt_runtime_copy_commands)
+    if(_qt_runtime_bin_dir)
+        foreach(_qt_runtime_dll IN LISTS _qt_optional_runtime_dlls)
+            if(EXISTS "${_qt_runtime_bin_dir}/${_qt_runtime_dll}")
+                list(APPEND _qt_runtime_copy_commands
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_qt_runtime_bin_dir}/${_qt_runtime_dll}"
+                        "$<TARGET_FILE_DIR:${target_name}>"
+                )
+            endif()
+        endforeach()
+    endif()
+
     add_custom_command(TARGET ${target_name} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target_name}>/platforms"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${_qt_platform_plugin}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
             "$<TARGET_FILE_DIR:${target_name}>/platforms"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${_qt_plugins_root}/platforms/qwindows.dll"
+            "$<TARGET_FILE_DIR:${target_name}>/platforms"
+        ${_qt_plugin_copy_commands}
+        ${_qt_runtime_copy_commands}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${_qt_conf_local}"
             "$<TARGET_FILE_DIR:${target_name}>/qt.conf"

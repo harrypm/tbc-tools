@@ -195,12 +195,22 @@ void CudaPluginManager::handleReleaseReply(QNetworkReply *reply)
     m_requestInFlight = false;
     reply->deleteLater();
 
-    // Check the HTTP status code first so we can give a clear, actionable
-    // message instead of Qt's terse "server replied:" errorString. The
-    // /releases/latest endpoint returns 404 when the repo has no published
-    // releases yet (the common case before the first cuda-plugin-vX release
-    // is published by the publish_cuda_plugin workflow).
-    const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QVariant statusCodeAttr = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+    const int statusCode = statusCodeAttr.isValid() ? statusCodeAttr.toInt() : 0;
+    if (reply->error() != QNetworkReply::NoError) {
+        const QString transportError = reply->errorString().trimmed();
+        if (statusCode > 0) {
+            emit releaseCheckFailed(
+                tr("Network error (HTTP %1): %2").arg(statusCode).arg(transportError));
+        } else {
+            emit releaseCheckFailed(tr("Network error: %1").arg(transportError));
+        }
+        return;
+    }
+
+    // Check HTTP status after transport succeeded so we can distinguish
+    // server responses from network/TLS failures. The /releases/latest
+    // endpoint returns 404 when the repo has no published releases yet.
     if (statusCode == 404) {
         emit releaseCheckFailed(
             tr("No CUDA plugin release has been published yet on %1/%2. "
@@ -226,10 +236,6 @@ void CudaPluginManager::handleReleaseReply(QNetworkReply *reply)
     }
     if (statusCode != 200) {
         emit releaseCheckFailed(tr("GitHub returned HTTP status %1.").arg(statusCode));
-        return;
-    }
-    if (reply->error() != QNetworkReply::NoError) {
-        emit releaseCheckFailed(tr("Network error: %1").arg(reply->errorString()));
         return;
     }
 
