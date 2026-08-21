@@ -53,6 +53,7 @@ private slots:
     void onPluginSelected(QListWidgetItem *current);
     void onCheckForUpdate();
     void onInstall();
+    void onInstallFromLocalArchive();
     void onRemove();
     void onLatestReleaseResolved(const QString &version, const QString &releaseTag, const QString &releaseUrl);
     void onReleaseCheckFailed(const QString &error);
@@ -85,6 +86,7 @@ private:
     QLabel *m_installPathLabel;
     QPushButton *m_checkButton;
     QPushButton *m_installButton;
+    QPushButton *m_installFromArchiveButton;
     QPushButton *m_removeButton;
     QPushButton *m_closeButton;
     QProgressBar *m_progressBar;

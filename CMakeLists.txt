@@ -202,11 +202,35 @@ function(stage_windows_onnxruntime_runtime target_name)
     if(NOT TARGET onnxruntime::onnxruntime)
         return()
     endif()
+    set(_onnxruntime_provider_copy_commands)
+    get_target_property(_onnxruntime_runtime_release onnxruntime::onnxruntime IMPORTED_LOCATION_RELEASE)
+    get_target_property(_onnxruntime_runtime_default onnxruntime::onnxruntime IMPORTED_LOCATION)
+    if(_onnxruntime_runtime_release)
+        set(_onnxruntime_runtime_dll "${_onnxruntime_runtime_release}")
+    else()
+        set(_onnxruntime_runtime_dll "${_onnxruntime_runtime_default}")
+    endif()
+    if(_onnxruntime_runtime_dll)
+        get_filename_component(_onnxruntime_runtime_dir "${_onnxruntime_runtime_dll}" DIRECTORY)
+        foreach(_onnxruntime_provider_dll
+            onnxruntime_providers_shared.dll
+            onnxruntime_providers_cuda.dll
+        )
+            if(EXISTS "${_onnxruntime_runtime_dir}/${_onnxruntime_provider_dll}")
+                list(APPEND _onnxruntime_provider_copy_commands
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_onnxruntime_runtime_dir}/${_onnxruntime_provider_dll}"
+                        "$<TARGET_FILE_DIR:${target_name}>"
+                )
+            endif()
+        endforeach()
+    endif()
 
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<TARGET_FILE:onnxruntime::onnxruntime>"
             "$<TARGET_FILE_DIR:${target_name}>"
+        ${_onnxruntime_provider_copy_commands}
         VERBATIM
     )
 endfunction()

@@ -62,6 +62,12 @@ public:
     // installFailed. Requires a prior successful checkForUpdate().
     void downloadAndInstall(const QString &installDirectory = QString());
 
+    // Install from a local package archive (.zip/.tar.gz) and a manifest JSON
+    // in the same directory. The manifest is matched from the archive name
+    // (or platform/arch fallback), then used for SHA-256 verification.
+    void installFromLocalArchive(const QString &archivePath,
+                                 const QString &installDirectory = QString());
+
     // Remove the installed plugin (deletes the install directory tree).
     // Emits removeSucceeded or removeFailed.
     void remove();

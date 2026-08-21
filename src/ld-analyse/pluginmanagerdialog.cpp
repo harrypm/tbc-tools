@@ -24,6 +24,7 @@
 #include <QListWidgetItem>
 #include <QMessageBox>
 #include <QVersionNumber>
+#include <QFileDialog>
 
 PluginManagerDialog::PluginManagerDialog(QWidget *parent)
     : QDialog(parent),
@@ -93,9 +94,11 @@ PluginManagerDialog::PluginManagerDialog(QWidget *parent)
     auto *buttonLayout = new QHBoxLayout();
     m_checkButton = new QPushButton(tr("Check for update"), rightWidget);
     m_installButton = new QPushButton(tr("Install / Update"), rightWidget);
+    m_installFromArchiveButton = new QPushButton(tr("Install from local archive"), rightWidget);
     m_removeButton = new QPushButton(tr("Remove"), rightWidget);
     buttonLayout->addWidget(m_checkButton);
     buttonLayout->addWidget(m_installButton);
+    buttonLayout->addWidget(m_installFromArchiveButton);
     buttonLayout->addWidget(m_removeButton);
     buttonLayout->addStretch();
     rightLayout->addLayout(buttonLayout);
@@ -128,6 +131,8 @@ PluginManagerDialog::PluginManagerDialog(QWidget *parent)
     connect(m_pluginList, &QListWidget::currentItemChanged, this, &PluginManagerDialog::onPluginSelected);
     connect(m_checkButton, &QPushButton::clicked, this, &PluginManagerDialog::onCheckForUpdate);
     connect(m_installButton, &QPushButton::clicked, this, &PluginManagerDialog::onInstall);
+    connect(m_installFromArchiveButton, &QPushButton::clicked,
+            this, &PluginManagerDialog::onInstallFromLocalArchive);
     connect(m_removeButton, &QPushButton::clicked, this, &PluginManagerDialog::onRemove);
     connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
 
@@ -182,6 +187,7 @@ void PluginManagerDialog::onPluginSelected(QListWidgetItem *current)
         m_descriptionLabel->clear();
         m_checkButton->setEnabled(false);
         m_installButton->setEnabled(false);
+        m_installFromArchiveButton->setEnabled(false);
         m_removeButton->setEnabled(false);
         return;
     }
@@ -206,6 +212,7 @@ void PluginManagerDialog::updateStatusDisplay()
         m_installPathLabel->setText(tr("—"));
         m_checkButton->setEnabled(false);
         m_installButton->setEnabled(false);
+        m_installFromArchiveButton->setEnabled(false);
         m_removeButton->setEnabled(false);
         return;
     }
@@ -244,6 +251,7 @@ void PluginManagerDialog::updateStatusDisplay()
             m_installButton->setText(tr("Up to date"));
         }
     }
+    m_installFromArchiveButton->setEnabled(true);
     m_checkButton->setEnabled(true);
 }
 
@@ -251,6 +259,7 @@ void PluginManagerDialog::setBusy(bool busy)
 {
     m_checkButton->setEnabled(!busy && m_selectedIndex >= 0);
     m_installButton->setEnabled(!busy && (!m_latestVersion.isEmpty() || m_updateAvailable));
+    m_installFromArchiveButton->setEnabled(!busy && m_selectedIndex >= 0);
     m_removeButton->setEnabled(!busy && !Configuration().getCudaPluginInstalledVersion().isEmpty());
     m_progressBar->setVisible(busy);
     if (!busy) {
@@ -337,6 +346,44 @@ void PluginManagerDialog::onInstall()
         appendLog(tr("No backend wired for plugin %1.").arg(plugin.id));
         setBusy(false);
     }
+}
+
+void PluginManagerDialog::onInstallFromLocalArchive()
+{
+    if (m_selectedIndex < 0) {
+        return;
+    }
+    const PluginDescriptor &plugin = m_plugins.at(m_selectedIndex);
+    if (plugin.id != QStringLiteral("tbc-tools.cuda-runtime")) {
+        appendLog(tr("No backend wired for plugin %1.").arg(plugin.id));
+        return;
+    }
+
+    const QString archivePath = QFileDialog::getOpenFileName(
+        this,
+        tr("Select local CUDA plugin archive"),
+        QDir::homePath(),
+        tr("Plugin archives (*.zip *.tar.gz *.tgz);;All files (*)"));
+    if (archivePath.isEmpty()) {
+        return;
+    }
+
+    auto confirm = QMessageBox::question(
+        this, tr("Install %1 from local archive").arg(plugin.displayName),
+        tr("This will install %1 from:\n\n%2\n\n"
+           "A matching manifest JSON must be present in the same directory, and "
+           "all files are SHA-256 verified before activation. Continue?")
+            .arg(plugin.displayName, QDir::toNativeSeparators(archivePath)),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (confirm != QMessageBox::Yes) {
+        return;
+    }
+
+    appendLog(tr("Installing %1 from local archive: %2")
+                  .arg(plugin.displayName, QDir::toNativeSeparators(archivePath)));
+    setBusy(true);
+    m_progressBar->setRange(0, 0);
+    m_cudaManager->installFromLocalArchive(archivePath);
 }
 
 void PluginManagerDialog::onInstallProgress(qint64 bytesReceived, qint64 bytesTotal, const QString &currentFile)

@@ -28,6 +28,58 @@
 #include <QTemporaryFile>
 #include <QStandardPaths>
 #include <QRegularExpression>
+namespace {
+QString archiveStem(const QString &fileName)
+{
+    QString stem = fileName;
+    if (stem.endsWith(QStringLiteral(".tar.gz"), Qt::CaseInsensitive)) {
+        stem.chop(7);
+        return stem;
+    }
+    if (stem.endsWith(QStringLiteral(".tgz"), Qt::CaseInsensitive)) {
+        stem.chop(4);
+        return stem;
+    }
+    if (stem.endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive)) {
+        stem.chop(4);
+        return stem;
+    }
+    return QFileInfo(fileName).completeBaseName();
+}
+
+QString inferManifestPathForArchive(const QString &archivePath,
+                                    const QString &platform,
+                                    const QString &arch)
+{
+    const QFileInfo archiveInfo(archivePath);
+    const QDir archiveDir = archiveInfo.dir();
+    const QString archiveStemValue = archiveStem(archiveInfo.fileName());
+    const QString packagePrefix = QStringLiteral("tbc-tools-cuda-plugin-");
+    if (archiveStemValue.startsWith(packagePrefix, Qt::CaseInsensitive)) {
+        const QString suffix = archiveStemValue.mid(packagePrefix.size());
+        const QString exactName = QStringLiteral("tbc-cuda-plugin-%1-manifest.json").arg(suffix);
+        const QString exactPath = archiveDir.filePath(exactName);
+        if (QFileInfo::exists(exactPath)) {
+            return exactPath;
+        }
+    }
+
+    const QString platformArchName =
+        QStringLiteral("tbc-cuda-plugin-%1-%2-manifest.json").arg(platform, arch);
+    const QString platformArchPath = archiveDir.filePath(platformArchName);
+    if (QFileInfo::exists(platformArchPath)) {
+        return platformArchPath;
+    }
+
+    const QStringList genericMatches = archiveDir.entryList(
+        QStringList() << QStringLiteral("tbc-cuda-plugin-*-manifest.json"),
+        QDir::Files | QDir::Readable | QDir::NoSymLinks);
+    if (genericMatches.size() == 1) {
+        return archiveDir.filePath(genericMatches.constFirst());
+    }
+    return QString();
+}
+} // namespace
 
 const QString CudaPluginManager::cacheRepositoryOwner = QStringLiteral("harrypm");
 const QString CudaPluginManager::cacheRepositoryName = QStringLiteral("tbc-tools-ci-cache");
@@ -156,6 +208,7 @@ bool CudaPluginManager::resolveAssetsFromReleaseJson(const QByteArray &payload, 
     const QString platform = currentPlatform();
     const QString arch = currentArch();
     const QString manifestSuffix = QStringLiteral("-manifest.json");
+    const QString manifestPrefix = QStringLiteral("tbc-cuda-plugin-%1-%2").arg(platform, arch);
     const QString packagePrefix = QStringLiteral("tbc-tools-cuda-plugin-%1-%2").arg(platform, arch);
 
     m_manifestAssetUrl.clear();
@@ -171,11 +224,16 @@ bool CudaPluginManager::resolveAssetsFromReleaseJson(const QByteArray &payload, 
         if (name.isEmpty() || url.isEmpty()) {
             continue;
         }
-        if (name.endsWith(manifestSuffix) && m_manifestAssetUrl.isEmpty()) {
+        if (name.startsWith(manifestPrefix)
+            && name.endsWith(manifestSuffix)
+            && m_manifestAssetUrl.isEmpty()) {
             m_manifestAssetUrl = url;
             m_manifestAssetName = name;
         }
-        if (name.startsWith(packagePrefix) && m_packageAssetUrl.isEmpty()) {
+        if (name.startsWith(packagePrefix)
+            && (name.endsWith(QStringLiteral(".zip"))
+                || name.endsWith(QStringLiteral(".tar.gz")))
+            && m_packageAssetUrl.isEmpty()) {
             m_packageAssetUrl = url;
             m_packageAssetName = name;
         }
@@ -183,8 +241,9 @@ bool CudaPluginManager::resolveAssetsFromReleaseJson(const QByteArray &payload, 
 
     if (m_manifestAssetUrl.isEmpty() || m_packageAssetUrl.isEmpty()) {
         error = QStringLiteral("Release %1 does not include a CUDA plugin manifest + "
-                               "package for %2-%3 (expected prefix %4).")
-                    .arg(m_latestReleaseTag, platform, arch, packagePrefix);
+                               "package for %2-%3 (expected manifest prefix %4, "
+                               "package prefix %5).")
+                    .arg(m_latestReleaseTag, platform, arch, manifestPrefix, packagePrefix);
         return false;
     }
     return true;
@@ -393,6 +452,150 @@ void CudaPluginManager::downloadAndInstall(const QString &installDirectory)
             emit installSucceeded(m_targetInstallDir);
         });
     });
+}
+void CudaPluginManager::installFromLocalArchive(const QString &archivePath,
+                                                const QString &installDirectory)
+{
+    const QFileInfo archiveInfo(archivePath);
+    if (!archiveInfo.exists() || !archiveInfo.isFile()) {
+        emit installFailed(tr("Archive file does not exist:\n%1")
+                               .arg(QDir::toNativeSeparators(archivePath)));
+        return;
+    }
+    const QString archiveNameLower = archiveInfo.fileName().toLower();
+    const bool supportedArchive = archiveNameLower.endsWith(QStringLiteral(".zip"))
+        || archiveNameLower.endsWith(QStringLiteral(".tar.gz"))
+        || archiveNameLower.endsWith(QStringLiteral(".tgz"));
+    if (!supportedArchive) {
+        emit installFailed(tr("Unsupported archive format for:\n%1\n\n"
+                              "Supported formats are .zip, .tar.gz, and .tgz.")
+                               .arg(QDir::toNativeSeparators(archiveInfo.fileName())));
+        return;
+    }
+
+    const QString platform = currentPlatform();
+    const QString arch = currentArch();
+    const QString manifestPath = inferManifestPathForArchive(archiveInfo.absoluteFilePath(), platform, arch);
+    if (manifestPath.isEmpty()) {
+        const QString expectedName =
+            QStringLiteral("tbc-cuda-plugin-%1-%2-manifest.json").arg(platform, arch);
+        emit installFailed(
+            tr("Could not locate a matching manifest JSON next to the archive.\n\n"
+               "Expected this file in the same directory:\n%1")
+                .arg(QDir::toNativeSeparators(expectedName)));
+        return;
+    }
+
+    QFile manifestFile(manifestPath);
+    if (!manifestFile.open(QIODevice::ReadOnly)) {
+        emit installFailed(tr("Could not open manifest JSON:\n%1")
+                               .arg(QDir::toNativeSeparators(manifestPath)));
+        return;
+    }
+    QJsonParseError parseError;
+    const QJsonDocument manifestDoc = QJsonDocument::fromJson(manifestFile.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !manifestDoc.isObject()) {
+        emit installFailed(tr("Could not parse manifest JSON (%1): %2")
+                               .arg(QDir::toNativeSeparators(manifestPath), parseError.errorString()));
+        return;
+    }
+    const QJsonObject manifest = manifestDoc.object();
+    const QString manifestPluginId = manifest.value(QStringLiteral("plugin_id")).toString().trimmed();
+    if (!manifestPluginId.isEmpty() && manifestPluginId != pluginId) {
+        emit installFailed(
+            tr("Manifest plugin_id mismatch:\nexpected %1\nactual %2")
+                .arg(pluginId, manifestPluginId));
+        return;
+    }
+    const QString manifestPlatform = manifest.value(QStringLiteral("platform")).toString().trimmed().toLower();
+    if (!manifestPlatform.isEmpty() && manifestPlatform != platform) {
+        emit installFailed(
+            tr("Manifest platform mismatch:\nexpected %1\nactual %2")
+                .arg(platform, manifestPlatform));
+        return;
+    }
+    const QString manifestArch = manifest.value(QStringLiteral("arch")).toString().trimmed().toLower();
+    if (!manifestArch.isEmpty() && manifestArch != arch) {
+        emit installFailed(
+            tr("Manifest architecture mismatch:\nexpected %1\nactual %2")
+                .arg(arch, manifestArch));
+        return;
+    }
+    const QJsonArray files = manifest.value(QStringLiteral("files")).toArray();
+    if (files.isEmpty()) {
+        emit installFailed(tr("Manifest does not declare any files."));
+        return;
+    }
+
+    m_targetInstallDir = installDirectory.isEmpty() ? defaultInstallDirectory() : installDirectory;
+    QDir installDir(m_targetInstallDir);
+    if (!installDir.mkpath(m_targetInstallDir)) {
+        emit installFailed(tr("Could not create install directory:\n%1").arg(m_targetInstallDir));
+        return;
+    }
+
+    emit installProgress(0, 0, archiveInfo.fileName());
+    QStringList tarArgs;
+    tarArgs << QStringLiteral("-xf") << archiveInfo.absoluteFilePath()
+            << QStringLiteral("-C") << m_targetInstallDir;
+    QProcess tar;
+    tar.start(QStringLiteral("tar"), tarArgs);
+    if (!tar.waitForFinished(120000) || tar.exitStatus() != QProcess::NormalExit || tar.exitCode() != 0) {
+        const QString stderrOut = QString::fromUtf8(tar.readAllStandardError()).trimmed();
+        emit installFailed(tr("Failed to extract the local archive (tar exit %1): %2")
+                               .arg(tar.exitCode()).arg(stderrOut));
+        return;
+    }
+
+    QStringList failedFiles;
+    for (const QJsonValue &fileVal : files) {
+        const QJsonObject fileObj = fileVal.toObject();
+        const QString fileName = fileObj.value(QStringLiteral("name")).toString();
+        const QString expectedSha = fileObj.value(QStringLiteral("sha256")).toString().toLower();
+        if (fileName.isEmpty() || expectedSha.isEmpty()) {
+            continue;
+        }
+        const QString filePath = QDir(m_targetInstallDir).filePath(fileName);
+        QFile file(filePath);
+        if (!file.open(QIODevice::ReadOnly)) {
+            failedFiles << QStringLiteral("%1 (missing)").arg(fileName);
+            continue;
+        }
+        QCryptographicHash hash(QCryptographicHash::Sha256);
+        if (!hash.addData(&file)) {
+            failedFiles << QStringLiteral("%1 (read error)").arg(fileName);
+            continue;
+        }
+        const QString actualSha = QString::fromLatin1(hash.result().toHex());
+        if (actualSha != expectedSha) {
+            failedFiles << QStringLiteral("%1 (sha256 mismatch)").arg(fileName);
+        }
+    }
+    if (!failedFiles.isEmpty()) {
+        const QString quarantineDir = m_targetInstallDir + QStringLiteral(".quarantine");
+        QDir().rename(m_targetInstallDir, quarantineDir);
+        emit installFailed(tr("SHA-256 verification failed for:\n%1\n\nThe plugin has been quarantined.")
+                               .arg(failedFiles.join(QStringLiteral("\n"))));
+        return;
+    }
+
+    const QString version = manifest.value(QStringLiteral("plugin_version")).toString().trimmed();
+    QString releaseTag = manifest.value(QStringLiteral("release_tag")).toString().trimmed();
+    if (releaseTag.isEmpty()) {
+        releaseTag = archiveInfo.fileName();
+    }
+    Configuration c;
+    c.setCudaPluginInstalledVersion(version.isEmpty() ? QStringLiteral("local") : version);
+    c.setCudaPluginReleaseTag(releaseTag);
+    c.setCudaPluginEnabled(true);
+    c.setCudaPluginTrusted(true);
+    c.setCudaPluginInstallPath(m_targetInstallDir);
+    c.writeConfiguration();
+
+    tbcDebugStream() << "CudaPluginManager: installed local CUDA plugin from"
+                     << archiveInfo.absoluteFilePath() << "using manifest" << manifestPath
+                     << "to" << m_targetInstallDir;
+    emit installSucceeded(m_targetInstallDir);
 }
 
 void CudaPluginManager::handleAssetDownloadReply(QNetworkReply *reply)

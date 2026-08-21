@@ -403,127 +403,58 @@ bool ensureWindowsOnnxCudaProviderLoaded(QString &errorMessage)
     static QString providerError;
 
     std::call_once(providerLoadOnce, []() {
-        auto formatWindowsError = [](DWORD errorCode) {
-            LPWSTR messageBuffer = nullptr;
-            const DWORD formatFlags = FORMAT_MESSAGE_ALLOCATE_BUFFER
-                | FORMAT_MESSAGE_FROM_SYSTEM
-                | FORMAT_MESSAGE_IGNORE_INSERTS;
-            const DWORD messageLength = FormatMessageW(
-                formatFlags,
-                nullptr,
-                errorCode,
-                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                reinterpret_cast<LPWSTR>(&messageBuffer),
-                0,
-                nullptr
-            );
-
-            QString message;
-            if (messageLength > 0 && messageBuffer != nullptr) {
-                message = QString::fromWCharArray(messageBuffer, static_cast<int>(messageLength)).trimmed();
-            } else {
-                message = QStringLiteral("Windows error code %1").arg(errorCode);
+        auto hasCudaRuntimeSet = [](const QString &directory) {
+            if (directory.isEmpty()) {
+                return false;
             }
-
-            if (messageBuffer != nullptr) {
-                LocalFree(messageBuffer);
-            }
-            return message;
-        };
-
-        auto tryLoadLibrary = [&](const QString &libraryPath, QString &loadError) -> bool {
-            HMODULE module = LoadLibraryW(reinterpret_cast<LPCWSTR>(libraryPath.utf16()));
-            if (module != nullptr) {
-                return true;
-            }
-
-            loadError = formatWindowsError(GetLastError());
-            return false;
-        };
-
-        auto tryLoadProviderPair = [&](const QString &directory, QString &pairError) -> bool {
-            const QString providersSharedDll = QStringLiteral("onnxruntime_providers_shared.dll");
-            const QString providersCudaDll = QStringLiteral("onnxruntime_providers_cuda.dll");
-            const QString sharedPath = directory.isEmpty()
-                ? providersSharedDll
-                : QDir(directory).filePath(providersSharedDll);
-            const QString cudaPath = directory.isEmpty()
-                ? providersCudaDll
-                : QDir(directory).filePath(providersCudaDll);
-
-            if (!directory.isEmpty()) {
-                if (!QFileInfo::exists(sharedPath) || !QFileInfo::exists(cudaPath)) {
-                    pairError = QStringLiteral("missing ONNX Runtime CUDA provider DLLs in %1").arg(directory);
+            const QDir dir(directory);
+            static const QStringList requiredRuntimeDlls = {
+                QStringLiteral("cudart64_110.dll"),
+                QStringLiteral("cublas64_11.dll"),
+                QStringLiteral("cublasLt64_11.dll"),
+                QStringLiteral("cufft64_10.dll"),
+                QStringLiteral("cudnn64_8.dll"),
+            };
+            for (const QString &dllName : requiredRuntimeDlls) {
+                if (!QFileInfo::exists(dir.filePath(dllName))) {
                     return false;
                 }
             }
-
-            // For a plugin directory, add it to the DLL search path so the
-            // provider DLL's transitive CUDA runtime imports (cudart64_110,
-            // cublas64_11, cufft64_10, cudnn64_8, ...) resolve from the plugin
-            // dir rather than only the exe dir / system dirs. SetDllDirectoryW
-            // is process-global and applies to subsequent LoadLibrary calls +
-            // their transitive DT_NEEDED resolution. Reset to nullptr after so
-            // we don't permanently alter the process search path.
-            if (!directory.isEmpty()) {
-                SetDllDirectoryW(reinterpret_cast<LPCWSTR>(directory.utf16()));
-            }
-
-            QString sharedError;
-            if (!tryLoadLibrary(sharedPath, sharedError)) {
-                pairError = QStringLiteral("failed to load %1: %2").arg(sharedPath, sharedError);
-                if (!directory.isEmpty()) SetDllDirectoryW(nullptr);
-                return false;
-            }
-
-            QString cudaError;
-            if (!tryLoadLibrary(cudaPath, cudaError)) {
-                pairError = QStringLiteral("failed to load %1: %2").arg(cudaPath, cudaError);
-                if (!directory.isEmpty()) SetDllDirectoryW(nullptr);
-                return false;
-            }
-
-            if (!directory.isEmpty()) SetDllDirectoryW(nullptr);
             return true;
         };
-
-        QStringList candidateDirectories;
-        // Plugin dirs first: if a CUDA plugin is installed there, its provider
-        // DLL + transitive CUDA runtime DLLs resolve from the plugin dir via
-        // SetDllDirectoryW (applied inside tryLoadProviderPair for a non-empty
-        // plugin dir). This is the opt-in GPU path.
+        QString runtimeDirectory;
         const QStringList pluginDirs = cudaPluginCandidateDirectories();
         for (const QString &dir : pluginDirs) {
-            candidateDirectories.append(dir);
-        }
-
-        const QString appDir = QCoreApplication::applicationDirPath();
-        if (!appDir.isEmpty()) {
-            candidateDirectories.append(appDir);
-        }
-
-        const QString onnxRuntimeRoot = qEnvironmentVariable(kOnnxRuntimeRootEnvVar).trimmed();
-        if (!onnxRuntimeRoot.isEmpty()) {
-            const QDir onnxRuntimeRootDir(onnxRuntimeRoot);
-            candidateDirectories.append(onnxRuntimeRootDir.filePath(QStringLiteral("lib")));
-            candidateDirectories.append(onnxRuntimeRootDir.filePath(QStringLiteral("bin")));
-            candidateDirectories.append(onnxRuntimeRoot);
-        }
-
-        candidateDirectories.removeDuplicates();
-        candidateDirectories.append(QString());
-
-        QString pairError;
-        for (const QString &candidateDirectory : candidateDirectories) {
-            if (tryLoadProviderPair(candidateDirectory, pairError)) {
-                providerReady = true;
-                return;
+            const QString cleanDir = QDir::cleanPath(dir);
+            if (hasCudaRuntimeSet(cleanDir)) {
+                runtimeDirectory = cleanDir;
+                break;
             }
         }
 
-        providerError = pairError.isEmpty()
-            ? QStringLiteral("unable to locate ONNX Runtime CUDA provider DLLs")
-            : pairError;
+        if (runtimeDirectory.isEmpty()) {
+            // No plugin runtime directory found; not fatal. ORT may still load
+            // CUDA from app-local or system CUDA runtime locations.
+            providerReady = true;
+            return;
+        }
+
+        QStringList pathEntries = QString::fromLocal8Bit(qgetenv("PATH"))
+            .split(QLatin1Char(';'), Qt::SkipEmptyParts);
+        const auto hasEntry = [&runtimeDirectory](const QString &entry) {
+            return QDir::cleanPath(entry).compare(runtimeDirectory, Qt::CaseInsensitive) == 0;
+        };
+        if (!std::any_of(pathEntries.cbegin(), pathEntries.cend(), hasEntry)) {
+            pathEntries.prepend(runtimeDirectory);
+            if (!qputenv("PATH", pathEntries.join(QLatin1Char(';')).toLocal8Bit())) {
+                providerError = QStringLiteral("failed to prepend CUDA plugin runtime directory to PATH: %1")
+                    .arg(runtimeDirectory);
+                return;
+            }
+            tbcDebugStream() << "ensureWindowsOnnxCudaProviderLoaded(): prepended CUDA plugin runtime path:"
+                             << runtimeDirectory;
+        }
+        providerReady = true;
     });
 
     if (!providerReady) {
@@ -992,26 +923,30 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
     static constexpr qint32 Nt = 4;
     static constexpr qint32 StepX = 8;
     static constexpr qint32 StepY = 8;
+    static constexpr qint32 TileElementCount = Nt * Ny * Nx;
+    static constexpr qint32 InputElementCountPerTile = 2 * TileElementCount;
+    static constexpr qint32 PreferredInferenceBatchTiles = 32;
 
     static thread_local fftw_plan forwardPlan = nullptr;
     static thread_local fftw_plan inversePlan = nullptr;
     if (!forwardPlan || !inversePlan) {
-        auto *planIn = reinterpret_cast<fftw_complex *>(fftw_malloc(sizeof(fftw_complex) * Nt * Ny * Nx));
-        auto *planOut = reinterpret_cast<fftw_complex *>(fftw_malloc(sizeof(fftw_complex) * Nt * Ny * Nx));
+        auto *planIn = reinterpret_cast<fftw_complex *>(fftw_malloc(sizeof(fftw_complex) * TileElementCount));
+        auto *planOut = reinterpret_cast<fftw_complex *>(fftw_malloc(sizeof(fftw_complex) * TileElementCount));
         forwardPlan = fftw_plan_dft_3d(Nt, Ny, Nx, planIn, planOut, FFTW_FORWARD, FFTW_ESTIMATE);
         inversePlan = fftw_plan_dft_3d(Nt, Ny, Nx, planOut, planIn, FFTW_BACKWARD, FFTW_ESTIMATE);
         fftw_free(planIn);
         fftw_free(planOut);
     }
-
-    static thread_local fftw_complex tileInput[Nt * Ny * Nx];
-    static thread_local fftw_complex tileSpectrum[Nt * Ny * Nx];
+    static thread_local fftw_complex tileInput[TileElementCount];
+    static thread_local fftw_complex tileSpectrum[TileElementCount];
     auto *in = tileInput;
     auto *out = tileSpectrum;
 
     static double winX[Nx];
     static double winY[Ny];
     static double winT[Nt];
+    static double winTYX[TileElementCount];
+    static qint32 reflectedMagnitudeIndex[TileElementCount];
     static std::once_flag windowInitOnce;
     std::call_once(windowInitOnce, []() {
         for (qint32 i = 0; i < Nx; i++) {
@@ -1021,13 +956,27 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
         for (qint32 i = 0; i < Nt; i++) {
             winT[i] = sin(M_PI * (static_cast<double>(i) + 0.5) / static_cast<double>(Nt));
         }
+        for (qint32 t = 0; t < Nt; t++) {
+            for (qint32 y = 0; y < Ny; y++) {
+                for (qint32 x = 0; x < Nx; x++) {
+                    const qint32 index = IDX3(t, y, x, Nt, Ny, Nx);
+                    winTYX[index] = winT[t] * winY[y] * winX[x];
+
+                    const qint32 refT = ((2 - t) % Nt + Nt) % Nt;
+                    const qint32 refY = (Ny - y) % Ny;
+                    const qint32 refX = ((Nx / 2) - x + Nx) % Nx;
+                    reflectedMagnitudeIndex[index] = IDX3(refT, refY, refX, Nt, Ny, Nx);
+                }
+            }
+        }
     });
 
     static std::once_flag onnxInitOnce;
-    static bool onnxReady = false;
+    static std::atomic_bool onnxReady {false};
+    static qint32 onnxBatchTiles = 1;
+    static QString onnxProviderName = QStringLiteral("CPU");
     static std::unique_ptr<Ort::Env> ortEnv;
     static std::unique_ptr<Ort::Session> ortSession;
-    static std::mutex onnxRunMutex;
     std::call_once(onnxInitOnce, []() {
         try {
             ortEnv = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "LdDecodeToolsNnTransform3D");
@@ -1052,9 +1001,8 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
                         kChromaNetV2OnnxDataSize,
                         options
                     );
-                    onnxReady = true;
-                    qInfo() << "nnTransform3D ONNX provider:" << providerName
-                            << "(intra-op threads:" << intraOpDescription << ")";
+                    onnxReady.store(true, std::memory_order_release);
+                    onnxProviderName = providerName;
                     return true;
                 } catch (const std::exception &e) {
                     qWarning() << "Failed to initialize nnTransform3D ONNX session with"
@@ -1096,7 +1044,7 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
                 }
             }
 
-            if (!onnxReady && allowCoreML) {
+            if (!onnxReady.load(std::memory_order_acquire) && allowCoreML) {
                 Ort::SessionOptions coremlOptions;
                 configureSessionOptions(coremlOptions);
 
@@ -1107,24 +1055,53 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
                     qWarning() << "Unable to enable nnTransform3D CoreML provider:" << appendError;
                 }
             }
-
-            if (!onnxReady) {
+            if (!onnxReady.load(std::memory_order_acquire)) {
                 Ort::SessionOptions cpuOptions;
                 configureSessionOptions(cpuOptions);
                 tryCreateSession(cpuOptions, QStringLiteral("CPU"));
             }
 
-            if (!onnxReady) {
+            if (onnxReady.load(std::memory_order_acquire) && ortSession) {
+                auto resolveBatchDimension = [](const std::vector<int64_t> &shape) -> qint32 {
+                    if (shape.empty()) {
+                        return 1;
+                    }
+                    const int64_t batchDim = shape.front();
+                    if (batchDim <= 0) {
+                        return PreferredInferenceBatchTiles;
+                    }
+                    const qint64 clampedBatch = qBound<qint64>(
+                        static_cast<qint64>(1),
+                        static_cast<qint64>(batchDim),
+                        static_cast<qint64>(PreferredInferenceBatchTiles)
+                    );
+                    return static_cast<qint32>(clampedBatch);
+                };
+                try {
+                    const auto inputShape = ortSession->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+                    const auto outputShape = ortSession->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+                    const qint32 inputBatch = resolveBatchDimension(inputShape);
+                    const qint32 outputBatch = resolveBatchDimension(outputShape);
+                    onnxBatchTiles = qMax<qint32>(1, qMin(inputBatch, outputBatch));
+                } catch (const std::exception &e) {
+                    qWarning() << "Unable to inspect nnTransform3D model tensor shapes; using batch=1:" << e.what();
+                    onnxBatchTiles = 1;
+                }
+
+                qInfo() << "nnTransform3D ONNX provider:" << onnxProviderName
+                        << "(intra-op threads:" << intraOpDescription
+                        << ", tile batch:" << onnxBatchTiles << ")";
+            } else {
                 qCritical() << "Failed to initialize nnTransform3D ONNX session using provider preference:"
                             << providerPreferenceToString(providerPreference);
             }
         } catch (const std::exception &e) {
             qCritical() << "Failed to initialize nnTransform3D ONNX runtime:" << e.what();
-            onnxReady = false;
+            onnxReady.store(false, std::memory_order_release);
         }
     });
 
-    if (!onnxReady || !forwardPlan || !inversePlan) {
+    if (!onnxReady.load(std::memory_order_acquire) || !forwardPlan || !inversePlan) {
         static std::once_flag nnUnavailableWarningOnce;
         std::call_once(nnUnavailableWarningOnce, []() {
             qCritical() << "nnTransform3D unavailable; falling back to 2D chroma";
@@ -1138,10 +1115,22 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
         return true;
     }
 
-    static thread_local float modelInput[2 * Nt * Ny * Nx];
-    static thread_local float magnitudes[Nt * Ny * Nx];
+    static thread_local std::vector<float> batchedModelInput;
+    static thread_local std::vector<float> batchedModelMask;
+    static thread_local std::vector<double> batchedSpectrum;
+    static thread_local std::vector<qint32> batchedTileY;
+    static thread_local std::vector<qint32> batchedTileX;
     static thread_local Ort::MemoryInfo modelMemoryInfo =
         Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    static const char *inputNames[] = { "input" };
+    static const char *outputNames[] = { "output" };
+
+    const qint32 maxBatchTiles = qMax<qint32>(1, onnxBatchTiles);
+    batchedModelInput.resize(static_cast<qsizetype>(maxBatchTiles) * InputElementCountPerTile);
+    batchedModelMask.resize(static_cast<qsizetype>(maxBatchTiles) * TileElementCount);
+    batchedSpectrum.resize(static_cast<qsizetype>(maxBatchTiles) * TileElementCount * 2);
+    batchedTileY.resize(maxBatchTiles);
+    batchedTileX.resize(maxBatchTiles);
 
     FrameBuffer *frames[2] = { this, &nextFrame };
 
@@ -1150,6 +1139,107 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
     const qint32 startX = videoParameters.activeVideoStart - (Nx / 2);
     const qint32 endX = videoParameters.activeVideoEnd;
     qint32 tileCounter = 0;
+    qint32 pendingBatchTiles = 0;
+
+    auto flushPendingBatch = [&](qint32 tileCount) -> bool {
+        if (tileCount <= 0) {
+            return true;
+        }
+        if (cancelEpoch.load(std::memory_order_relaxed) != decodeEpoch) {
+            return false;
+        }
+        if (!onnxReady.load(std::memory_order_acquire) || !ortSession) {
+            return false;
+        }
+
+        const int64_t inputShape[] = {
+            static_cast<int64_t>(tileCount),
+            static_cast<int64_t>(2),
+            static_cast<int64_t>(Nt),
+            static_cast<int64_t>(Ny),
+            static_cast<int64_t>(Nx)
+        };
+        const int64_t outputShape[] = {
+            static_cast<int64_t>(tileCount),
+            static_cast<int64_t>(1),
+            static_cast<int64_t>(Nt),
+            static_cast<int64_t>(Ny),
+            static_cast<int64_t>(Nx)
+        };
+        const size_t inputElementCount = static_cast<size_t>(tileCount) * static_cast<size_t>(InputElementCountPerTile);
+        const size_t outputElementCount = static_cast<size_t>(tileCount) * static_cast<size_t>(TileElementCount);
+
+        Ort::Value modelInputTensor = Ort::Value::CreateTensor<float>(
+            modelMemoryInfo, batchedModelInput.data(), inputElementCount, inputShape, 5
+        );
+        Ort::Value modelOutputTensor = Ort::Value::CreateTensor<float>(
+            modelMemoryInfo, batchedModelMask.data(), outputElementCount, outputShape, 5
+        );
+
+        try {
+            ortSession->Run(
+                Ort::RunOptions{ nullptr },
+                inputNames, &modelInputTensor, 1,
+                outputNames, &modelOutputTensor, 1
+            );
+        } catch (const Ort::Exception &e) {
+            qWarning() << "nnTransform3D ONNX inference failed; disabling nn session and falling back to 2D chroma:"
+                       << e.what();
+            onnxReady.store(false, std::memory_order_release);
+            return false;
+        }
+
+        if (cancelEpoch.load(std::memory_order_relaxed) != decodeEpoch) {
+            return false;
+        }
+
+        for (qint32 tileIndex = 0; tileIndex < tileCount; tileIndex++) {
+            const qint32 tileY = batchedTileY[tileIndex];
+            const qint32 tileX = batchedTileX[tileIndex];
+            const qsizetype tileOffset = static_cast<qsizetype>(tileIndex) * TileElementCount;
+            const qsizetype spectrumOffset = tileOffset * 2;
+            const float *mask = batchedModelMask.data() + tileOffset;
+
+            for (qint32 i = 0; i < TileElementCount; i++) {
+                const qsizetype spectrumIndex = spectrumOffset + (static_cast<qsizetype>(i) * 2);
+                out[i][0] = batchedSpectrum[spectrumIndex] * mask[i];
+                out[i][1] = batchedSpectrum[spectrumIndex + 1] * mask[i];
+            }
+
+            fftw_execute_dft(inversePlan, out, in);
+
+            for (qint32 t = 0; t < Nt; t++) {
+                const qint32 targetFrameIndex = t / 2;
+                const bool oddField = (t % 2) != 0;
+                FrameBuffer *targetFrame = frames[targetFrameIndex];
+
+                for (qint32 dy = 0; dy < Ny; dy++) {
+                    const qint32 absY = tileY + dy;
+                    if (absY < videoParameters.firstActiveFrameLine || absY >= videoParameters.lastActiveFrameLine) {
+                        continue;
+                    }
+                    if ((absY % 2 != 0) != oddField) {
+                        continue;
+                    }
+
+                    for (qint32 dx = 0; dx < Nx; dx++) {
+                        const qint32 absX = tileX + dx;
+                        if (absX < videoParameters.activeVideoStart || absX >= videoParameters.activeVideoEnd) {
+                            continue;
+                        }
+                        const qint32 index = IDX3(t, dy, dx, Nt, Ny, Nx);
+                        const double value = in[index][0] / static_cast<double>(TileElementCount);
+                        const double weight = winTYX[index];
+
+                        targetFrame->nnAccChroma[absY][absX] += value * weight;
+                        targetFrame->nnWeightSum[absY][absX] += weight * weight;
+                    }
+                }
+            }
+        }
+
+        return true;
+    };
 
     for (qint32 y = startY; y < endY; y += StepY) {
         for (qint32 x = startX; x < endX; x += StepX) {
@@ -1165,7 +1255,7 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
                     );
                 }
             }
-            memset(in, 0, sizeof(fftw_complex) * Nt * Ny * Nx);
+            memset(in, 0, sizeof(fftw_complex) * TileElementCount);
 
             double blockDc = 0.0;
             qint32 sampleCount = 0;
@@ -1225,7 +1315,7 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
                         const qint32 index = IDX3(t, dy, dx, Nt, Ny, Nx);
 
                         if (yActive && xActive && (oddLine == oddField)) {
-                            in[index][0] = (in[index][0] - blockDc) * winT[t] * winY[dy] * winX[dx];
+                            in[index][0] = (in[index][0] - blockDc) * winTYX[index];
                         } else {
                             in[index][0] = 0.0;
                             in[index][1] = 0.0;
@@ -1235,90 +1325,37 @@ bool Comb::FrameBuffer::split3DnnTransform(FrameBuffer &nextFrame, qint32 frameI
             }
 
             fftw_execute_dft(forwardPlan, in, out);
-
-            for (qint32 i = 0; i < Nt * Ny * Nx; i++) {
-                magnitudes[i] = sqrtf(static_cast<float>((out[i][0] * out[i][0]) + (out[i][1] * out[i][1])));
+            const qsizetype inputOffset = static_cast<qsizetype>(pendingBatchTiles) * InputElementCountPerTile;
+            const qsizetype spectrumOffset = static_cast<qsizetype>(pendingBatchTiles) * TileElementCount * 2;
+            float *channel0 = batchedModelInput.data() + inputOffset;
+            float *channel1 = channel0 + TileElementCount;
+            for (qint32 i = 0; i < TileElementCount; i++) {
+                const double re = out[i][0];
+                const double im = out[i][1];
+                channel0[i] = sqrtf(static_cast<float>((re * re) + (im * im)));
+                const qsizetype destinationIndex = spectrumOffset + (static_cast<qsizetype>(i) * 2);
+                batchedSpectrum[destinationIndex] = re;
+                batchedSpectrum[destinationIndex + 1] = im;
             }
-            memcpy(modelInput, magnitudes, sizeof(float) * Nt * Ny * Nx);
-
-            qint32 reflectedIndex = Nt * Ny * Nx;
-            for (qint32 ft = 0; ft < Nt; ft++) {
-                const qint32 refT = ((2 - ft) % 4 + 4) % 4;
-                for (qint32 fy = 0; fy < Ny; fy++) {
-                    const qint32 refY = (Ny - fy) % Ny;
-                    for (qint32 fx = 0; fx < Nx; fx++) {
-                        const qint32 refX = ((Nx / 2) - fx + Nx) % Nx;
-                        modelInput[reflectedIndex++] = magnitudes[IDX3(refT, refY, refX, Nt, Ny, Nx)];
-                    }
-                }
+            for (qint32 i = 0; i < TileElementCount; i++) {
+                channel1[i] = channel0[reflectedMagnitudeIndex[i]];
             }
 
-            static const int64_t inputShape[] = { 1, 2, 4, 16, 16 };
-            Ort::Value modelInputTensor = Ort::Value::CreateTensor<float>(
-                modelMemoryInfo, modelInput, 2 * Nt * Ny * Nx, inputShape, 5
-            );
-            static const char *inputNames[] = { "input" };
-            static const char *outputNames[] = { "output" };
-            std::vector<Ort::Value> modelOutputs;
-            {
-                std::lock_guard<std::mutex> runLock(onnxRunMutex);
-                if (!onnxReady || !ortSession) {
+            batchedTileY[pendingBatchTiles] = y;
+            batchedTileX[pendingBatchTiles] = x;
+            pendingBatchTiles++;
+
+            if (pendingBatchTiles == maxBatchTiles) {
+                if (!flushPendingBatch(pendingBatchTiles)) {
                     return false;
                 }
-                try {
-                    modelOutputs = ortSession->Run(
-                        Ort::RunOptions{ nullptr },
-                        inputNames, &modelInputTensor, 1,
-                        outputNames, 1
-                    );
-                } catch (const Ort::Exception &e) {
-                    qWarning() << "nnTransform3D ONNX inference failed; disabling nn session and falling back to 2D chroma:"
-                               << e.what();
-                    onnxReady = false;
-                    ortSession.reset();
-                    return false;
-                }
-            }
-            if (cancelEpoch.load(std::memory_order_relaxed) != decodeEpoch) {
-                return false;
-            }
-            const float *mask = modelOutputs[0].GetTensorData<float>();
-            for (qint32 i = 0; i < Nt * Ny * Nx; i++) {
-                out[i][0] *= mask[i];
-                out[i][1] *= mask[i];
-            }
-
-            fftw_execute_dft(inversePlan, out, in);
-
-            for (qint32 t = 0; t < Nt; t++) {
-                const qint32 targetFrameIndex = t / 2;
-                const bool oddField = (t % 2) != 0;
-                FrameBuffer *targetFrame = frames[targetFrameIndex];
-
-                for (qint32 dy = 0; dy < Ny; dy++) {
-                    const qint32 absY = y + dy;
-                    if (absY < videoParameters.firstActiveFrameLine || absY >= videoParameters.lastActiveFrameLine) {
-                        continue;
-                    }
-                    if ((absY % 2 != 0) != oddField) {
-                        continue;
-                    }
-
-                    for (qint32 dx = 0; dx < Nx; dx++) {
-                        const qint32 absX = x + dx;
-                        if (absX < videoParameters.activeVideoStart || absX >= videoParameters.activeVideoEnd) {
-                            continue;
-                        }
-                        const qint32 index = IDX3(t, dy, dx, Nt, Ny, Nx);
-                        const double value = in[index][0] / static_cast<double>(Nt * Ny * Nx);
-                        const double weight = winT[t] * winY[dy] * winX[dx];
-
-                        targetFrame->nnAccChroma[absY][absX] += value * weight;
-                        targetFrame->nnWeightSum[absY][absX] += weight * weight;
-                    }
-                }
+                pendingBatchTiles = 0;
             }
         }
+    }
+
+    if (!flushPendingBatch(pendingBatchTiles)) {
+        return false;
     }
     return true;
 }
