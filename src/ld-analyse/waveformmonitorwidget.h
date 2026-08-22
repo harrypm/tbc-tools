@@ -99,9 +99,11 @@ class WaveformMonitorWidget : public QWidget {
   // Resolved 10-bit CVBS levels (normative) + 16-bit black for the Black
   // marker, plus the resolved 16-bit blanking used by tbc_to_cvbs.
   ::VideoSystem system_ = NTSC;
+  int32_t cvbs_sync_tip_10_ = 16;
   int32_t cvbs_blanking_10_ = 240;
   int32_t cvbs_white_10_ = 800;
   int32_t cvbs_black_10_ = 282;
+  int32_t cvbs_peak_10_ = 1019;
   int32_t blanking_16_ = 15360;
   int32_t white_16_ = 51200;
   int32_t black_16_ = 18048;

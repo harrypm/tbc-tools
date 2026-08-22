@@ -756,6 +756,16 @@ bool isSupportedInputExtension(const QString &filePath)
         || suffix == QStringLiteral("json");
 }
 
+bool isTeletextStreamInputExtension(const QString &filePath)
+{
+    static const QRegularExpression teletextSuffixPattern(
+        QStringLiteral("^t\\d\\d$"),
+        QRegularExpression::CaseInsensitiveOption
+    );
+    const QString suffix = QFileInfo(filePath).suffix();
+    return teletextSuffixPattern.match(suffix).hasMatch();
+}
+
 QString firstSupportedDroppedFile(const QMimeData *mimeData)
 {
     if (!mimeData || !mimeData->hasUrls()) {
@@ -771,7 +781,7 @@ QString firstSupportedDroppedFile(const QMimeData *mimeData)
         if (localPath.isEmpty()) {
             continue;
         }
-        if (isSupportedInputExtension(localPath)) {
+        if (isSupportedInputExtension(localPath) || isTeletextStreamInputExtension(localPath)) {
             return localPath;
         }
     }
@@ -2050,8 +2060,30 @@ void MainWindow::dropEvent(QDropEvent *event)
         return;
     }
 
-    lastFilename = droppedFile;
     event->acceptProposedAction();
+    if (isTeletextStreamInputExtension(droppedFile)) {
+        if (!teletextViewerDialog) {
+            teletextViewerDialog = new TeletextViewerDialog(this);
+            teletextViewerDialog->setWindowFlag(Qt::Window, true);
+        }
+        QString errorMessage;
+        if (!teletextViewerDialog->openTeletextStream(droppedFile, &errorMessage)) {
+            QMessageBox::warning(this, tr("Teletext open failed"),
+                                 errorMessage.isEmpty()
+                                     ? tr("Could not open the dropped .tXX teletext stream.")
+                                     : errorMessage);
+            return;
+        }
+        teletextViewerDialog->show();
+        teletextViewerDialog->raise();
+        teletextViewerDialog->activateWindow();
+        if (statusBar()) {
+            statusBar()->showMessage(tr("Opened teletext stream: %1").arg(droppedFile), 5000);
+        }
+        return;
+    }
+
+    lastFilename = droppedFile;
     requestSourceOpen(droppedFile);
 }
 

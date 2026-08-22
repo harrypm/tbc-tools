@@ -62,6 +62,8 @@ void WaveformMonitorWidget::setData(
 
   cvbs_blanking_10_ = tbc::cvbs::cvbs_blanking(system_);
   cvbs_white_10_ = tbc::cvbs::cvbs_white(system_);
+  cvbs_sync_tip_10_ = tbc::cvbs::cvbs_sync_tip(system_);
+  cvbs_peak_10_ = tbc::cvbs::cvbs_peak(system_);
   cvbs_black_10_ = tbc::cvbs::tbc_to_cvbs(
       static_cast<uint16_t>(std::clamp(black_16_, 0, 65535)), blanking_16_,
       white_16_, system_);
@@ -75,19 +77,18 @@ void WaveformMonitorWidget::setData(
     y_min_mv_ = -100.0;
     y_max_mv_ = amv + 100.0;
   } else if (have_levels_) {
-    // Map the 16-bit blanking/white to mV via the 10-bit domain so the axis
-    // spans the active range with a little headroom either side.
-    const double blank_mv =
-        tbc::amp::samples10_to_mv(cvbs_blanking_10_, cvbs_blanking_10_,
+    // Match decode-orc's waveform framing: derive the display envelope from
+    // normative sync-tip and peak limits with a small headroom margin.
+    const double sync_tip_mv =
+        tbc::amp::samples10_to_mv(cvbs_sync_tip_10_, cvbs_blanking_10_,
                                   cvbs_white_10_, system_);
-    const double white_mv =
-        tbc::amp::samples10_to_mv(cvbs_white_10_, cvbs_blanking_10_,
+    const double peak_mv =
+        tbc::amp::samples10_to_mv(cvbs_peak_10_, cvbs_blanking_10_,
                                   cvbs_white_10_, system_);
-    const double span = white_mv - blank_mv;  // == active_video_mv
+    const double span = peak_mv - sync_tip_mv;
     if (span > 0.0) {
-      // Composite headroom: ~40 IRE below blanking (sync), ~20 IRE above white.
-      y_min_mv_ = blank_mv - span * 0.40;
-      y_max_mv_ = white_mv + span * 0.20;
+      y_min_mv_ = sync_tip_mv - span * 0.05;
+      y_max_mv_ = peak_mv + span * 0.05;
     }
   }
   y_bins_ = static_cast<int>((y_max_mv_ - y_min_mv_) / kBinWidthMv) + 1;
@@ -531,8 +532,6 @@ void WaveformMonitorWidget::drawLevelMarkers(QPainter &painter,
   const int32_t blanking = cvbs_blanking_10_;
   const int32_t white = cvbs_white_10_;
 
-  // ld-decode metadata has no sync-tip/peak 16-bit fields, so only the three
-  // levels it does carry are marked: Blanking, Black, White.
   struct LevelSpec {
     int32_t raw10;
     const char *name;
@@ -541,9 +540,12 @@ void WaveformMonitorWidget::drawLevelMarkers(QPainter &painter,
   };
 
   const LevelSpec levels[] = {
+      {cvbs_sync_tip_10_, "Sync tip", Qt::DashLine, 0.60},
       {blanking, "Blanking", Qt::DashLine, 0.35},
-      {cvbs_black_10_, "Black", Qt::DashDotLine, 0.50},
+      {(cvbs_black_10_ == blanking ? -1 : cvbs_black_10_), "Black",
+       Qt::DashDotLine, 0.50},
       {white, "White", Qt::DashLine, 0.70},
+      {cvbs_peak_10_, "Peak", Qt::DashLine, 0.55},
   };
 
   for (const auto &lv : levels) {

@@ -118,6 +118,7 @@ FIRFilter<double> filter(coefficients);
 - **Nix environment provides all dependencies** - prefer Nix over manual dependency management
 - **Qt6 required** - all tools use Qt framework even for CLI tools
 - **Multi-threading enabled** by default for performance-critical operations
+- **Hard rule: never touch or target the ld-decode-tools upstream remote** - do not fetch from, pull from, push to, diff against, cherry-pick from, or otherwise reference `https://github.com/simoninns/ld-decode-tools.git` (or a git remote alias pointing to it, e.g. `upstream`) for any task in this project
 - **Hard rule: all build/testing work must pass GitHub Actions workflows** - do not treat build verification as complete unless GitHub Actions succeeds
 - **Hard rule: GUI input contrast is mandatory** - never ship a GUI binary where text/edit/selection widgets have low-contrast text; all Qt GUI entrypoints must apply the shared `tbc::ui::enforceInputWidgetContrast(...)` guard after palette/theme setup
 - **Hard rule: preserve legacy GUI theme appearance** - do not introduce blue-tinted global backgrounds; keep the established neutral grey/black theme in existing GUIs by preserving each app’s intended `QPalette::Window`/`QPalette::Base` colors

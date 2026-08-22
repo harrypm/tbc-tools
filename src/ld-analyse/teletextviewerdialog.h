@@ -24,9 +24,12 @@ class QEvent;
 class QLineEdit;
 class QMimeData;
 class QPushButton;
+class QStackedWidget;
+class QShowEvent;
 class QTextBrowser;
 class QTimer;
 class QUrl;
+class TeletextNativeViewWidget;
 
 class TeletextViewerDialog : public QDialog
 {
@@ -36,22 +39,30 @@ public:
     explicit TeletextViewerDialog(QWidget *parent = nullptr);
     void setDirectory(const QString &directoryPath);
     QString directory() const;
+    bool openTeletextStream(const QString &streamPath, QString *errorMessage = nullptr);
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private slots:
     void browseForDirectory();
+    void browseForTeletextStream();
     void refreshPageList();
     void loadSelectedPage();
     void handlePageLinkClicked(const QUrl &linkUrl);
     void openSelectedPageInBrowser();
     void setAutoRefreshEnabled(bool enabled);
     void handlePeriodicRefresh();
+    void setNativeRendererEnabled(bool enabled);
+    void setFlashAnimationEnabled(bool enabled);
 
 private:
+    void autoSizeWindowForCurrentRenderer();
+    bool cyclePageSelection(int direction);
+    bool openTeletextStreamPath(const QString &streamPath, QString *errorMessage = nullptr);
     bool canAcceptDrop(const QMimeData *mimeData) const;
     bool handleDrop(const QMimeData *mimeData);
     bool directoryContainsHtml() const;
@@ -63,13 +74,19 @@ private:
 
     QLineEdit *directoryLineEdit = nullptr;
     QPushButton *browseDirectoryButton = nullptr;
+    QPushButton *browseStreamButton = nullptr;
     QPushButton *refreshListButton = nullptr;
     QComboBox *pageComboBox = nullptr;
     QPushButton *refreshPageButton = nullptr;
     QPushButton *openInBrowserButton = nullptr;
     QCheckBox *autoRefreshCheckBox = nullptr;
+    QComboBox *rendererComboBox = nullptr;
+    QCheckBox *flashAnimationCheckBox = nullptr;
+    QStackedWidget *viewerStack = nullptr;
     QTextBrowser *pageViewer = nullptr;
+    TeletextNativeViewWidget *nativePageViewer = nullptr;
     QTimer *refreshTimer = nullptr;
+    bool autoWindowSizePending = true;
 };
 
 #endif // TELETEXTVIEWERDIALOG_H

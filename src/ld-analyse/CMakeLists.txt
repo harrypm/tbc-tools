@@ -14,6 +14,7 @@ set(ld-analyse_SOURCES
     metadatastatusdialog.cpp metadatastatusdialog.ui
     notesviewerdialog.cpp notesviewerdialog.h
     teletextviewerdialog.cpp teletextviewerdialog.h
+    teletextnativeviewwidget.cpp teletextnativeviewwidget.h
     main.cpp
     mainwindow.cpp mainwindow.ui
     timelinemarkerslider.cpp timelinemarkerslider.h
@@ -88,8 +89,10 @@ target_link_libraries(tbc-efm-handler PRIVATE
 )
 
 set(_audio_align_vendor_dir "${CMAKE_SOURCE_DIR}/src/audio-align/vendor/vhs_decode_auto_audio_align")
+set(_teletext_vendor_dir "${CMAKE_SOURCE_DIR}/src/ld-process-vbi/vendor/vhs-teletext")
 target_compile_definitions(ld-analyse PRIVATE
     AUDIO_ALIGN_VENDOR_DIR="${_audio_align_vendor_dir}"
+    TELETEXT_VENDOR_DIR="${_teletext_vendor_dir}"
 )
 add_custom_command(TARGET ld-analyse POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:ld-analyse>/vendor/vhs_decode_auto_audio_align"
@@ -103,6 +106,13 @@ add_custom_command(TARGET ld-analyse POST_BUILD
         "${_audio_align_vendor_dir}/VENDOR_INFO.txt"
         "$<TARGET_FILE_DIR:ld-analyse>/vendor/vhs_decode_auto_audio_align"
 )
+add_custom_command(TARGET ld-analyse POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:ld-analyse>/vendor/vhs-teletext"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${_teletext_vendor_dir}"
+        "$<TARGET_FILE_DIR:ld-analyse>/vendor/vhs-teletext"
+)
+install(DIRECTORY "${_teletext_vendor_dir}/" DESTINATION ${CMAKE_INSTALL_BINDIR}/vendor/vhs-teletext)
 
 if(WIN32)
     target_compile_definitions(ld-analyse PRIVATE
