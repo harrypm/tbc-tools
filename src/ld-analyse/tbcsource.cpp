@@ -1434,6 +1434,21 @@ TbcSource::ScanLineData TbcSource::getScanLineData(qint32 scanLine)
                             : inputFields[secondInputIndex].data;
     DropOuts &dropouts = isFirstField ? firstField.dropOuts : secondField.dropOuts;
 
+    // The frameLine bounds check above validates against the frame height, but the
+    // field data only holds fieldHeight lines. A stale scan-line coordinate (for
+    // example when the Line Scope stays open across a view-mode switch) or a
+    // truncated field with fewer than fieldHeight lines can make lineNumber.field0()
+    // resolve beyond the real field-data line count, causing an out-of-bounds read.
+    // Guard the field-relative line against the actual field-data size before indexing.
+    const qint32 fieldDataWidth = videoParameters.fieldWidth;
+    const qint32 fieldDataLines = fieldDataWidth > 0
+        ? static_cast<qint32>(fieldData.size() / fieldDataWidth)
+        : 0;
+    const qint32 fieldLine0 = lineNumber.field0();
+    if (fieldLine0 < 0 || fieldLine0 >= fieldDataLines) {
+        return ScanLineData();
+    }
+
     scanLineData.composite.resize(videoParameters.fieldWidth);
     scanLineData.luma.resize(videoParameters.fieldWidth);
     scanLineData.isDropout.resize(videoParameters.fieldWidth);
@@ -1441,7 +1456,7 @@ TbcSource::ScanLineData TbcSource::getScanLineData(qint32 scanLine)
 
     for (qint32 xPosition = 0; xPosition < videoParameters.fieldWidth; xPosition++) {
         // Get the 16-bit composite value for the current pixel (frame data is numbered 0-624 or 0-524)
-        scanLineData.composite[xPosition] = fieldData[(lineNumber.field0() * videoParameters.fieldWidth) + xPosition];
+        scanLineData.composite[xPosition] = fieldData[(fieldLine0 * videoParameters.fieldWidth) + xPosition];
 
         // Get the decoded luma value for the current pixel (only computed in the active region)
         scanLineData.luma[xPosition] = static_cast<qint32>(componentFrame.y(frameLine - 1)[xPosition]);
@@ -1461,13 +1476,18 @@ TbcSource::ScanLineData TbcSource::getScanLineData(qint32 scanLine)
         && secondInputIndex < chromaInputFields.size()) {
         const auto &chromaFieldData = isFirstField ? chromaInputFields[firstInputIndex].data
                      : chromaInputFields[secondInputIndex].data;
-        // We need to offset by half a word since the input is 16-bit unsigned.
-        const short offset = std::numeric_limits<int16_t>::min();
-        scanLineData.chroma.resize(videoParameters.fieldWidth);
-        for (qint32 xPosition = 0; xPosition < videoParameters.fieldWidth; xPosition++) {
-            scanLineData.chroma[xPosition] = chromaFieldData[(lineNumber.field0() * videoParameters.fieldWidth) + xPosition] + offset;
-            // Combine Y and C to "simulate" composite for the scope.
-            scanLineData.composite[xPosition] += scanLineData.chroma[xPosition];
+        const qint32 chromaDataLines = fieldDataWidth > 0
+            ? static_cast<qint32>(chromaFieldData.size() / fieldDataWidth)
+            : 0;
+        if (fieldLine0 >= 0 && fieldLine0 < chromaDataLines) {
+            // We need to offset by half a word since the input is 16-bit unsigned.
+            const short offset = std::numeric_limits<int16_t>::min();
+            scanLineData.chroma.resize(videoParameters.fieldWidth);
+            for (qint32 xPosition = 0; xPosition < videoParameters.fieldWidth; xPosition++) {
+                scanLineData.chroma[xPosition] = chromaFieldData[(fieldLine0 * videoParameters.fieldWidth) + xPosition] + offset;
+                // Combine Y and C to "simulate" composite for the scope.
+                scanLineData.composite[xPosition] += scanLineData.chroma[xPosition];
+            }
         }
 
     }

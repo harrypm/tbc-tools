@@ -307,7 +307,16 @@ void OscilloscopeDialog::updateAdvancedScope(const TbcSource::ScanLineData &scan
         return;
     }
     if (scanLineData.fieldWidth < 1 || scanLineData.composite.isEmpty()) {
+        // PlotWidget::showNoDataMessage() deletes every series and marker owned
+        // by the plot widget. Forget our cached pointers so the next valid
+        // update recreates them instead of dereferencing freed memory
+        // (GitHub issue #28: access violation when the Line Scope stays open
+        // across a no-data -> valid-data transition during a view-mode switch).
         advancedPlotWidget->showNoDataMessage(tr("No data available for this line"));
+        advancedCompositeSeries = nullptr;
+        advancedYSeries = nullptr;
+        advancedCSeries = nullptr;
+        advancedSampleMarker = nullptr;
         return;
     }
 
@@ -461,7 +470,17 @@ void OscilloscopeDialog::showTraceImage(TbcSource::ScanLineData scanLineData, qi
     if (scanLineData.fieldWidth < 1 || scanLineData.composite.empty()) {
         tbcDebugStream() << "OscilloscopeDialog::showTraceImage(): Invalid scan line data, skipping - fieldWidth:" << scanLineData.fieldWidth;
         if (advancedPlotWidget) {
+            // PlotWidget::showNoDataMessage() deletes every series and marker
+            // owned by the plot widget. Forget our cached pointers so the next
+            // valid update recreates them instead of dereferencing freed memory
+            // (GitHub issue #28: access violation when the Line Scope stays
+            // open across a no-data -> valid-data transition during a view-mode
+            // switch).
             advancedPlotWidget->showNoDataMessage(tr("No data available for this line"));
+            advancedCompositeSeries = nullptr;
+            advancedYSeries = nullptr;
+            advancedCSeries = nullptr;
+            advancedSampleMarker = nullptr;
         }
         if (advancedSampleInfoLabel) {
             advancedSampleInfoLabel->setText(QString());
