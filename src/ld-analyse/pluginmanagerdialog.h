@@ -25,21 +25,17 @@
 #include <QString>
 #include <QList>
 
+#include "plugincatalog.h"
+
 class CudaPluginManager;
+class GenericPluginInstaller;
 class QLabel;
 class QPushButton;
 class QProgressBar;
 class QTextEdit;
 class QListWidget;
 class QListWidgetItem;
-
-// A descriptor for a known plugin in the built-in registry.
-struct PluginDescriptor {
-    QString id;           // stable plugin id (e.g. "tbc-tools.cuda-runtime")
-    QString displayName;  // shown in the plugin list
-    QString description;  // shown in the details panel
-    QString category;     // grouping label (e.g. "GPU acceleration")
-};
+class QShowEvent;
 
 class PluginManagerDialog : public QDialog
 {
@@ -49,12 +45,19 @@ public:
     explicit PluginManagerDialog(QWidget *parent = nullptr);
     ~PluginManagerDialog() override;
 
+protected:
+    void showEvent(QShowEvent *event) override;
+
 private slots:
     void onPluginSelected(QListWidgetItem *current);
     void onCheckForUpdate();
     void onInstall();
     void onInstallFromLocalArchive();
     void onRemove();
+    void onRetry();
+    void onCancelDownload();
+    void onCatalogFetched(const QList<PluginCatalogEntry> &entries);
+    void onCatalogFetchFailed(const QString &error);
     void onLatestReleaseResolved(const QString &version, const QString &releaseTag, const QString &releaseUrl);
     void onReleaseCheckFailed(const QString &error);
     void onInstallProgress(qint64 bytesReceived, qint64 bytesTotal, const QString &currentFile);
@@ -66,14 +69,18 @@ private slots:
 private:
     void populatePluginList();
     void updateStatusDisplay();
-    void setBusy(bool busy);
+    void setBusy(bool busy, bool canCancel = false);
     void appendLog(const QString &message);
 
-    // The built-in plugin registry (extensible).
-    QList<PluginDescriptor> m_plugins;
+    // The plugin catalog (bundled + cached + remote-fetched).
+    QList<PluginCatalogEntry> m_plugins;
     int m_selectedIndex = -1;  // index into m_plugins, or -1 if none selected
+    bool m_catalogFetchInProgress = false;
+    bool m_installCancelled = false;  // set by Cancel download; consumed by onInstallFailed
 
-    CudaPluginManager *m_cudaManager;  // backend for the CUDA plugin
+    PluginCatalog *m_catalog;              // discovery (bundled/cached/remote)
+    CudaPluginManager *m_cudaManager;      // backend for cuda-runtime plugins
+    GenericPluginInstaller *m_genericInstaller;  // backend for generic plugins
 
     // UI
     QListWidget *m_pluginList;
@@ -89,6 +96,9 @@ private:
     QPushButton *m_installFromArchiveButton;
     QPushButton *m_removeButton;
     QPushButton *m_closeButton;
+    QPushButton *m_retryButton;
+    QPushButton *m_cancelButton;
+    QLabel *m_catalogStatusLabel;
     QProgressBar *m_progressBar;
     QTextEdit *m_logView;
 

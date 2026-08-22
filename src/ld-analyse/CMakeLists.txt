@@ -35,6 +35,8 @@ set(ld-analyse_SOURCES
     updatechecker.cpp updatechecker.h
     cudapluginmanager.cpp cudapluginmanager.h
     pluginmanagerdialog.cpp pluginmanagerdialog.h
+    plugincatalog.cpp plugincatalog.h
+    genericplugininstaller.cpp genericplugininstaller.h
     videoparametersdialog.cpp videoparametersdialog.ui
     chromadecoderconfigdialog.cpp chromadecoderconfigdialog.ui
     tbcsource.cpp

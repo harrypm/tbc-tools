@@ -17,4 +17,7 @@
         <file>Graphics/zoom-original.svg</file>
         <file>Graphics/zoom-out.svg</file>
     </qresource>
+    <qresource prefix="/plugins">
+        <file alias="catalog.json">../../plugins/catalog.json</file>
+    </qresource>
 </RCC>

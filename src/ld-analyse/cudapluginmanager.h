@@ -72,6 +72,11 @@ public:
     // Emits removeSucceeded or removeFailed.
     void remove();
 
+    // Abort an in-flight downloadAndInstall() download (manifest or package).
+    // The outstanding reply's finished handler emits installFailed with an
+    // "Operation canceled" error, which the dialog treats as a cancellation.
+    void cancelInstall();
+
     // Resolved release metadata (valid after latestReleaseResolved).
     QString latestVersion() const { return m_latestVersion; }
     QString latestReleaseTag() const { return m_latestReleaseTag; }
@@ -113,6 +118,10 @@ private:
     qint64 m_receivedBytes = 0;
 
     bool m_requestInFlight = false;
+
+    // The currently in-flight asset reply (manifest or package) during
+    // downloadAndInstall(); used by cancelInstall() to abort the download.
+    QNetworkReply *m_inFlightReply = nullptr;
 
     // Helper: find the manifest + package asset URLs for the current platform
     // from a GitHub release JSON payload. Returns true if both found.

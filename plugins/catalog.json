@@ -1,0 +1,14 @@
+{
+    "catalog_version": 1,
+    "updated": "2026-08-22T00:00:00Z",
+    "plugins": [
+        {
+            "id": "tbc-tools.cuda-runtime",
+            "display_name": "nnTransform3D CUDA",
+            "description": "CUDA 11.8 + cuDNN 8.9 runtime for nnTransform3D GPU acceleration via the ONNX Runtime CUDA execution provider. Optional \u2014 nnTransform3D falls back to the CPU provider when not installed.",
+            "category": "GPU acceleration",
+            "backend": "cuda-runtime",
+            "homepage": "https://github.com/harrypm/tbc-tools/wiki"
+        }
+    ]
+}

@@ -334,9 +334,11 @@ void CudaPluginManager::downloadAndInstall(const QString &installDirectory)
     emit installProgress(0, 0, m_manifestAssetName);
     QNetworkReply *manifestReply = m_networkManager->get(makeAssetRequest(m_manifestAssetUrl));
     manifestReply->setProperty("cudaPluginPhase", QStringLiteral("manifest"));
+    m_inFlightReply = manifestReply;
 
     connect(manifestReply, &QNetworkReply::finished, this, [this, manifestReply, makeAssetRequest]() {
         manifestReply->deleteLater();
+        m_inFlightReply = nullptr;
         if (manifestReply->error() != QNetworkReply::NoError) {
             emit installFailed(tr("Failed to download manifest: %1").arg(manifestReply->errorString()));
             return;
@@ -359,6 +361,7 @@ void CudaPluginManager::downloadAndInstall(const QString &installDirectory)
         emit installProgress(0, 0, m_packageAssetName);
         QNetworkReply *packageReply = m_networkManager->get(makeAssetRequest(m_packageAssetUrl));
         packageReply->setProperty("cudaPluginPhase", QStringLiteral("package"));
+        m_inFlightReply = packageReply;
 
         connect(packageReply, &QNetworkReply::downloadProgress, this,
                 [this, packageAssetName = m_packageAssetName](qint64 recv, qint64 total) {
@@ -368,6 +371,7 @@ void CudaPluginManager::downloadAndInstall(const QString &installDirectory)
         connect(packageReply, &QNetworkReply::finished, this,
                 [this, packageReply, files, manifest]() {
             packageReply->deleteLater();
+            m_inFlightReply = nullptr;
             if (packageReply->error() != QNetworkReply::NoError) {
                 emit installFailed(tr("Failed to download package: %1").arg(packageReply->errorString()));
                 return;
@@ -453,6 +457,15 @@ void CudaPluginManager::downloadAndInstall(const QString &installDirectory)
         });
     });
 }
+
+void CudaPluginManager::cancelInstall()
+{
+    if (m_inFlightReply != nullptr) {
+        tbcDebugStream() << "CudaPluginManager::cancelInstall(): aborting in-flight download";
+        m_inFlightReply->abort();
+    }
+}
+
 void CudaPluginManager::installFromLocalArchive(const QString &archivePath,
                                                 const QString &installDirectory)
 {

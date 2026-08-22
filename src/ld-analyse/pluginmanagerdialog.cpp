@@ -10,6 +10,8 @@
 
 #include "pluginmanagerdialog.h"
 #include "cudapluginmanager.h"
+#include "plugincatalog.h"
+#include "genericplugininstaller.h"
 #include "configuration.h"
 
 #include <QVBoxLayout>
@@ -25,25 +27,38 @@
 #include <QMessageBox>
 #include <QVersionNumber>
 #include <QFileDialog>
+#include <QDir>
+#include <QShowEvent>
 
 PluginManagerDialog::PluginManagerDialog(QWidget *parent)
     : QDialog(parent),
-      m_cudaManager(new CudaPluginManager(this))
+      m_catalog(new PluginCatalog(this)),
+      m_cudaManager(new CudaPluginManager(this)),
+      m_genericInstaller(new GenericPluginInstaller(this))
 {
     setWindowTitle(tr("Plugin Manager"));
     setMinimumWidth(720);
     setMinimumHeight(480);
 
-    // --- Built-in plugin registry ---
-    // Currently one plugin; the structure supports adding more entries here.
-    m_plugins.append({
-        QStringLiteral("tbc-tools.cuda-runtime"),
-        QStringLiteral("nnTransform3D CUDA"),
-        QStringLiteral("CUDA 11.8 + cuDNN 8.9 runtime for nnTransform3D GPU acceleration via the ONNX Runtime CUDA execution provider. Optional — nnTransform3D falls back to the CPU provider when not installed."),
-        QStringLiteral("GPU acceleration")
-    });
+    // --- Plugin catalog (bundled + cached; refreshed from remote on show) ---
+    // Start from the bundled + cached catalog so the list is never empty;
+    // showEvent() fetches the latest remote catalog every time the dialog opens.
+    m_catalog->loadBundled();
+    m_catalog->loadCached();
+    m_plugins = m_catalog->entries();
 
     auto *mainLayout = new QVBoxLayout(this);
+
+    // --- Catalog status + retry (above the splitter) ---
+    m_catalogStatusLabel = new QLabel(tr("Fetching catalog..."), this);
+    mainLayout->addWidget(m_catalogStatusLabel);
+
+    auto *retryLayout = new QHBoxLayout();
+    m_retryButton = new QPushButton(tr("Retry fetch"), this);
+    m_retryButton->setVisible(false);
+    retryLayout->addWidget(m_retryButton);
+    retryLayout->addStretch();
+    mainLayout->addLayout(retryLayout);
 
     // --- Splitter: plugin list (left) + details (right) ---
     auto *splitter = new QSplitter(Qt::Horizontal, this);
@@ -109,10 +124,15 @@ PluginManagerDialog::PluginManagerDialog(QWidget *parent)
     splitter->setStretchFactor(0, 1);
     splitter->setStretchFactor(1, 3);
 
-    // --- Progress + log (below the splitter) ---
+    // --- Progress + cancel + log (below the splitter) ---
+    auto *progressLayout = new QHBoxLayout();
     m_progressBar = new QProgressBar(this);
     m_progressBar->setVisible(false);
-    mainLayout->addWidget(m_progressBar);
+    progressLayout->addWidget(m_progressBar, 1);
+    m_cancelButton = new QPushButton(tr("Cancel download"), this);
+    m_cancelButton->setVisible(false);
+    progressLayout->addWidget(m_cancelButton);
+    mainLayout->addLayout(progressLayout);
 
     m_logView = new QTextEdit(this);
     m_logView->setReadOnly(true);
@@ -151,6 +171,24 @@ PluginManagerDialog::PluginManagerDialog(QWidget *parent)
     connect(m_cudaManager, &CudaPluginManager::removeFailed,
             this, &PluginManagerDialog::onRemoveFailed);
 
+    // Catalog discovery + generic backend + retry wiring.
+    connect(m_catalog, &PluginCatalog::catalogFetched,
+            this, &PluginManagerDialog::onCatalogFetched);
+    connect(m_catalog, &PluginCatalog::fetchFailed,
+            this, &PluginManagerDialog::onCatalogFetchFailed);
+    connect(m_genericInstaller, &GenericPluginInstaller::installProgress,
+            this, &PluginManagerDialog::onInstallProgress);
+    connect(m_genericInstaller, &GenericPluginInstaller::installSucceeded,
+            this, &PluginManagerDialog::onInstallSucceeded);
+    connect(m_genericInstaller, &GenericPluginInstaller::installFailed,
+            this, &PluginManagerDialog::onInstallFailed);
+    connect(m_genericInstaller, &GenericPluginInstaller::removeSucceeded,
+            this, &PluginManagerDialog::onRemoveSucceeded);
+    connect(m_genericInstaller, &GenericPluginInstaller::removeFailed,
+            this, &PluginManagerDialog::onRemoveFailed);
+    connect(m_retryButton, &QPushButton::clicked, this, &PluginManagerDialog::onRetry);
+    connect(m_cancelButton, &QPushButton::clicked, this, &PluginManagerDialog::onCancelDownload);
+
     m_platformLabel->setText(QStringLiteral("%1-%2")
         .arg(CudaPluginManager::currentPlatform(), CudaPluginManager::currentArch()));
 
@@ -166,7 +204,7 @@ PluginManagerDialog::~PluginManagerDialog() = default;
 void PluginManagerDialog::populatePluginList()
 {
     m_pluginList->clear();
-    for (const PluginDescriptor &plugin : m_plugins) {
+    for (const PluginCatalogEntry &plugin : m_plugins) {
         auto *item = new QListWidgetItem(plugin.displayName, m_pluginList);
         item->setData(Qt::UserRole, plugin.id);
         item->setToolTip(plugin.description);
@@ -193,7 +231,7 @@ void PluginManagerDialog::onPluginSelected(QListWidgetItem *current)
     }
 
     m_selectedIndex = m_pluginList->row(current);
-    const PluginDescriptor &plugin = m_plugins.at(m_selectedIndex);
+    const PluginCatalogEntry &plugin = m_plugins.at(m_selectedIndex);
     m_nameLabel->setText(plugin.displayName);
     m_categoryLabel->setText(plugin.category);
     m_descriptionLabel->setText(plugin.description);
@@ -201,6 +239,11 @@ void PluginManagerDialog::onPluginSelected(QListWidgetItem *current)
     m_latestVersion.clear();
     m_latestReleaseTag.clear();
     m_updateAvailable = false;
+    // Generic plugins know their latest version from the catalog directly;
+    // cuda-runtime resolves it via Check for update.
+    if (plugin.backend == QStringLiteral("generic")) {
+        m_latestVersion = plugin.version;
+    }
     updateStatusDisplay();
 }
 
@@ -217,14 +260,35 @@ void PluginManagerDialog::updateStatusDisplay()
         return;
     }
 
-    // Currently the only plugin is the CUDA runtime, so the status is derived
-    // from the CUDA plugin registry entry. When more plugins are added, route
-    // by m_plugins.at(m_selectedIndex).id.
-    Configuration c;
-    const QString installedVersion = c.getCudaPluginInstalledVersion();
-    const QString installPath = c.getCudaPluginInstallPath();
+    const PluginCatalogEntry &plugin = m_plugins.at(m_selectedIndex);
+    QString installedVersion;
+    QString installPath;
 
-    if (installedVersion.isEmpty() || installPath.isEmpty() || !QDir(installPath).exists()) {
+    if (plugin.backend == QStringLiteral("cuda-runtime")) {
+        Configuration c;
+        installedVersion = c.getCudaPluginInstalledVersion();
+        installPath = c.getCudaPluginInstallPath();
+    } else if (plugin.backend == QStringLiteral("generic")) {
+        const GenericPluginInstalledInfo info = m_genericInstaller->installedInfo(plugin.id);
+        installedVersion = info.installed ? info.version : QString();
+        installPath = info.installPath;
+    } else {
+        m_statusLabel->setText(tr("Unsupported backend"));
+        m_versionLabel->setText(tr("—"));
+        m_installPathLabel->setText(tr("—"));
+        m_checkButton->setEnabled(false);
+        m_installButton->setEnabled(false);
+        m_installButton->setText(tr("Install / Update"));
+        m_installFromArchiveButton->setEnabled(false);
+        m_removeButton->setEnabled(false);
+        return;
+    }
+
+    const bool present = !installedVersion.isEmpty()
+        && !installPath.isEmpty()
+        && QDir(installPath).exists();
+
+    if (!present) {
         m_statusLabel->setText(tr("Not installed"));
         m_versionLabel->setText(tr("—"));
         m_installPathLabel->setText(tr("—"));
@@ -251,20 +315,28 @@ void PluginManagerDialog::updateStatusDisplay()
             m_installButton->setText(tr("Up to date"));
         }
     }
-    m_installFromArchiveButton->setEnabled(true);
+
+    // Install-from-local-archive is only wired for the cuda-runtime backend.
+    m_installFromArchiveButton->setEnabled(plugin.backend == QStringLiteral("cuda-runtime"));
     m_checkButton->setEnabled(true);
 }
 
-void PluginManagerDialog::setBusy(bool busy)
+void PluginManagerDialog::setBusy(bool busy, bool canCancel)
 {
-    m_checkButton->setEnabled(!busy && m_selectedIndex >= 0);
-    m_installButton->setEnabled(!busy && (!m_latestVersion.isEmpty() || m_updateAvailable));
-    m_installFromArchiveButton->setEnabled(!busy && m_selectedIndex >= 0);
-    m_removeButton->setEnabled(!busy && !Configuration().getCudaPluginInstalledVersion().isEmpty());
-    m_progressBar->setVisible(busy);
-    if (!busy) {
+    if (busy) {
+        m_checkButton->setEnabled(false);
+        m_installButton->setEnabled(false);
+        m_installFromArchiveButton->setEnabled(false);
+        m_removeButton->setEnabled(false);
+        m_progressBar->setVisible(true);
+        m_cancelButton->setVisible(canCancel);
+        m_cancelButton->setEnabled(canCancel);
+    } else {
+        m_progressBar->setVisible(false);
         m_progressBar->setRange(0, 100);
         m_progressBar->setValue(0);
+        m_cancelButton->setVisible(false);
+        updateStatusDisplay();
     }
 }
 
@@ -273,15 +345,32 @@ void PluginManagerDialog::onCheckForUpdate()
     if (m_selectedIndex < 0) {
         return;
     }
-    const PluginDescriptor &plugin = m_plugins.at(m_selectedIndex);
+    const PluginCatalogEntry &plugin = m_plugins.at(m_selectedIndex);
     appendLog(tr("Checking for %1 updates...").arg(plugin.displayName));
-    setBusy(true);
-    // Route by plugin id. Currently only the CUDA runtime backend exists.
-    if (plugin.id == QStringLiteral("tbc-tools.cuda-runtime")) {
+    if (plugin.backend == QStringLiteral("cuda-runtime")) {
+        setBusy(true);
         m_cudaManager->checkForUpdate();
+    } else if (plugin.backend == QStringLiteral("generic")) {
+        // Generic update detection is local: compare the installed record's
+        // version against the catalog version (no network round-trip).
+        const GenericPluginInstalledInfo info = m_genericInstaller->installedInfo(plugin.id);
+        m_latestVersion = plugin.version;
+        if (!info.installed) {
+            m_updateAvailable = false;
+            appendLog(tr("Not installed. Latest available: v%1.").arg(plugin.version));
+        } else {
+            const bool newer = !plugin.version.isEmpty()
+                && QVersionNumber::fromString(plugin.version) > QVersionNumber::fromString(info.version);
+            m_updateAvailable = newer;
+            if (newer) {
+                appendLog(tr("Update available: v%1 -> v%2.").arg(info.version, plugin.version));
+            } else {
+                appendLog(tr("Installed v%1 is up to date.").arg(info.version));
+            }
+        }
+        updateStatusDisplay();
     } else {
         appendLog(tr("No backend wired for plugin %1.").arg(plugin.id));
-        setBusy(false);
     }
 }
 
@@ -320,31 +409,44 @@ void PluginManagerDialog::onInstall()
     if (m_selectedIndex < 0) {
         return;
     }
-    if (m_latestVersion.isEmpty()) {
-        QMessageBox::information(this, tr("No update info"),
-            tr("Click \"Check for update\" first to resolve the latest version."));
-        return;
-    }
+    const PluginCatalogEntry &plugin = m_plugins.at(m_selectedIndex);
+    m_installCancelled = false;
 
-    const PluginDescriptor &plugin = m_plugins.at(m_selectedIndex);
-    auto confirm = QMessageBox::question(this, tr("Install %1").arg(plugin.displayName),
-        tr("This will download the %1 package from harrypm/tbc-tools-ci-cache and "
-           "install it to:\n\n%2\n\n"
-           "The package is SHA-256 verified but NOT code-signed. Continue?")
-            .arg(plugin.displayName, CudaPluginManager::defaultInstallDirectory()),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (confirm != QMessageBox::Yes) {
-        return;
-    }
-
-    appendLog(tr("Downloading and installing %1 v%2...").arg(plugin.displayName, m_latestVersion));
-    setBusy(true);
-    m_progressBar->setRange(0, 0); // indeterminate during manifest download
-    if (plugin.id == QStringLiteral("tbc-tools.cuda-runtime")) {
+    if (plugin.backend == QStringLiteral("cuda-runtime")) {
+        if (m_latestVersion.isEmpty()) {
+            QMessageBox::information(this, tr("No update info"),
+                tr("Click \"Check for update\" first to resolve the latest version."));
+            return;
+        }
+        auto confirm = QMessageBox::question(this, tr("Install %1").arg(plugin.displayName),
+            tr("This will download the %1 package from harrypm/tbc-tools-ci-cache and "
+               "install it to:\n\n%2\n\n"
+               "The package is SHA-256 verified but NOT code-signed. Continue?")
+                .arg(plugin.displayName, CudaPluginManager::defaultInstallDirectory()),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (confirm != QMessageBox::Yes) {
+            return;
+        }
+        appendLog(tr("Downloading and installing %1 v%2...").arg(plugin.displayName, m_latestVersion));
+        setBusy(true, true);
+        m_progressBar->setRange(0, 0); // indeterminate during manifest download
         m_cudaManager->downloadAndInstall();
+    } else if (plugin.backend == QStringLiteral("generic")) {
+        const QString installDir = QDir(PluginCatalog::pluginsRootDirectory()).filePath(plugin.id);
+        auto confirm = QMessageBox::question(this, tr("Install %1").arg(plugin.displayName),
+            tr("This will download the %1 package and install it to:\n\n%2\n\n"
+               "The package is SHA-256 verified but NOT code-signed. Continue?")
+                .arg(plugin.displayName, QDir::toNativeSeparators(installDir)),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (confirm != QMessageBox::Yes) {
+            return;
+        }
+        appendLog(tr("Downloading and installing %1 v%2...").arg(plugin.displayName, plugin.version));
+        setBusy(true, true);
+        m_progressBar->setRange(0, 0); // indeterminate until downloadProgress arrives
+        m_genericInstaller->install(plugin);
     } else {
         appendLog(tr("No backend wired for plugin %1.").arg(plugin.id));
-        setBusy(false);
     }
 }
 
@@ -353,9 +455,9 @@ void PluginManagerDialog::onInstallFromLocalArchive()
     if (m_selectedIndex < 0) {
         return;
     }
-    const PluginDescriptor &plugin = m_plugins.at(m_selectedIndex);
-    if (plugin.id != QStringLiteral("tbc-tools.cuda-runtime")) {
-        appendLog(tr("No backend wired for plugin %1.").arg(plugin.id));
+    const PluginCatalogEntry &plugin = m_plugins.at(m_selectedIndex);
+    if (plugin.backend != QStringLiteral("cuda-runtime")) {
+        appendLog(tr("Install from local archive is not available for plugin %1.").arg(plugin.id));
         return;
     }
 
@@ -401,6 +503,7 @@ void PluginManagerDialog::onInstallProgress(qint64 bytesReceived, qint64 bytesTo
 
 void PluginManagerDialog::onInstallSucceeded(const QString &installPath)
 {
+    m_installCancelled = false;
     appendLog(tr("Installed successfully to %1").arg(installPath));
     appendLog(tr("Restart ld-analyse for the change to take effect."));
     setBusy(false);
@@ -412,6 +515,13 @@ void PluginManagerDialog::onInstallSucceeded(const QString &installPath)
 
 void PluginManagerDialog::onInstallFailed(const QString &error)
 {
+    if (m_installCancelled) {
+        appendLog(tr("Download cancelled."));
+        m_installCancelled = false;
+        setBusy(false);
+        QMessageBox::information(this, tr("Cancelled"), tr("The download was cancelled."));
+        return;
+    }
     appendLog(tr("Install failed: %1").arg(error));
     setBusy(false);
     QMessageBox::warning(this, tr("Install failed"), error);
@@ -422,7 +532,7 @@ void PluginManagerDialog::onRemove()
     if (m_selectedIndex < 0) {
         return;
     }
-    const PluginDescriptor &plugin = m_plugins.at(m_selectedIndex);
+    const PluginCatalogEntry &plugin = m_plugins.at(m_selectedIndex);
     auto confirm = QMessageBox::question(this, tr("Remove %1").arg(plugin.displayName),
         tr("This will delete the installed %1.\n\n"
            "Restart ld-analyse after removal for the change to take effect.\n\nContinue?")
@@ -433,8 +543,10 @@ void PluginManagerDialog::onRemove()
     }
     appendLog(tr("Removing %1...").arg(plugin.displayName));
     setBusy(true);
-    if (plugin.id == QStringLiteral("tbc-tools.cuda-runtime")) {
+    if (plugin.backend == QStringLiteral("cuda-runtime")) {
         m_cudaManager->remove();
+    } else if (plugin.backend == QStringLiteral("generic")) {
+        m_genericInstaller->remove(plugin.id);
     } else {
         appendLog(tr("No backend wired for plugin %1.").arg(plugin.id));
         setBusy(false);
@@ -456,4 +568,70 @@ void PluginManagerDialog::onRemoveFailed(const QString &error)
     appendLog(tr("Remove failed: %1").arg(error));
     setBusy(false);
     QMessageBox::warning(this, tr("Remove failed"), error);
+}
+
+// Pull the latest remote catalog every time the dialog is shown.
+void PluginManagerDialog::showEvent(QShowEvent *event)
+{
+    QDialog::showEvent(event);
+    if (!m_catalogFetchInProgress) {
+        appendLog(tr("Fetching plugin catalog..."));
+        m_catalogStatusLabel->setText(tr("Fetching catalog..."));
+        m_retryButton->setVisible(false);
+        m_catalogFetchInProgress = true;
+        m_catalog->fetchRemote();
+    }
+}
+
+void PluginManagerDialog::onRetry()
+{
+    appendLog(tr("Retrying catalog fetch..."));
+    m_catalogStatusLabel->setText(tr("Fetching catalog..."));
+    m_retryButton->setVisible(false);
+    m_catalogFetchInProgress = true;
+    m_catalog->fetchRemote();
+}
+
+void PluginManagerDialog::onCancelDownload()
+{
+    if (m_selectedIndex < 0) {
+        return;
+    }
+    const PluginCatalogEntry &plugin = m_plugins.at(m_selectedIndex);
+    appendLog(tr("Cancelling download..."));
+    m_installCancelled = true;
+    m_cancelButton->setEnabled(false);
+    if (plugin.backend == QStringLiteral("cuda-runtime")) {
+        m_cudaManager->cancelInstall();
+    } else if (plugin.backend == QStringLiteral("generic")) {
+        m_genericInstaller->cancelInstall();
+    }
+}
+
+void PluginManagerDialog::onCatalogFetched(const QList<PluginCatalogEntry> &entries)
+{
+    m_catalogFetchInProgress = false;
+    m_plugins = entries;
+    populatePluginList();
+    m_catalogStatusLabel->setText(tr("Catalog updated."));
+    m_retryButton->setVisible(false);
+    appendLog(tr("Catalog updated (%1 plugin(s)).").arg(entries.size()));
+
+    // Preserve the current selection if still present, else select the first row.
+    const int prevRow = m_selectedIndex;
+    if (prevRow >= 0 && prevRow < m_plugins.size()) {
+        m_pluginList->setCurrentRow(prevRow);
+    } else if (!m_plugins.isEmpty()) {
+        m_pluginList->setCurrentRow(0);
+    } else {
+        onPluginSelected(nullptr);
+    }
+}
+
+void PluginManagerDialog::onCatalogFetchFailed(const QString &error)
+{
+    m_catalogFetchInProgress = false;
+    m_catalogStatusLabel->setText(tr("Couldn't fetch catalog — showing bundled/cached list."));
+    m_retryButton->setVisible(true);
+    appendLog(tr("Catalog fetch failed: %1").arg(error));
 }
