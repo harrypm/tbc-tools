@@ -13,9 +13,14 @@
 
 #include <QApplication>
 #include <QColor>
+#include <QMargins>
 #include <QPalette>
+#include <QRect>
+#include <QScreen>
 #include <QStyleFactory>
 #include <QtGlobal>
+#include <QWidget>
+#include <QWindow>
 
 namespace tbc::ui {
 inline qreal paletteContrastDistance(const QColor &first, const QColor &second)
@@ -110,6 +115,61 @@ inline void enforceInputWidgetContrast(QApplication &application)
         "}").arg(guardMarker));
 
     application.setStyleSheet(styleSheet);
+}
+
+// Center a top-level sub-window over its parent widget (typically the main
+// analyse window). Call this from a show-path override (e.g. setVisible or a
+// show-event filter) so the placement is applied before the window manager
+// maps the window.
+//
+// QWidget::move() positions the window *frame* on most platforms, while
+// QWidget::width()/height() report the client area. Centering the client area
+// without accounting for the frame margins leaves the window shifted right and
+// down by the left/top frame margins, so we subtract them. The result is
+// clamped to the available geometry of the window's screen.
+inline void centerDialogOverParent(QWidget *dialog)
+{
+    if (!dialog) {
+        return;
+    }
+
+    QWidget *parent = dialog->parentWidget();
+    QRect referenceRect;
+    if (parent) {
+        referenceRect = parent->geometry();
+    } else if (QScreen *screen = dialog->screen()) {
+        referenceRect = screen->availableGeometry();
+    } else {
+        return;
+    }
+
+    // Force the native handle so the window-frame margins are known.
+    if (!dialog->windowHandle()) {
+        dialog->winId();
+    }
+
+    int leftMargin = 0;
+    int topMargin = 0;
+    if (QWindow *handle = dialog->windowHandle()) {
+        const QMargins margins = handle->frameMargins();
+        leftMargin = margins.left();
+        topMargin = margins.top();
+    }
+
+    const int width = dialog->width();
+    const int height = dialog->height();
+    int x = referenceRect.x() + (referenceRect.width() - width) / 2 - leftMargin;
+    int y = referenceRect.y() + (referenceRect.height() - height) / 2 - topMargin;
+
+    if (QScreen *screen = dialog->screen()) {
+        const QRect avail = screen->availableGeometry();
+        const int maxX = avail.left() + qMax(0, avail.width() - width);
+        const int maxY = avail.top() + qMax(0, avail.height() - height);
+        x = qBound(avail.left(), x, maxX);
+        y = qBound(avail.top(), y, maxY);
+    }
+
+    dialog->move(x, y);
 }
 } // namespace tbc::ui
 

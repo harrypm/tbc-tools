@@ -80,6 +80,7 @@
 #include "efmhandlerdialog.h"
 #include "../audio-align/audioalignmentdialog.h"
 #include "../tbc-export-metadata/metadataexportdialog.h"
+#include "tbc/uistyle.h"
 namespace {
 QString chromaDecoderNameFromConfig(VideoSystem system,
                                     const PalColour::Configuration &palConfig,
@@ -1483,6 +1484,11 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
     timeCodeStatus.hide();
     cursorStatus.setText(tr(" Cursor: --"));
 
+    // Center every pop-out sub-window over this main window when it is shown
+    // (project UX rule). The filter acts on Qt::Window/Qt::Dialog top-levels
+    // that belong to this MainWindow, excluding popups/menus/tooltips.
+    qApp->installEventFilter(this);
+
     if (ui->imageViewerLabel) {
         ui->imageViewerLabel->setMouseTracking(true);
         ui->imageViewerLabel->installEventFilter(this);
@@ -1882,6 +1888,25 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     if (!ui || !event) {
         return QMainWindow::eventFilter(watched, event);
+    }
+
+    // Center pop-out sub-windows over the main window when they are shown.
+    if (event->type() == QEvent::Show) {
+        if (auto *widget = qobject_cast<QWidget *>(watched)) {
+            if (widget != this && widget->isWindow()) {
+                const Qt::WindowFlags flags = widget->windowFlags();
+                const Qt::WindowType baseType =
+                    static_cast<Qt::WindowType>(static_cast<int>(flags & Qt::WindowType_Mask));
+                if (baseType == Qt::Window || baseType == Qt::Dialog) {
+                    for (QWidget *p = widget->parentWidget(); p; p = p->parentWidget()) {
+                        if (p == this) {
+                            tbc::ui::centerDialogOverParent(widget);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     const bool watchingImageLabel = (ui->imageViewerLabel && watched == ui->imageViewerLabel);

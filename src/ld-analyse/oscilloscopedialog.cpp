@@ -876,3 +876,22 @@ void OscilloscopeDialog::resizeEvent(QResizeEvent *event)
         showTraceImage(cachedScanLineData, lastScopeX, lastScopeY, maximumX, maximumY, bothSourcesMode);
     }
 }
+
+// Apply the scan-line scope's first-open defaults (reference start size,
+// Advanced tab, YC + Y traces). Centering over the main window is handled
+// centrally by MainWindow's Show-event filter via tbc::ui::centerDialogOverParent.
+void OscilloscopeDialog::setVisible(bool visible)
+{
+    if (visible && !isVisible() && !firstShowDone) {
+        resize(1028, 390);
+        setAdvancedTabSelected(true);
+        if (ui->YCcheckBox) {
+            ui->YCcheckBox->setChecked(true);
+        }
+        if (ui->YcheckBox) {
+            ui->YcheckBox->setChecked(true);
+        }
+        firstShowDone = true;
+    }
+    QDialog::setVisible(visible);
+}

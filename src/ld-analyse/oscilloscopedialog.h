@@ -38,6 +38,7 @@ public:
     void showTraceImage(TbcSource::ScanLineData scanLineData, qint32 xCoord, qint32 yCoord, qint32 frameWidth, qint32 frameHeight, bool bothSources);
     bool setAdvancedTabSelected(bool selected);
     bool isAdvancedTabSelected() const;
+    void setVisible(bool visible) override;
 
 signals:
     void scopeCoordsChanged(qint32 xCoord, qint32 yCoord);
@@ -85,6 +86,7 @@ private:
     QLabel *advancedSampleInfoLabel;
     QWidget *advancedSidePanel;
     QPushButton *fieldToggleButton;
+    bool firstShowDone = false;
 
     QImage getFieldLineTraceImage(TbcSource::ScanLineData scanLineData, qint32 pictureDot, bool bothSources, qint32 scopeHeight, qint32 scopeWidth);
     void setupAdvancedScopeTab();
