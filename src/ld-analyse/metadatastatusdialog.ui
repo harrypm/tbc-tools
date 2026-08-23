@@ -3,7 +3,7 @@
  <class>MetadataStatusDialog</class>
  <widget class="QDialog" name="MetadataStatusDialog">
   <property name="windowTitle">
-   <string>Metadata status</string>
+   <string>Metadata Status</string>
   </property>
   <property name="minimumSize">
    <size>

@@ -885,12 +885,12 @@
   </action>
   <action name="actionMetadata_Conversion">
    <property name="text">
-    <string>Metadata conversion...</string>
+    <string>Metadata Conversion...</string>
    </property>
   </action>
   <action name="actionMetadata_Status">
    <property name="text">
-    <string>Metadata status...</string>
+    <string>Metadata Status...</string>
    </property>
   </action>
   <action name="actionMetadata_Editor">
