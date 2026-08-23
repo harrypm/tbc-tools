@@ -118,7 +118,9 @@ void SourceField::loadFields(SourceVideo &sourceVideo, TbcMetaData &metaData,
             fields[i].data = sourceVideo.getVideoField(firstFieldNumber);
             fields[i + 1].data = sourceVideo.getVideoField(secondFieldNumber);
 
-            if ((videoParameters.system == PAL || videoParameters.system == PAL_M) && videoParameters.isSubcarrierLocked) {
+            if ((videoParameters.system == PAL || videoParameters.system == PAL_M
+                || videoParameters.system == SECAM || videoParameters.system == MESECAM)
+                && videoParameters.isSubcarrierLocked) {
                 // With subcarrier-locked 4fSC PAL sampling, we have four
                 // "extra" samples over the course of the frame, so the two
                 // fields will be horizontally misaligned by two samples. Shift

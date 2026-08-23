@@ -32,7 +32,7 @@ VitcDecoder::Vitc VitcDecoder::decode(const std::array<qint32, 8>& vitcData, Vid
     vitc.isValid = true;
 
     // Some bit assignments differ between 25-frame and 30-frame systems
-    const bool is30Frame = (system != PAL);
+    const bool is30Frame = (system != PAL && system != PAL_M && system != SECAM && system != MESECAM);
 
     // Decode time
     decodeBCD(vitcData[7] & 0x03, vitcData[6] & 0x0F, vitc.hour, vitc.isValid);

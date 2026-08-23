@@ -56,6 +56,7 @@
 #include "configuration.h"
 #include "updatechecker.h"
 #include "pluginmanagerdialog.h"
+#include "metadataeditordialog.h"
 #include "tbcsource.h"
 
 namespace Ui {
@@ -95,7 +96,7 @@ private slots:
     void on_actionAbout_ld_analyse_triggered();
     void on_actionCheck_for_Updates_triggered();
     void on_actionPluginManager_triggered();
-    void on_actionVBI_triggered();
+    void on_actionMetadata_Editor_triggered();
     void on_actionDropout_analysis_triggered();
     void on_actionVisible_Dropout_analysis_triggered();
     void on_actionSNR_analysis_triggered();
@@ -120,6 +121,7 @@ private slots:
     void on_actionEFM_Handler_triggered();
     void on_actionLDS_Converter_triggered();
     void on_actionTeletext_Viewer_triggered();
+    void on_actionVBI_triggered();
 
     // Media control frame handlers
     void on_previousPushButton_clicked();
@@ -298,6 +300,7 @@ private:
     UpdateChecker *updateChecker = nullptr;
     bool updateCheckSilent = false; // true for the automatic weekly check (suppresses non-update popups)
     PluginManagerDialog *pluginManagerDialog = nullptr;
+    MetadataEditorDialog *metadataEditorDialog = nullptr;
     void maybePerformWeeklyUpdateCheck();
     void recordUpdateCheckAttempt();
     void showUpdateAvailableDialog(const QString &latestVersion, const QString &releaseUrl, const QString &releaseName);

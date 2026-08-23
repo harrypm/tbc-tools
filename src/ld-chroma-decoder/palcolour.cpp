@@ -495,7 +495,7 @@ void PalColour::decodeLine(const SourceField &inputField, const ChromaSample *ch
         };
         static constexpr auto palMUvFilter = makeFIRFilter(palMUvFilterCoeffs);
 
-        const auto& uvFilter = (videoParameters.system == PAL) ? palUvFilter : palMUvFilter;
+        const auto& uvFilter = (videoParameters.system == PAL_M) ? palMUvFilter : palUvFilter;
 
         const qint32 overlap = palUvFilterCoeffs.size() / 2;
         const qint32 filterStart = qMax(decodeStart - overlap, 0);

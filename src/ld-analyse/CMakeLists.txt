@@ -37,6 +37,7 @@ set(ld-analyse_SOURCES
     pluginmanagerdialog.cpp pluginmanagerdialog.h
     plugincatalog.cpp plugincatalog.h
     genericplugininstaller.cpp genericplugininstaller.h
+    metadataeditordialog.cpp metadataeditordialog.h metadataeditordialog.ui
     videoparametersdialog.cpp videoparametersdialog.ui
     chromadecoderconfigdialog.cpp chromadecoderconfigdialog.ui
     tbcsource.cpp

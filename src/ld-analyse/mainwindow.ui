@@ -812,6 +812,7 @@
     <addaction name="actionLDS_Converter"/>
     <addaction name="separator"/>
     <addaction name="actionMetadata_Status"/>
+    <addaction name="actionMetadata_Editor"/>
     <addaction name="actionMetadata_Conversion"/>
     <addaction name="actionExport_Decode_Metadata"/>
    </widget>
@@ -890,6 +891,14 @@
   <action name="actionMetadata_Status">
    <property name="text">
     <string>Metadata status...</string>
+   </property>
+  </action>
+  <action name="actionMetadata_Editor">
+   <property name="text">
+    <string>Metadata Editor...</string>
+   </property>
+   <property name="toolTip">
+    <string>Edit TBC metadata fields (TV system, chroma decoder, IRE levels, PCM audio, etc.)</string>
    </property>
   </action>
   <action name="actionExport_Decode_Metadata">

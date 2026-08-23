@@ -78,11 +78,32 @@ static constexpr VideoSystemDefaults palMDefaults {
     ntscDefaults.firstActiveFrameLine, ntscDefaults.lastActiveFrameLine,
 };
 
+// SECAM and MESECAM are both 625-line FM-chroma systems (same as PAL geometry).
+static constexpr VideoSystemDefaults secamDefaults {
+    ExportMetaData::SECAM,
+    "SECAM",
+    palDefaults.fSC,
+    palDefaults.minActiveFrameLine,
+    palDefaults.firstActiveFieldLine, palDefaults.lastActiveFieldLine,
+    palDefaults.firstActiveFrameLine, palDefaults.lastActiveFrameLine,
+};
+
+static constexpr VideoSystemDefaults mesecamDefaults {
+    ExportMetaData::MESECAM,
+    "MESECAM",
+    palDefaults.fSC,
+    palDefaults.minActiveFrameLine,
+    palDefaults.firstActiveFieldLine, palDefaults.lastActiveFieldLine,
+    palDefaults.firstActiveFrameLine, palDefaults.lastActiveFrameLine,
+};
+
 // These must be in the same order as enum VideoSystem
 static constexpr VideoSystemDefaults VIDEO_SYSTEM_DEFAULTS[] = {
     palDefaults,
     ntscDefaults,
     palMDefaults,
+    secamDefaults,
+    mesecamDefaults,
 };
 
 // Return appropriate defaults for the selected video system
@@ -1167,17 +1188,17 @@ qint32 ExportMetaData::convertClvTimecodeToFrameNumber(ExportMetaData::ClvTimeco
     }
 
     if (clvTimeCode.hours != -1) {
-        if (videoParameters.system == PAL) frameNumber += clvTimeCode.hours * 3600 * 25;
+        if (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) frameNumber += clvTimeCode.hours * 3600 * 25;
         else frameNumber += clvTimeCode.hours * 3600 * 30;
     }
 
     if (clvTimeCode.minutes != -1) {
-        if (videoParameters.system == PAL) frameNumber += clvTimeCode.minutes * 60 * 25;
+        if (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) frameNumber += clvTimeCode.minutes * 60 * 25;
         else frameNumber += clvTimeCode.minutes * 60 * 30;
     }
 
     if (clvTimeCode.seconds != -1) {
-        if (videoParameters.system == PAL) frameNumber += clvTimeCode.seconds * 25;
+        if (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) frameNumber += clvTimeCode.seconds * 25;
         else frameNumber += clvTimeCode.seconds * 30;
     }
 
@@ -1198,7 +1219,7 @@ ExportMetaData::ClvTimecode ExportMetaData::convertFrameNumberToClvTimecode(qint
     clvTimecode.seconds = 0;
     clvTimecode.pictureNumber = 0;
 
-    if (getVideoParameters().system == PAL) {
+    if (getVideoParameters().system == PAL || getVideoParameters().system == SECAM || getVideoParameters().system == MESECAM) {
         clvTimecode.hours = frameNumber / (3600 * 25);
         frameNumber -= clvTimecode.hours * (3600 * 25);
 

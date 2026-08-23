@@ -46,7 +46,7 @@ QString generateTimeStamp(qint32 fieldIndex, VideoSystem system)
     // Set some constants for the timecode calculations.
     // We are generating non-drop timecode (:ff not ;ff), so
     // the clock actually counts at 29.97 FPS.
-    const double framesPerSecond = (system == PAL) ? 25.0 : 29.97;
+    const double framesPerSecond = (system == PAL || system == SECAM || system == MESECAM) ? 25.0 : 29.97;
     const double framesPerMinute = framesPerSecond * 60.0;
     const double framesPerHour = framesPerMinute * 60.0;
 

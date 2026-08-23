@@ -164,7 +164,7 @@ QByteArray OutputWriter::getStreamHeader() const
     str << " H" << outputHeight;
 
     // Frame rate
-    if (videoParameters.system == PAL) {
+    if (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) {
         str << " F25:1";
     } else {
         str << " F30000:1001";
@@ -180,7 +180,7 @@ QByteArray OutputWriter::getStreamHeader() const
     // Pixel aspect ratio
     // Follows EBU R92 and SMPTE RP 187 except that values are scaled from
     // BT.601 sampling (13.5 MHz) to 4fSC
-    if (videoParameters.system == PAL) {
+    if (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) {
         if (videoParameters.isWidescreen) {
             str << " A865:779"; // (16 / 9) * (576 / (702 * 4*fSC / 13.5))
         } else {
@@ -316,7 +316,8 @@ void OutputWriter::convertLine(qint32 lineNumber, const ComponentFrame &componen
 
     const double leveledYOffset = static_cast<double>(videoParameters.black16bIre);
     const double hybridBackgroundYOffset =
-        ((videoParameters.system == PAL) || (videoParameters.system == PAL_M))
+        ((videoParameters.system == PAL) || (videoParameters.system == PAL_M)
+         || (videoParameters.system == SECAM) || (videoParameters.system == MESECAM))
             ? HYBRID_BLACK_PAL
             : HYBRID_BLACK_NTSC;
     double yRange = static_cast<double>(videoParameters.white16bIre - videoParameters.black16bIre);

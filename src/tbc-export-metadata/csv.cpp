@@ -173,7 +173,7 @@ QString frameToSimpleTimecode(qint32 frame, VideoSystem system)
         return QStringLiteral("00:00:00:00");
     }
 
-    const qint32 fps = system == PAL ? 25 : 30;
+    const qint32 fps = (system == PAL || system == SECAM || system == MESECAM) ? 25 : 30;
     const qint32 zeroBasedFrame = frame - 1;
     const qint32 framesPerHour = fps * 60 * 60;
     const qint32 framesPerMinute = fps * 60;

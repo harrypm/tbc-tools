@@ -98,7 +98,7 @@ void VbiLineDecoder::run()
 
         // Get Closed Caption data from line 21 (525-line) or 22 (625-line)
         ClosedCaption closedCaption;
-        closedCaption.decodeLine(getFieldLine(sourceFieldData, (videoParameters.system == PAL) ? 22 : 21, videoParameters),
+        closedCaption.decodeLine(getFieldLine(sourceFieldData, (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) ? 22 : 21, videoParameters),
                                  videoParameters, fieldMetadata);
 
         // Write the result to the output metadata

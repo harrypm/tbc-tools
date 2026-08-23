@@ -51,6 +51,8 @@ public:
 		PAL = 0,    // 625-line PAL
 		NTSC,       // 525-line NTSC
 		PAL_M,      // 525-line PAL
+		SECAM,      // 625-line SECAM (FM chroma)
+		MESECAM,    // 625-line MESECAM (FM chroma, VHS-style) — same decode as SECAM
 	};
 
     // VBI Metadata definition

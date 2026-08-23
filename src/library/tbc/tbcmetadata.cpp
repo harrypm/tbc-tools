@@ -69,11 +69,36 @@ static constexpr VideoSystemDefaults palMDefaults {
     ntscDefaults.firstActiveFrameLine, ntscDefaults.lastActiveFrameLine,
 };
 
+// SECAM and MESECAM are both 625-line FM-chroma systems. They have separate
+// enum values so the `system` field round-trips the exact name the user wrote
+// ("SECAM" vs "MESECAM"), but the decode pipeline treats them identically
+// (both -> SecamDecoder). fSC is set to PAL's value as a placeholder — SECAM
+// has no single colour subcarrier; the decoder measures the rest carriers itself.
+static constexpr VideoSystemDefaults secamDefaults {
+    SECAM,
+    "SECAM",
+    palDefaults.fSC,
+    palDefaults.minActiveFrameLine,
+    palDefaults.firstActiveFieldLine, palDefaults.lastActiveFieldLine,
+    palDefaults.firstActiveFrameLine, palDefaults.lastActiveFrameLine,
+};
+
+static constexpr VideoSystemDefaults mesecamDefaults {
+    MESECAM,
+    "MESECAM",
+    palDefaults.fSC,
+    palDefaults.minActiveFrameLine,
+    palDefaults.firstActiveFieldLine, palDefaults.lastActiveFieldLine,
+    palDefaults.firstActiveFrameLine, palDefaults.lastActiveFrameLine,
+};
+
 // These must be in the same order as enum VideoSystem
 static constexpr VideoSystemDefaults VIDEO_SYSTEM_DEFAULTS[] = {
     palDefaults,
     ntscDefaults,
     palMDefaults,
+    secamDefaults,
+    mesecamDefaults,
 };
 
 // Return appropriate defaults for the selected video system
@@ -131,9 +156,9 @@ bool parseVideoSystemName(QString name, VideoSystem &system)
 
     // PAL-family aliases currently emitted/accepted by vhs-decode workflows
     // (mapped to PAL line-system defaults in ld-analyse)
-    if (normalisedName == "SECAM" ||
-        normalisedName == "MESECAM" ||
-        normalisedName == "PALN" ||
+    // NOTE: SECAM and MESECAM are now first-class enum values resolved by
+    // the VIDEO_SYSTEM_DEFAULTS loop above, so they are not aliased to PAL here.
+    if (normalisedName == "PALN" ||
         normalisedName == "PAL_N" ||
         normalisedName == "405" ||
         normalisedName == "819") {
@@ -1870,17 +1895,17 @@ qint32 TbcMetaData::convertClvTimecodeToFrameNumber(TbcMetaData::ClvTimecode clv
     }
 
     if (clvTimeCode.hours != -1) {
-        if (videoParameters.system == PAL) frameNumber += clvTimeCode.hours * 3600 * 25;
+        if (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) frameNumber += clvTimeCode.hours * 3600 * 25;
         else frameNumber += clvTimeCode.hours * 3600 * 30;
     }
 
     if (clvTimeCode.minutes != -1) {
-        if (videoParameters.system == PAL) frameNumber += clvTimeCode.minutes * 60 * 25;
+        if (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) frameNumber += clvTimeCode.minutes * 60 * 25;
         else frameNumber += clvTimeCode.minutes * 60 * 30;
     }
 
     if (clvTimeCode.seconds != -1) {
-        if (videoParameters.system == PAL) frameNumber += clvTimeCode.seconds * 25;
+        if (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) frameNumber += clvTimeCode.seconds * 25;
         else frameNumber += clvTimeCode.seconds * 30;
     }
 
@@ -1901,7 +1926,7 @@ TbcMetaData::ClvTimecode TbcMetaData::convertFrameNumberToClvTimecode(qint32 fra
     clvTimecode.seconds = 0;
     clvTimecode.pictureNumber = 0;
 
-    if (getVideoParameters().system == PAL) {
+    if (getVideoParameters().system == PAL || getVideoParameters().system == SECAM || getVideoParameters().system == MESECAM) {
         clvTimecode.hours = frameNumber / (3600 * 25);
         frameNumber -= clvTimecode.hours * (3600 * 25);
 

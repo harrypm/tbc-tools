@@ -133,7 +133,7 @@ protected:
     // Private constructor used by from* static methods
     LineNumber(qint32 number, VideoSystem system, bool isStandard = false)
     {
-        const qint32 numLines = (system == PAL) ? 625 : 525;
+        const qint32 numLines = (system == PAL || system == SECAM || system == MESECAM) ? 625 : 525;
         firstFieldLines = (numLines / 2) + 1;
 
         // In both cases, we allow an extra two lines at the end, so we can

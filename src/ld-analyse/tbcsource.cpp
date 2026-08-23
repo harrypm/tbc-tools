@@ -1320,8 +1320,26 @@ void TbcSource::setVideoParameters(const TbcMetaData::VideoParameters &videoPara
     // Update the metadata
     metaData.setVideoParameters(videoParameters);
 
+    // Apply chroma settings from the metadata (this reads the chromaDecoder
+    // string and sets palConfiguration.chromaFilter to the right decoder —
+    // e.g. PalColour::secam for "secam"). Without this, changing the TV system
+    // to SECAM/MESECAM would not switch the chroma decoder.
+    applyChromaSettingsFromMetadata(videoParameters);
+
     // Reconfigure the chroma decoder
     configureChromaDecoder();
+}
+
+// Get the PcmAudioParameters for the current source
+const TbcMetaData::PcmAudioParameters &TbcSource::getPcmAudioParameters() const
+{
+    return metaData.getPcmAudioParameters();
+}
+
+// Update the PcmAudioParameters for the current source
+void TbcSource::setPcmAudioParameters(const TbcMetaData::PcmAudioParameters &pcmAudioParameters)
+{
+    metaData.setPcmAudioParameters(pcmAudioParameters);
 }
 
 // Get scan line data from the field/frame
@@ -1831,7 +1849,8 @@ void TbcSource::configureChromaDecoder()
         applyFullFrameDecodeBounds(decodeVideoParameters);
     }
 	
-    if (videoParameters.system == PAL || videoParameters.system == PAL_M) {
+    if (videoParameters.system == PAL || videoParameters.system == PAL_M
+        || videoParameters.system == SECAM || videoParameters.system == MESECAM) {
 		monoConfiguration.yNRLevel = palConfiguration.yNRLevel;
         palColour.updateConfiguration(decodeVideoParameters, palConfiguration);
     } else {
@@ -1839,7 +1858,8 @@ void TbcSource::configureChromaDecoder()
         ntscColour.updateConfiguration(decodeVideoParameters, ntscConfiguration);
     }
 	monoDecoder.updateConfiguration(decodeVideoParameters, monoConfiguration);
-    if (videoParameters.system == PAL || videoParameters.system == PAL_M) {
+    if (videoParameters.system == PAL || videoParameters.system == PAL_M
+        || videoParameters.system == SECAM || videoParameters.system == MESECAM) {
         // The SECAM decoder measures each line's rest carrier inside the
         // blanking interval, so it must see the real active/burst bounds from
         // the metadata -- not the full-frame decode bounds, which rewrite
@@ -1889,6 +1909,8 @@ void TbcSource::applyChromaSettingsFromMetadata(const TbcMetaData::VideoParamete
     } else if (videoParameters.system == NTSC) {
         ntscConfiguration.phaseCompensation = true;
     }
+    // SECAM/MESECAM: no NTSC-specific defaults; chroma decoder is selected by
+    // the chromaDecoder string ("secam"/"mono") in applyChromaSettingsFromMetadata.
 
     if (videoParameters.palTransformThreshold >= 0.0) {
         palConfiguration.transformThreshold = videoParameters.palTransformThreshold;
@@ -1896,7 +1918,8 @@ void TbcSource::applyChromaSettingsFromMetadata(const TbcMetaData::VideoParamete
 
     if (!videoParameters.chromaDecoder.isEmpty()) {
         const QString decoder = videoParameters.chromaDecoder.toLower();
-        if (videoParameters.system == PAL || videoParameters.system == PAL_M) {
+        if (videoParameters.system == PAL || videoParameters.system == PAL_M
+            || videoParameters.system == SECAM || videoParameters.system == MESECAM) {
             if (decoder == "pal2d") {
                 palConfiguration.chromaFilter = PalColour::palColourFilter;
             } else if (decoder == "transform2d") {
@@ -1909,6 +1932,7 @@ void TbcSource::applyChromaSettingsFromMetadata(const TbcMetaData::VideoParamete
                 palConfiguration.chromaFilter = PalColour::mono;
             }
         } else if (videoParameters.system == NTSC) {
+            // NTSC decoders
             if (decoder == "ntsc1d") {
                 ntscConfiguration.dimensions = 1;
                 ntscConfiguration.nnTransform3D = false;
@@ -1937,7 +1961,7 @@ void TbcSource::loadInputFields()
 
     // Work out how many frames ahead/behind we need to fetch
     qint32 lookBehind, lookAhead;
-    if (getSystem() == PAL || getSystem() == PAL_M) {
+    if (getSystem() == PAL || getSystem() == PAL_M || getSystem() == SECAM || getSystem() == MESECAM) {
         lookBehind = palConfiguration.getLookBehind();
         lookAhead = palConfiguration.getLookAhead();
     } else {
@@ -2000,10 +2024,10 @@ void TbcSource::decodeFrame()
 	if(!combine && sourceMode == BOTH_SOURCES)
 	{
 		monoDecoder.decodeFrames(inputFields, inputStartIndex, inputEndIndex, yFrames);
-		if ((getSystem() == PAL || getSystem() == PAL_M) && palConfiguration.chromaFilter == PalColour::secam) {
+		if ((getSystem() == PAL || getSystem() == PAL_M || getSystem() == SECAM || getSystem() == MESECAM) && palConfiguration.chromaFilter == PalColour::secam) {
 			// SECAM source: the chroma TBC carries a restored studio SECAM FM block
 			secamDecoder.decodeFrames(chromaInputFields, inputStartIndex, inputEndIndex, cFrames);
-		} else if ((getSystem() == PAL || getSystem() == PAL_M) && palConfiguration.chromaFilter != PalColour::mono) {
+		} else if ((getSystem() == PAL || getSystem() == PAL_M || getSystem() == SECAM || getSystem() == MESECAM) && palConfiguration.chromaFilter != PalColour::mono) {
 			// PAL source
 			palColour.decodeFrames(chromaInputFields, inputStartIndex, inputEndIndex, cFrames);
 		} else if(getSystem() == NTSC && ntscConfiguration.dimensions != 0){
@@ -2028,7 +2052,7 @@ void TbcSource::decodeFrame()
 	}
 	else
 	{
-		if (getSystem() == PAL || getSystem() == PAL_M) {
+		if (getSystem() == PAL || getSystem() == PAL_M || getSystem() == SECAM || getSystem() == MESECAM) {
 			if(palConfiguration.chromaFilter == palColour.ChromaFilterMode::mono){
 				monoDecoder.decodeFrames(inputFields, inputStartIndex, inputEndIndex, componentFrames);
 			} else if(palConfiguration.chromaFilter == palColour.ChromaFilterMode::secam){
@@ -2548,7 +2572,8 @@ bool TbcSource::startBackgroundLoad(QString sourceFilename)
     currentMetadataFilename = metadataFileName;
 
     // Configure the chroma decoder
-    if (videoParameters.system == PAL || videoParameters.system == PAL_M) {
+    if (videoParameters.system == PAL || videoParameters.system == PAL_M
+        || videoParameters.system == SECAM || videoParameters.system == MESECAM) {
         palColour.updateConfiguration(videoParameters, palConfiguration);
         secamConfiguration.chromaGain = palConfiguration.chromaGain;
         secamDecoder.updateConfiguration(videoParameters, secamConfiguration);

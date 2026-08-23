@@ -171,9 +171,11 @@ bool SecamDecoder::updateConfiguration(const TbcMetaData::VideoParameters &video
 
 bool SecamDecoder::configure(const TbcMetaData::VideoParameters &videoParameters)
 {
-    // SECAM/ME-SECAM sources carry the PAL line structure, and vhs-decode
-    // reports them as PAL.
-    if (videoParameters.system != PAL && videoParameters.system != PAL_M) {
+    // SECAM/ME-SECAM sources carry the PAL line structure (625-line), and
+    // vhs-decode reports them as SECAM, MESECAM, or PAL. All three are valid
+    // here — the decoder works on any 625-line PAL-geometry source.
+    if (videoParameters.system != PAL && videoParameters.system != PAL_M
+        && videoParameters.system != SECAM && videoParameters.system != MESECAM) {
         qCritical() << "This decoder is for PAL-line (SECAM/MESECAM) video only";
         return false;
     }

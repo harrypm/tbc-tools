@@ -87,7 +87,9 @@ DiscMap::DiscMap(const QFileInfo &metadataFileInfo, const bool reverseFieldOrder
 
     // Get the source format (PAL/NTSC)
     m_videoSystemDescription = metaData->getVideoSystemDescription();
-    if (metaData->getVideoParameters().system == PAL) m_isDiscPal = true;
+    if (metaData->getVideoParameters().system == PAL
+        || metaData->getVideoParameters().system == SECAM
+        || metaData->getVideoParameters().system == MESECAM) m_isDiscPal = true;
     else if (metaData->getVideoParameters().system == NTSC) m_isDiscPal = false;
     else {
         tbcDebugStream() << "Input TBC video system" << m_videoSystemDescription << "is not supported";

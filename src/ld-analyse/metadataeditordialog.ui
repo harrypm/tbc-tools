@@ -1,0 +1,399 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MetadataEditorDialog</class>
+ <widget class="QDialog" name="MetadataEditorDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>620</width>
+    <height>780</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Metadata Editor</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <item>
+    <widget class="QScrollArea" name="scrollArea">
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <widget class="QWidget" name="scrollContents">
+      <layout class="QFormLayout" name="formLayout">
+       <item row="0" column="0">
+        <widget class="QLabel" name="systemLabel">
+         <property name="text">
+          <string>TV System:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QComboBox" name="systemComboBox"/>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="chromaDecoderLabel">
+         <property name="text">
+          <string>Chroma decoder:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QComboBox" name="chromaDecoderComboBox"/>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="tapeFormatLabel">
+         <property name="text">
+          <string>Tape format:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLineEdit" name="tapeFormatLineEdit"/>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="widescreenLabel">
+         <property name="text">
+          <string>Widescreen:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QCheckBox" name="widescreenCheckBox"/>
+       </item>
+       <item row="4" column="0">
+        <widget class="QLabel" name="subcarrierLockedLabel">
+         <property name="text">
+          <string>Subcarrier locked:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="1">
+        <widget class="QCheckBox" name="subcarrierLockedCheckBox"/>
+       </item>
+       <item row="5" column="0">
+        <widget class="QLabel" name="mappedLabel">
+         <property name="text">
+          <string>Mapped:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="5" column="1">
+        <widget class="QCheckBox" name="mappedCheckBox"/>
+       </item>
+       <item row="6" column="0">
+        <widget class="QLabel" name="chromaGainLabel">
+         <property name="text">
+          <string>Chroma gain:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="1">
+        <widget class="QDoubleSpinBox" name="chromaGainSpinBox">
+         <property name="decimals">
+          <number>3</number>
+         </property>
+         <property name="minimum">
+          <double>0.000</double>
+         </property>
+         <property name="maximum">
+          <double>10.000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.100</double>
+         </property>
+         <property name="specialValueText">
+          <string>auto</string>
+         </property>
+        </widget>
+       </item>
+       <item row="7" column="0">
+        <widget class="QLabel" name="chromaPhaseLabel">
+         <property name="text">
+          <string>Chroma phase:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="7" column="1">
+        <widget class="QDoubleSpinBox" name="chromaPhaseSpinBox">
+         <property name="decimals">
+          <number>3</number>
+         </property>
+         <property name="minimum">
+          <double>-1.000</double>
+         </property>
+         <property name="maximum">
+          <double>360.000</double>
+         </property>
+         <property name="singleStep">
+          <double>1.000</double>
+         </property>
+         <property name="specialValueText">
+          <string>auto</string>
+         </property>
+        </widget>
+       </item>
+       <item row="8" column="0">
+        <widget class="QLabel" name="lumaNrLabel">
+         <property name="text">
+          <string>Luma NR:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="8" column="1">
+        <widget class="QDoubleSpinBox" name="lumaNrSpinBox">
+         <property name="decimals">
+          <number>3</number>
+         </property>
+         <property name="minimum">
+          <double>-1.000</double>
+         </property>
+         <property name="maximum">
+          <double>10.000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.100</double>
+         </property>
+         <property name="specialValueText">
+          <string>auto</string>
+         </property>
+        </widget>
+       </item>
+       <item row="9" column="0">
+        <widget class="QLabel" name="ntscAdaptiveLabel">
+         <property name="text">
+          <string>NTSC adaptive:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="9" column="1">
+        <widget class="QCheckBox" name="ntscAdaptiveCheckBox"/>
+       </item>
+       <item row="10" column="0">
+        <widget class="QLabel" name="ntscAdaptThresholdLabel">
+         <property name="text">
+          <string>NTSC adapt threshold:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="10" column="1">
+        <widget class="QDoubleSpinBox" name="ntscAdaptThresholdSpinBox">
+         <property name="decimals">
+          <number>3</number>
+         </property>
+         <property name="minimum">
+          <double>-1.000</double>
+         </property>
+         <property name="maximum">
+          <double>1.000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.010</double>
+         </property>
+         <property name="specialValueText">
+          <string>auto</string>
+         </property>
+        </widget>
+       </item>
+       <item row="11" column="0">
+        <widget class="QLabel" name="ntscChromaWeightLabel">
+         <property name="text">
+          <string>NTSC chroma weight:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="11" column="1">
+        <widget class="QDoubleSpinBox" name="ntscChromaWeightSpinBox">
+         <property name="decimals">
+          <number>3</number>
+         </property>
+         <property name="minimum">
+          <double>-1.000</double>
+         </property>
+         <property name="maximum">
+          <double>10.000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.100</double>
+         </property>
+         <property name="specialValueText">
+          <string>auto</string>
+         </property>
+        </widget>
+       </item>
+       <item row="12" column="0">
+        <widget class="QLabel" name="ntscPhaseCompensationLabel">
+         <property name="text">
+          <string>NTSC phase compensation:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="12" column="1">
+        <widget class="QCheckBox" name="ntscPhaseCompensationCheckBox"/>
+       </item>
+       <item row="13" column="0">
+        <widget class="QLabel" name="palTransformThresholdLabel">
+         <property name="text">
+          <string>PAL transform threshold:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="13" column="1">
+        <widget class="QDoubleSpinBox" name="palTransformThresholdSpinBox">
+         <property name="decimals">
+          <number>3</number>
+         </property>
+         <property name="minimum">
+          <double>-1.000</double>
+         </property>
+         <property name="maximum">
+          <double>1.000</double>
+         </property>
+         <property name="singleStep">
+          <double>0.010</double>
+         </property>
+         <property name="specialValueText">
+          <string>auto</string>
+         </property>
+        </widget>
+       </item>
+       <item row="14" column="0">
+        <widget class="QLabel" name="sampleRateLabel">
+         <property name="text">
+          <string>Sample rate (Hz):</string>
+         </property>
+        </widget>
+       </item>
+       <item row="14" column="1">
+        <widget class="QDoubleSpinBox" name="sampleRateSpinBox">
+         <property name="decimals">
+          <number>0</number>
+         </property>
+         <property name="minimum">
+          <double>0.000</double>
+         </property>
+         <property name="maximum">
+          <double>99999999.000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="15" column="0">
+        <widget class="QLabel" name="colourBurstStartLabel">
+         <property name="text">
+          <string>Colour burst start:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="15" column="1">
+        <widget class="QSpinBox" name="colourBurstStartSpinBox"/>
+       </item>
+       <item row="16" column="0">
+        <widget class="QLabel" name="colourBurstEndLabel">
+         <property name="text">
+          <string>Colour burst end:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="16" column="1">
+        <widget class="QSpinBox" name="colourBurstEndSpinBox"/>
+       </item>
+       <item row="22" column="0">
+        <widget class="QLabel" name="gitBranchLabel">
+         <property name="text">
+          <string>Git branch:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="22" column="1">
+        <widget class="QLineEdit" name="gitBranchLineEdit"/>
+       </item>
+       <item row="23" column="0">
+        <widget class="QLabel" name="gitCommitLabel">
+         <property name="text">
+          <string>Git commit:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="23" column="1">
+        <widget class="QLineEdit" name="gitCommitLineEdit"/>
+       </item>
+       <item row="24" column="0" colspan="2">
+        <widget class="QLabel" name="pcmAudioHeaderLabel">
+         <property name="text">
+          <string>&lt;b&gt;PCM Audio Parameters&lt;/b&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item row="25" column="0">
+        <widget class="QLabel" name="pcmSampleRateLabel">
+         <property name="text">
+          <string>PCM sample rate (Hz):</string>
+         </property>
+        </widget>
+       </item>
+       <item row="25" column="1">
+        <widget class="QDoubleSpinBox" name="pcmSampleRateSpinBox">
+         <property name="decimals">
+          <number>0</number>
+         </property>
+         <property name="minimum">
+          <double>0.000</double>
+         </property>
+         <property name="maximum">
+          <double>999999.000</double>
+         </property>
+        </widget>
+       </item>
+       <item row="26" column="0">
+        <widget class="QLabel" name="pcmBitsLabel">
+         <property name="text">
+          <string>PCM bits:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="26" column="1">
+        <widget class="QSpinBox" name="pcmBitsSpinBox">
+         <property name="minimum">
+          <number>-1</number>
+         </property>
+         <property name="maximum">
+          <number>32</number>
+         </property>
+        </widget>
+       </item>
+       <item row="27" column="0">
+        <widget class="QLabel" name="pcmSignedLabel">
+         <property name="text">
+          <string>PCM signed:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="27" column="1">
+        <widget class="QCheckBox" name="pcmSignedCheckBox"/>
+       </item>
+       <item row="28" column="0">
+        <widget class="QLabel" name="pcmLittleEndianLabel">
+         <property name="text">
+          <string>PCM little-endian:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="28" column="1">
+        <widget class="QCheckBox" name="pcmLittleEndianCheckBox"/>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Apply|QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

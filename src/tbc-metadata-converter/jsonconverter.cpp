@@ -134,8 +134,10 @@ void JsonConverter::reportMetadataContents(TbcMetaData &metaData)
     // Comprehensive Video parameters matching README schema
     const TbcMetaData::VideoParameters &videoParams = metaData.getVideoParameters();
     qInfo() << "Video Parameters:";
-    qInfo() << "  System:" << (videoParams.system == PAL ? "PAL" : 
-                                (videoParams.system == NTSC ? "NTSC" : "PAL_M"));
+    qInfo() << "  System:" << (videoParams.system == PAL ? "PAL" :
+                                (videoParams.system == NTSC ? "NTSC" :
+                                (videoParams.system == PAL_M ? "PAL_M" :
+                                (videoParams.system == SECAM ? "SECAM" : "MESECAM"))));
     qInfo() << "  Field Width:" << videoParams.fieldWidth << "pixels";
     qInfo() << "  Field Height:" << videoParams.fieldHeight << "lines";
     qInfo() << "  Video Sample Rate:" << QString::number(videoParams.sampleRate, 'f', 0).toLongLong() << "Hz";

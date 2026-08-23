@@ -148,7 +148,7 @@ std::vector<qint32> VitcCode::getLineNumbers(const TbcMetaData::VideoParameters&
     // the standards [ITU 6.20, SMPTE 10.6] recommend lines to use. Try the
     // recommended lines first (prioritising those that don't clash with
     // LaserDisc VBI), then the others.
-    if (videoParameters.system == PAL) {
+    if (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) {
         // 625-line
         return {
             21, 19, 18, 20,

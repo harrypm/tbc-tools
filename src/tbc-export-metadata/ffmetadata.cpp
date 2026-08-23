@@ -229,7 +229,7 @@ bool writeFfmetadata(TbcMetaData &metaData,
     const auto videoParameters = metaData.getVideoParameters();
 
     // Select the appropriate timebase to make 0-based field numbers work
-    const QString timeBase = videoParameters.system == PAL ? "1/50" : "1001/60000";
+    const QString timeBase = (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) ? "1/50" : "1001/60000";
 
     qint32 exportStartField = 0;
     qint32 exportEndFieldExclusive = 0;

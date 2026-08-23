@@ -160,6 +160,9 @@ public:
     const TbcMetaData::VideoParameters &getVideoParameters() const;
     void setVideoParameters(const TbcMetaData::VideoParameters &videoParameters);
 
+    const TbcMetaData::PcmAudioParameters &getPcmAudioParameters() const;
+    void setPcmAudioParameters(const TbcMetaData::PcmAudioParameters &pcmAudioParameters);
+
     const ComponentFrame &getComponentFrame();
     ScanLineData getScanLineData(qint32 scanLine);
     FieldTimingData getFieldTimingData();

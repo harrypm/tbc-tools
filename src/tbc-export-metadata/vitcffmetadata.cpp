@@ -108,7 +108,8 @@ bool writeVitcFfmetadataText(TbcMetaData &metaData, const QString &fileName)
     stream.setCodec("UTF-8");
 #endif
 
-    const bool is30Frame = (metaData.getVideoParameters().system != PAL);
+    const bool is30Frame = (metaData.getVideoParameters().system != PAL && metaData.getVideoParameters().system != PAL_M
+                             && metaData.getVideoParameters().system != SECAM && metaData.getVideoParameters().system != MESECAM);
     const qint32 numberOfFrames = qMax<qint32>(0, metaData.getNumberOfFrames());
 
     for (qint32 frameIndex = 0; frameIndex < numberOfFrames; ++frameIndex) {

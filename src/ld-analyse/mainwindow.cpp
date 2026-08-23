@@ -1382,6 +1382,24 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
     chromaDecoderConfigDialog = new ChromaDecoderConfigDialog(this);
     metadataConversionDialog = new MetadataConversionDialog(this);
     metadataStatusDialog = new MetadataStatusDialog(this);
+    metadataEditorDialog = new MetadataEditorDialog(this);
+    connect(metadataEditorDialog, &MetadataEditorDialog::videoParametersChanged,
+            this, &MainWindow::videoParametersChangedSignalHandler);
+    connect(metadataEditorDialog, &MetadataEditorDialog::pcmAudioParametersChanged,
+            this, [this](const TbcMetaData::PcmAudioParameters &pcmAudioParameters) {
+        if (!tbcSource.getIsSourceLoaded()) return;
+        tbcSource.setPcmAudioParameters(pcmAudioParameters);
+        ui->actionSave_Metadata->setEnabled(true);
+    });
+    // Apply: save the metadata to disk. TbcSource::saveSourceMetadata() writes
+    // to a .new file, backs up the original to .bup (timestamped fallback),
+    // renames .new to the target, then on_finishedSaving reloads the source
+    // with the new metadata.
+    connect(metadataEditorDialog, &MetadataEditorDialog::refreshRequested,
+            this, [this]() {
+        if (!tbcSource.getIsSourceLoaded()) return;
+        tbcSource.saveSourceMetadata();
+    });
     notesViewerDialog = new NotesViewerDialog(this);
     notesViewerDialog->setWindowFlag(Qt::Window, true);
     connect(notesViewerDialog, &NotesViewerDialog::goToFrameRequested, this, [this](qint32 frameNumber) {
@@ -5369,6 +5387,20 @@ void MainWindow::on_actionPluginManager_triggered()
     pluginManagerDialog->activateWindow();
 }
 
+// Show the Metadata Editor (Tools > Metadata Editor...)
+void MainWindow::on_actionMetadata_Editor_triggered()
+{
+    if (!tbcSource.getIsSourceLoaded()) {
+        statusBar()->showMessage(tr("No source loaded to edit metadata for."), 3000);
+        return;
+    }
+    metadataEditorDialog->setVideoParameters(tbcSource.getVideoParameters());
+    metadataEditorDialog->setPcmAudioParameters(tbcSource.getPcmAudioParameters());
+    metadataEditorDialog->show();
+    metadataEditorDialog->raise();
+    metadataEditorDialog->activateWindow();
+}
+
 // Check for updates - manual trigger from the Help menu
 void MainWindow::on_actionCheck_for_Updates_triggered()
 {
@@ -7694,6 +7726,20 @@ void MainWindow::on_finishedSaving(bool success)
     if (success) {
         // Disable the "Save Metadata" action until the metadata is modified again
         ui->actionSave_Metadata->setEnabled(false);
+
+        // Reload the source with the newly-saved metadata so the GUI reflects
+        // the edited values (e.g. TV system change, chroma decoder switch).
+        if (tbcSource.getIsSourceLoaded()) {
+            pendingUiStateSnapshot = captureUiStateSnapshot();
+            restoreUiStateAfterReload = true;
+            const QString currentSource = tbcSource.getCurrentSourceFilename();
+            const QString currentMetadata = tbcSource.getCurrentMetadataFilename();
+            if (!currentSource.isEmpty()) {
+                loadTbcFile(currentSource, false, true);
+            } else if (!currentMetadata.isEmpty()) {
+                loadTbcFile(currentMetadata, true, true);
+            }
+        }
     } else {
         // Show the error to the user
         QMessageBox messageBox;

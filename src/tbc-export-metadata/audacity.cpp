@@ -37,7 +37,7 @@ bool writeAudacityLabels(TbcMetaData &metaData, const QString &fileName)
 
     // Positions are given in seconds, with exclusive ranges.
     // Select a scale factor to convert from 0-based field numbers to seconds.
-    const double timeFactor = videoParameters.system == PAL ? (1.0 / 50.0) : (1001.0 / 60000.0);
+    const double timeFactor = (videoParameters.system == PAL || videoParameters.system == SECAM || videoParameters.system == MESECAM) ? (1.0 / 50.0) : (1001.0 / 60000.0);
 
     // Extract navigation information
     const NavigationInfo navInfo(metaData);
