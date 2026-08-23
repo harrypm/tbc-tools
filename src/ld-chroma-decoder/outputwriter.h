@@ -30,7 +30,7 @@
 #include <QByteArray>
 #include <QVector>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 class ComponentFrame;
 
@@ -59,7 +59,7 @@ public:
 
     // Set the output configuration, and adjust the VideoParameters to suit.
     // (If usePadding is disabled, this will not change the VideoParameters.)
-    void updateConfiguration(LdDecodeMetaData::VideoParameters &videoParameters, const Configuration &config);
+    void updateConfiguration(TbcMetaData::VideoParameters &videoParameters, const Configuration &config);
 
     // Print a qInfo message about the output format
     void printOutputInfo() const;
@@ -80,7 +80,7 @@ public:
 private:
     // Configuration parameters
     Configuration config;
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::VideoParameters videoParameters;
 
     // Number of blank lines to add at the top and bottom of the output
     qint32 topPadLines;

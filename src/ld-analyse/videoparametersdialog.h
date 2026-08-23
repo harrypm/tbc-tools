@@ -14,7 +14,7 @@
 #include <QAbstractButton>
 #include <QDialog>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 namespace Ui {
 class VideoParametersDialog;
@@ -28,12 +28,12 @@ public:
     explicit VideoParametersDialog(QWidget *parent = nullptr);
     ~VideoParametersDialog();
 
-    void setVideoParameters(const LdDecodeMetaData::VideoParameters &videoParameters);
+    void setVideoParameters(const TbcMetaData::VideoParameters &videoParameters);
     void setShowExportBoundary(bool enabled);
     void setExportBoundaryThickness(int thickness);
 
 signals:
-    void videoParametersChanged(const LdDecodeMetaData::VideoParameters &videoParameters);
+    void videoParametersChanged(const TbcMetaData::VideoParameters &videoParameters);
     void exportBoundaryToggled(bool enabled);
     void exportBoundaryThicknessChanged(int thickness);
 protected:
@@ -69,7 +69,7 @@ private:
     void updateResultingFrameSizeLabel();
 
     Ui::VideoParametersDialog *ui;
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::VideoParameters videoParameters;
     qint32 originalActiveVideoStart = -1;
     qint32 originalActiveVideoWidth = -1;
     qint32 originalFirstActiveFieldLine = -1;

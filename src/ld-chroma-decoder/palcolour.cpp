@@ -106,7 +106,7 @@ const PalColour::Configuration &PalColour::getConfiguration() const {
     return configuration;
 }
 
-void PalColour::updateConfiguration(const LdDecodeMetaData::VideoParameters &_videoParameters,
+void PalColour::updateConfiguration(const TbcMetaData::VideoParameters &_videoParameters,
                                     const Configuration &_configuration)
 {
     // Copy the configuration parameters

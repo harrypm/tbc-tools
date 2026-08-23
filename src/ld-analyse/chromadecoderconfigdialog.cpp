@@ -183,7 +183,7 @@ const Comb::Configuration &ChromaDecoderConfigDialog::getNtscConfiguration()
     return ntscConfiguration;
 }
 
-void ChromaDecoderConfigDialog::setVideoLevels(const LdDecodeMetaData::VideoParameters &videoParameters)
+void ChromaDecoderConfigDialog::setVideoLevels(const TbcMetaData::VideoParameters &videoParameters)
 {
     system = videoParameters.system;
 

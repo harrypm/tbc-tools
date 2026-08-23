@@ -496,14 +496,14 @@ ActiveAreaFrameDefaults activeAreaDefaultsForSystem(int system)
 }
 
 
-bool hasExplicitVerticalFraming(const LdDecodeMetaData::VideoParameters &videoParameters)
+bool hasExplicitVerticalFraming(const TbcMetaData::VideoParameters &videoParameters)
 {
     return videoParameters.firstActiveFieldLine > 0
            && videoParameters.lastActiveFieldLine > 0
            && videoParameters.firstActiveFrameLine > 0
            && videoParameters.lastActiveFrameLine > 0;
 }
-bool hasVerticalFramingDeltaBeyondThreshold(const LdDecodeMetaData::VideoParameters &videoParameters,
+bool hasVerticalFramingDeltaBeyondThreshold(const TbcMetaData::VideoParameters &videoParameters,
                                             int thresholdLines)
 {
     if (!videoParameters.isValid || !hasExplicitVerticalFraming(videoParameters)) {
@@ -522,13 +522,13 @@ bool hasVerticalFramingDeltaBeyondThreshold(const LdDecodeMetaData::VideoParamet
            || exceedsThreshold(videoParameters.lastActiveFrameLine, defaults.lfrl);
 }
 
-bool usesCustomVerticalFraming(const LdDecodeMetaData::VideoParameters &videoParameters)
+bool usesCustomVerticalFraming(const TbcMetaData::VideoParameters &videoParameters)
 {
     return hasVerticalFramingDeltaBeyondThreshold(videoParameters,
                                                   kVerticalFramingAutoUserDefinedThreshold);
 }
 
-bool hasAnyNonDefaultVerticalFraming(const LdDecodeMetaData::VideoParameters &videoParameters)
+bool hasAnyNonDefaultVerticalFraming(const TbcMetaData::VideoParameters &videoParameters)
 {
     if (!videoParameters.isValid) {
         return false;
@@ -759,7 +759,7 @@ int vbiNativeOutputHeightForSystem(int system)
     return qMax(1, lines.lastFrameLine - lines.firstFrameLine);
 }
 
-int nativeActiveWidthForVideoParameters(const LdDecodeMetaData::VideoParameters &videoParameters)
+int nativeActiveWidthForVideoParameters(const TbcMetaData::VideoParameters &videoParameters)
 {
     if (!videoParameters.isValid) {
         return 0;
@@ -771,7 +771,7 @@ int nativeActiveWidthForVideoParameters(const LdDecodeMetaData::VideoParameters 
     return qMax(0, videoParameters.fieldWidth);
 }
 
-int nativeActiveHeightForVideoParameters(const LdDecodeMetaData::VideoParameters &videoParameters)
+int nativeActiveHeightForVideoParameters(const TbcMetaData::VideoParameters &videoParameters)
 {
     if (!videoParameters.isValid) {
         return 0;
@@ -1244,7 +1244,7 @@ QString firstValidVitcTimecodeForRange(const QString &metadataSnapshotPath,
         return QString();
     }
 
-    LdDecodeMetaData metadata;
+    TbcMetaData metadata;
     if (!metadata.read(metadataSnapshotPath)) {
         return QString();
     }
@@ -1269,7 +1269,7 @@ QString firstValidVitcTimecodeForRange(const QString &metadataSnapshotPath,
 
     const VideoSystem system = metadata.getVideoParameters().system;
     for (int fieldNumber = startFieldOneBased; fieldNumber <= endFieldOneBased; ++fieldNumber) {
-        const LdDecodeMetaData::Vitc &fieldVitc = metadata.getFieldVitc(fieldNumber);
+        const TbcMetaData::Vitc &fieldVitc = metadata.getFieldVitc(fieldNumber);
         if (!fieldVitc.inUse) {
             continue;
         }
@@ -2118,7 +2118,7 @@ void ExportDialog::syncResolutionModeSelectionFromSource()
     }
 
     if (tbcSource && tbcSource->getIsSourceLoaded() && !tbcSource->getIsMetadataOnly()) {
-        const LdDecodeMetaData::VideoParameters &videoParameters = tbcSource->getVideoParameters();
+        const TbcMetaData::VideoParameters &videoParameters = tbcSource->getVideoParameters();
         if (usesCustomVerticalFraming(videoParameters)) {
             targetMode = QStringLiteral("user_defined");
         } else if (targetMode == QStringLiteral("user_defined")) {
@@ -2145,7 +2145,7 @@ void ExportDialog::refreshOutputResolutionModeOptions()
     const QString resolutionMode = effectiveResolutionMode(tbcSource, ui ? ui->resolutionModeComboBox : nullptr);
 
     int system = NTSC;
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::VideoParameters videoParameters;
     const bool hasVideoParameters = tbcSource && tbcSource->getIsSourceLoaded();
     if (hasVideoParameters) {
         videoParameters = tbcSource->getVideoParameters();
@@ -2294,7 +2294,7 @@ void ExportDialog::updateRangeControlsForSource(bool resetToFullRange)
     int outPoint = ui->outPointSpinBox->value();
     if (resetToFullRange) {
         bool restoredFromMetadata = false;
-        const LdDecodeMetaData::VideoParameters &videoParameters = tbcSource->getVideoParameters();
+        const TbcMetaData::VideoParameters &videoParameters = tbcSource->getVideoParameters();
         if (videoParameters.userEditInSelection > 0 && videoParameters.userEditOutSelection > 0) {
             inPoint = qBound(1, videoParameters.userEditInSelection, totalFrames);
             outPoint = qBound(1, videoParameters.userEditOutSelection, totalFrames);
@@ -4735,7 +4735,7 @@ bool ExportDialog::prepareTrimmedAudioTracks(int zeroBasedStartFrame,
         return false;
     }
 
-    const LdDecodeMetaData::VideoParameters &videoParameters = tbcSource->getVideoParameters();
+    const TbcMetaData::VideoParameters &videoParameters = tbcSource->getVideoParameters();
     const double fps = frameRateForSystem(videoParameters.system);
     if (fps <= 0.0) {
         if (errorMessage) {
@@ -5044,7 +5044,7 @@ QStringList ExportDialog::buildArguments(QString *errorMessage, const QString &i
         args << QStringLiteral("--overwrite");
     }
 
-    const LdDecodeMetaData::VideoParameters &videoParameters = tbcSource->getVideoParameters();
+    const TbcMetaData::VideoParameters &videoParameters = tbcSource->getVideoParameters();
     const bool isPalSystem = (videoParameters.system == PAL || videoParameters.system == PAL_M);
     const bool isNtscSystem = (videoParameters.system == NTSC);
     if (videoParameters.isValid) {

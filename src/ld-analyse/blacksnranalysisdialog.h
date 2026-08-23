@@ -17,7 +17,7 @@
 #include <QTimer>
 #include <QShowEvent>
 #include "plotwidget.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 namespace Ui {
 class BlackSnrAnalysisDialog;

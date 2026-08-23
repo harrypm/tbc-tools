@@ -30,7 +30,7 @@
 #include <QCommandLineParser>
 #include <cstdio>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "tbc/logging.h"
 
 #include "ntscencoder.h"
@@ -239,7 +239,7 @@ int main(int argc, char *argv[])
     }
 
     // Encode the data
-    LdDecodeMetaData metaData;
+    TbcMetaData metaData;
     if (system == NTSC) {
         NTSCEncoder encoder(inputFile, tbcFile, chromaFile, metaData, fieldOffset, isComponent, chromaMode, addSetup);
         if (!encoder.encode()) {

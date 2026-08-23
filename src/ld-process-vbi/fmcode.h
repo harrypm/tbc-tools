@@ -26,7 +26,7 @@
 #define FMCODE_H
 
 #include "sourcevideo.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 // Decoder for NTSC LaserDisc FM code lines.
 // Specified in IEC 60587-1986 section 10.2.
@@ -34,8 +34,8 @@ class FmCode
 {
 public:
     bool decodeLine(const SourceVideo::Data &lineData,
-                    const LdDecodeMetaData::VideoParameters& videoParameters,
-                    LdDecodeMetaData::Field& fieldMetadata);
+                    const TbcMetaData::VideoParameters& videoParameters,
+                    TbcMetaData::Field& fieldMetadata);
 };
 
 #endif // FMCODE_H

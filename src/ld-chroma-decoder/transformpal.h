@@ -31,7 +31,7 @@
 #include <QVector>
 #include <fftw3.h>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include "componentframe.h"
 #include "framecanvas.h"
@@ -49,7 +49,7 @@ public:
     // threshold is the similarity threshold for the filter. Values from 0-1
     // are meaningful, with higher values requiring signals to be more similar
     // to be considered chroma.
-    void updateConfiguration(const LdDecodeMetaData::VideoParameters &videoParameters,
+    void updateConfiguration(const TbcMetaData::VideoParameters &videoParameters,
                              double threshold, const QVector<double> &thresholds);
 
     // Filter input fields.
@@ -86,7 +86,7 @@ protected:
 
     // Configuration parameters
     bool configurationSet;
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::VideoParameters videoParameters;
     QVector<double> thresholds;
 };
 

@@ -12,7 +12,7 @@
 #define JSONCONVERTER_H
 
 #include <QString>
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "exportmetadata.h"
 
 class MetadataConverter
@@ -27,11 +27,11 @@ private:
     QString m_inputSqliteFilename;
     QString m_outputJsonFilename;
 
-    void convertVideoParamters(const LdDecodeMetaData::VideoParameters &in_VideoParameters,
+    void convertVideoParamters(const TbcMetaData::VideoParameters &in_VideoParameters,
                                ExportMetaData::VideoParameters &out_VideoParameters);
-    void convertPcmAudioParamters(const LdDecodeMetaData::PcmAudioParameters &in_PcmAudioParameters,
+    void convertPcmAudioParamters(const TbcMetaData::PcmAudioParameters &in_PcmAudioParameters,
                                   ExportMetaData::PcmAudioParameters &out_PcmAudioParameters);
-    void convertField(const LdDecodeMetaData::Field &in_field,
+    void convertField(const TbcMetaData::Field &in_field,
                       ExportMetaData::Field &out_field);
 };
 

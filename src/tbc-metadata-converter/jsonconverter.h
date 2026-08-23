@@ -15,7 +15,7 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 class JsonConverter
 {
@@ -37,12 +37,12 @@ private:
     QSqlDatabase m_database;
     bool processJsonToSqlite();
     bool processSqliteToJson();
-    void reportMetadataContents(LdDecodeMetaData &metaData);
-    void reportJsonContents(LdDecodeMetaData &metaData);
-    void countDropouts(const LdDecodeMetaData &metaData, qint32 &totalDropouts);
+    void reportMetadataContents(TbcMetaData &metaData);
+    void reportJsonContents(TbcMetaData &metaData);
+    void countDropouts(const TbcMetaData &metaData, qint32 &totalDropouts);
     bool createDatabase();
     bool createSchema();
-    bool insertData(LdDecodeMetaData &metaData);
+    bool insertData(TbcMetaData &metaData);
 };
 
 #endif // JSONCONVERTER_H

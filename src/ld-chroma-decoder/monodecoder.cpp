@@ -40,7 +40,7 @@ MonoDecoder::MonoDecoder(const MonoDecoder::MonoConfiguration &config)
     monoConfig = config;
 }
 
-bool MonoDecoder::updateConfiguration(const LdDecodeMetaData::VideoParameters &videoParameters, const MonoDecoder::MonoConfiguration &configuration) {
+bool MonoDecoder::updateConfiguration(const TbcMetaData::VideoParameters &videoParameters, const MonoDecoder::MonoConfiguration &configuration) {
     // This decoder works for both PAL and NTSC.
 	monoConfig.yNRLevel = configuration.yNRLevel;
     monoConfig.videoParameters = videoParameters;
@@ -48,7 +48,7 @@ bool MonoDecoder::updateConfiguration(const LdDecodeMetaData::VideoParameters &v
     return true;
 }
 
-bool MonoDecoder::configure(const LdDecodeMetaData::VideoParameters &videoParameters) {
+bool MonoDecoder::configure(const TbcMetaData::VideoParameters &videoParameters) {
     // This decoder works for both PAL and NTSC.
 
     monoConfig.videoParameters = videoParameters;
@@ -65,7 +65,7 @@ void MonoDecoder::decodeFrames(const QVector<SourceField>& inputFields,
                                qint32 endIndex,
                                QVector<ComponentFrame>& componentFrames)
 {
-	const LdDecodeMetaData::VideoParameters &videoParameters = monoConfig.videoParameters;
+	const TbcMetaData::VideoParameters &videoParameters = monoConfig.videoParameters;
 	bool ignoreUV = false;
 
 	const qint32 frameHeight = (videoParameters.fieldHeight * 2) - 1;

@@ -5,7 +5,7 @@ add_executable(tbc-audio-align
     main.cpp
 )
 
-target_link_libraries(tbc-audio-align PRIVATE Qt::Core Qt::Gui Qt::Widgets lddecode-library)
+target_link_libraries(tbc-audio-align PRIVATE Qt::Core Qt::Gui Qt::Widgets tbc-library)
 
 target_compile_definitions(tbc-audio-align PRIVATE
     AUDIO_ALIGN_VENDOR_DIR="${CMAKE_CURRENT_SOURCE_DIR}/vendor/vhs_decode_auto_audio_align"
@@ -33,7 +33,7 @@ if(BUILD_TESTING)
         testaudioalignmentruntime.cpp
         audioalignmentutil.cpp
     )
-    target_link_libraries(test-audio-align-runtime PRIVATE Qt::Core lddecode-library)
+    target_link_libraries(test-audio-align-runtime PRIVATE Qt::Core tbc-library)
     target_compile_definitions(test-audio-align-runtime PRIVATE
         AUDIO_ALIGN_VENDOR_DIR="${CMAKE_CURRENT_SOURCE_DIR}/vendor/vhs_decode_auto_audio_align"
     )

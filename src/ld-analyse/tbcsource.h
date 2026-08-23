@@ -22,7 +22,7 @@
 
 // TBC library includes
 #include "sourcevideo.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "linenumber.h"
 #include "vbidecoder.h"
 #include "videoiddecoder.h"
@@ -157,8 +157,8 @@ public:
 
     bool getIsDropoutPresent() const;
 
-    const LdDecodeMetaData::VideoParameters &getVideoParameters() const;
-    void setVideoParameters(const LdDecodeMetaData::VideoParameters &videoParameters);
+    const TbcMetaData::VideoParameters &getVideoParameters() const;
+    void setVideoParameters(const TbcMetaData::VideoParameters &videoParameters);
 
     const ComponentFrame &getComponentFrame();
     ScanLineData getScanLineData(qint32 scanLine);
@@ -210,7 +210,7 @@ private:
     SourceVideo sourceVideo;
     SourceVideo chromaSourceVideo;
     SourceMode sourceMode;
-    LdDecodeMetaData ldDecodeMetaData;
+    TbcMetaData metaData;
     QString currentSourceFilename;
     QString currentMetadataFilename;
     QString requestedMetadataFilename;
@@ -234,7 +234,7 @@ private:
 
     // Metadata for the loaded frame
     qint32 firstFieldNumber, secondFieldNumber;
-    LdDecodeMetaData::Field firstField, secondField;
+    TbcMetaData::Field firstField, secondField;
     qint32 loadedFieldNumber, loadedFrameNumber;
 
     // Source fields needed to decode the loaded frame
@@ -297,7 +297,7 @@ private:
     bool startBackgroundLoad(QString sourceFilename);
     bool startBackgroundLoadMetadata(QString metadataFilename, QString displayFilename);
     bool startBackgroundSave(QString metadataFilename);
-    void applyChromaSettingsFromMetadata(const LdDecodeMetaData::VideoParameters &videoParameters);
+    void applyChromaSettingsFromMetadata(const TbcMetaData::VideoParameters &videoParameters);
 
     bool metadataOnly;
     ComponentFrame metadataOnlyFrame;

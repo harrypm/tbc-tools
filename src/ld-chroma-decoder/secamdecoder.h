@@ -33,7 +33,7 @@
 #include <vector>
 
 #include "componentframe.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "sourcevideo.h"
 
 #include "decoder.h"
@@ -60,14 +60,14 @@ public:
 
     struct SecamConfiguration {
         double chromaGain = 1.0;
-        LdDecodeMetaData::VideoParameters videoParameters;
+        TbcMetaData::VideoParameters videoParameters;
     };
 
     SecamDecoder();
     SecamDecoder(const SecamDecoder::SecamConfiguration &config);
-    bool updateConfiguration(const LdDecodeMetaData::VideoParameters &videoParameters,
+    bool updateConfiguration(const TbcMetaData::VideoParameters &videoParameters,
                              const SecamDecoder::SecamConfiguration &configuration);
-    bool configure(const LdDecodeMetaData::VideoParameters &videoParameters) override;
+    bool configure(const TbcMetaData::VideoParameters &videoParameters) override;
     QThread *makeThread(QAtomicInt& abort, DecoderPool& decoderPool) override;
 
     /// Synchronously decode SECAM chroma fields into component frames

@@ -28,7 +28,7 @@
 #include "tbc/logging.h"
 
 // Construct a NavigationInfo from a disc's metadata
-NavigationInfo::NavigationInfo(LdDecodeMetaData &metaData)
+NavigationInfo::NavigationInfo(TbcMetaData &metaData)
 {
     const qint32 numFields = metaData.getVideoParameters().numberOfSequentialFields;
 

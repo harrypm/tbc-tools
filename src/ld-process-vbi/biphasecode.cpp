@@ -30,8 +30,8 @@
 // Return true if any line was decoded successfully, false if none were.
 bool BiphaseCode::decodeLines(const SourceVideo::Data& line16Data, const SourceVideo::Data& line17Data,
                               const SourceVideo::Data& line18Data,
-                              const LdDecodeMetaData::VideoParameters& videoParameters,
-                              LdDecodeMetaData::Field& fieldMetadata)
+                              const TbcMetaData::VideoParameters& videoParameters,
+                              TbcMetaData::Field& fieldMetadata)
 {
     // Decode all three lines
     bool success = false;
@@ -51,8 +51,8 @@ bool BiphaseCode::decodeLines(const SourceVideo::Data& line16Data, const SourceV
 // Decode one of the three biphase code lines, writing the result into fieldMetadata.
 // Return true if decoding was successful, false otherwise.
 bool BiphaseCode::decodeLine(qint32 lineIndex, const SourceVideo::Data& lineData,
-                                const LdDecodeMetaData::VideoParameters& videoParameters,
-                                LdDecodeMetaData::Field& fieldMetadata)
+                                const TbcMetaData::VideoParameters& videoParameters,
+                                TbcMetaData::Field& fieldMetadata)
 {
     // Determine the 16-bit zero-crossing point
     qint32 zcPoint = (videoParameters.white16bIre + videoParameters.black16bIre) / 2;
@@ -64,7 +64,7 @@ bool BiphaseCode::decodeLine(qint32 lineIndex, const SourceVideo::Data& lineData
 
 // Private method to read a 24-bit biphase coded signal (manchester code) from a field line
 qint32 BiphaseCode::manchesterDecoder(const SourceVideo::Data &lineData, qint32 zcPoint,
-                                         LdDecodeMetaData::VideoParameters videoParameters)
+                                         TbcMetaData::VideoParameters videoParameters)
 {
     qint32 result = 0;
     QVector<bool> manchesterData = getTransitionMap(lineData, zcPoint);

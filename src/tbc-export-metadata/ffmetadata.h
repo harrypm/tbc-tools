@@ -28,7 +28,7 @@
 #include <QString>
 #include <QtGlobal>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 /*!
     Write an FFMETADATA1 file containing navigation information.
@@ -46,7 +46,7 @@
 
     Returns true on success, false on failure.
 */
-bool writeFfmetadata(LdDecodeMetaData &metaData,
+bool writeFfmetadata(TbcMetaData &metaData,
                      const QString &fileName,
                      qint32 startFrameOneBased = -1,
                      qint32 lengthFrames = -1,

@@ -26,16 +26,16 @@
 #include "tbc/logging.h"
 
 DecoderPool::DecoderPool(QString _inputFilename, QString _outputMetadataFilename,
-                         qint32 _maxThreads, LdDecodeMetaData &_ldDecodeMetaData)
+                         qint32 _maxThreads, TbcMetaData &_metaData)
     : inputFilename(_inputFilename), outputMetadataFilename(_outputMetadataFilename),
-      maxThreads(_maxThreads), ldDecodeMetaData(_ldDecodeMetaData)
+      maxThreads(_maxThreads), metaData(_metaData)
 {
 }
 
 bool DecoderPool::process()
 {
     // Get the metadata for the video parameters
-    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
     qInfo().noquote() << "Input TBC source dimensions are" << videoParameters.fieldWidth << "x" <<
                 videoParameters.fieldHeight;
 
@@ -47,18 +47,18 @@ bool DecoderPool::process()
     }
 
     // Check TBC and metadata field numbers match
-    if (sourceVideo.getNumberOfAvailableFields() != ldDecodeMetaData.getNumberOfFields()) {
+    if (sourceVideo.getNumberOfAvailableFields() != metaData.getNumberOfFields()) {
         qWarning() << "Warning: TBC file contains" << sourceVideo.getNumberOfAvailableFields() <<
-                   "fields but the metadata indicates" << ldDecodeMetaData.getNumberOfFields() <<
+                   "fields but the metadata indicates" << metaData.getNumberOfFields() <<
                    "fields - some fields will be ignored";
     }
 
     // Show some information for the user
-    qInfo() << "Using" << maxThreads << "threads to process" << ldDecodeMetaData.getNumberOfFields() << "fields";
+    qInfo() << "Using" << maxThreads << "threads to process" << metaData.getNumberOfFields() << "fields";
 
     // Initialise processing state
     inputFieldNumber = 1;
-    lastFieldNumber = ldDecodeMetaData.getNumberOfFields();
+    lastFieldNumber = metaData.getNumberOfFields();
     processedFieldNumber = 0;
     progressReportInterval = qMax<qint32>(1, lastFieldNumber / 200);
     totalTimer.start();
@@ -92,7 +92,7 @@ bool DecoderPool::process()
 
     // Write the metadata file
     qInfo() << "Writing metadata file...";
-    ldDecodeMetaData.write(outputMetadataFilename);
+    metaData.write(outputMetadataFilename);
     qInfo() << "VBI processing complete";
 
     // Close the source video
@@ -106,7 +106,7 @@ bool DecoderPool::process()
 // Returns true if a field was returned, false if the end of the input has been
 // reached.
 bool DecoderPool::getInputField(qint32 &fieldNumber, SourceVideo::Data &fieldVideoData,
-                                LdDecodeMetaData::Field &fieldMetadata, LdDecodeMetaData::VideoParameters &videoParameters)
+                                TbcMetaData::Field &fieldMetadata, TbcMetaData::VideoParameters &videoParameters)
 {
     QMutexLocker locker(&inputMutex);
 
@@ -123,8 +123,8 @@ bool DecoderPool::getInputField(qint32 &fieldNumber, SourceVideo::Data &fieldVid
 
     // Fetch the input data
     fieldVideoData = sourceVideo.getVideoField(fieldNumber, VbiLineDecoder::startFieldLine, VbiLineDecoder::endFieldLine);
-    fieldMetadata = ldDecodeMetaData.getField(fieldNumber);
-    videoParameters = ldDecodeMetaData.getVideoParameters();
+    fieldMetadata = metaData.getField(fieldNumber);
+    videoParameters = metaData.getVideoParameters();
 
     return true;
 }
@@ -132,15 +132,15 @@ bool DecoderPool::getInputField(qint32 &fieldNumber, SourceVideo::Data &fieldVid
 // Put a decoded frame into the output stream.
 //
 // Returns true on success, false on failure.
-bool DecoderPool::setOutputField(qint32 fieldNumber, const LdDecodeMetaData::Field& fieldMetadata)
+bool DecoderPool::setOutputField(qint32 fieldNumber, const TbcMetaData::Field& fieldMetadata)
 {
     QMutexLocker locker(&outputMutex);
 
     // Save the field data to the metadata (only some metadata is affected)
-    ldDecodeMetaData.updateFieldVbi(fieldMetadata.vbi, fieldNumber);
-    ldDecodeMetaData.updateFieldNtsc(fieldMetadata.ntsc, fieldNumber);
-    ldDecodeMetaData.updateFieldVitc(fieldMetadata.vitc, fieldNumber);
-    ldDecodeMetaData.updateFieldClosedCaption(fieldMetadata.closedCaption, fieldNumber);
+    metaData.updateFieldVbi(fieldMetadata.vbi, fieldNumber);
+    metaData.updateFieldNtsc(fieldMetadata.ntsc, fieldNumber);
+    metaData.updateFieldVitc(fieldMetadata.vitc, fieldNumber);
+    metaData.updateFieldClosedCaption(fieldMetadata.closedCaption, fieldNumber);
 
     processedFieldNumber++;
     const bool shouldReport = (processedFieldNumber == lastFieldNumber)

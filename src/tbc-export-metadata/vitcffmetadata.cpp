@@ -61,7 +61,7 @@ QString formatPtsTime(qint32 frameIndex, bool is30Frame)
     return ptsTime;
 }
 
-bool getFrameVitcTimecode(const LdDecodeMetaData &metaData,
+bool getFrameVitcTimecode(const TbcMetaData &metaData,
                           qint32 frameNumberOneBased,
                           QString *timecode)
 {
@@ -80,7 +80,7 @@ bool getFrameVitcTimecode(const LdDecodeMetaData &metaData,
         if (fieldNumber < 1 || fieldNumber > numberOfFields) {
             continue;
         }
-        const LdDecodeMetaData::Vitc &fieldVitc = metaData.getFieldVitc(fieldNumber);
+        const TbcMetaData::Vitc &fieldVitc = metaData.getFieldVitc(fieldNumber);
         if (!fieldVitc.inUse) {
             continue;
         }
@@ -96,7 +96,7 @@ bool getFrameVitcTimecode(const LdDecodeMetaData &metaData,
 }
 } // namespace
 
-bool writeVitcFfmetadataText(LdDecodeMetaData &metaData, const QString &fileName)
+bool writeVitcFfmetadataText(TbcMetaData &metaData, const QString &fileName)
 {
     QFile file(fileName);
     if (!file.open(QFile::WriteOnly | QFile::Text)) {

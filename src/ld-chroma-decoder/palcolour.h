@@ -32,7 +32,7 @@
 #include <QtMath>
 #include <memory>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include "componentframe.h"
 #include "decoder.h"
@@ -77,7 +77,7 @@ public:
     };
 
     const Configuration &getConfiguration() const;
-    void updateConfiguration(const LdDecodeMetaData::VideoParameters &videoParameters,
+    void updateConfiguration(const TbcMetaData::VideoParameters &videoParameters,
                              const Configuration &configuration);
 
     // Decode a sequence of fields into a sequence of interlaced frames
@@ -110,7 +110,7 @@ private:
     // Configuration parameters
     bool configurationSet;
     Configuration configuration;
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::VideoParameters videoParameters;
 
     // Transform PAL filter
     std::unique_ptr<TransformPal> transformPal;

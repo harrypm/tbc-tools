@@ -280,11 +280,11 @@ int main(int argc, char *argv[])
     qInfo() << "Starting preparation for dropout correction processes...";
     // Open the source video metadata
     tbcDebugStream() << "main(): Opening source video metadata files..";
-    QVector<LdDecodeMetaData *> ldDecodeMetaData;
-    ldDecodeMetaData.resize(totalNumberOfInputFiles);
+    QVector<TbcMetaData *> metaData;
+    metaData.resize(totalNumberOfInputFiles);
     for (qint32 i = 0; i < totalNumberOfInputFiles; i++) {
         // Create an object for the source video
-        ldDecodeMetaData[i] = new LdDecodeMetaData;
+        metaData[i] = new TbcMetaData;
     }
 
     for (qint32 i = 0; i < totalNumberOfInputFiles; i++) {
@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
         qInfo().nospace().noquote() << "Reading input #" << i << " metadata from " << metadataFilename;
 
         // Open it
-        if (!ldDecodeMetaData[i]->read(metadataFilename)) {
+        if (!metaData[i]->read(metadataFilename)) {
             qCritical() << "Unable to open TBC metadata file - cannot continue";
             return -1;
         }
@@ -310,7 +310,7 @@ int main(int argc, char *argv[])
     if (reverse) {
         qInfo() << "Expected field order is reversed to second field/first field";
         for (qint32 i = 0; i < totalNumberOfInputFiles; i++)
-            ldDecodeMetaData[i]->setIsFirstFieldFirst(false);
+            metaData[i]->setIsFirstFieldFirst(false);
     }
 
     // Intrafield only correction if required
@@ -333,7 +333,7 @@ int main(int argc, char *argv[])
     }
 
     for (qint32 i = 0; i < totalNumberOfInputFiles; i++) {
-        LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData[i]->getVideoParameters();
+        TbcMetaData::VideoParameters videoParameters = metaData[i]->getVideoParameters();
 
         qInfo().nospace() << "Opening input #" << i << ": " << videoParameters.fieldWidth << "x" << videoParameters.fieldHeight <<
                     " - input filename is " << inputFilenames[i];
@@ -347,9 +347,9 @@ int main(int argc, char *argv[])
         }
 
         // Verify TBC and metadata input fields match
-        if (sourceVideos[i]->getNumberOfAvailableFields() != ldDecodeMetaData[i]->getNumberOfFields()) {
+        if (sourceVideos[i]->getNumberOfAvailableFields() != metaData[i]->getNumberOfFields()) {
             qInfo() << "Warning: TBC file contains" << sourceVideos[i]->getNumberOfAvailableFields() <<
-                       "fields but the metadata indicates" << ldDecodeMetaData[i]->getNumberOfFields() <<
+                       "fields but the metadata indicates" << metaData[i]->getNumberOfFields() <<
                        "fields - some fields will be ignored";
             qInfo() << "Update your copy of ld-decode and try again, this shouldn't happen unless the metadata has been corrupted";
         }
@@ -357,14 +357,14 @@ int main(int argc, char *argv[])
         // Additional checks when using multiple input sources
         if (totalNumberOfInputFiles > 1) {
             // Ensure source video has VBI data
-            if (!ldDecodeMetaData[i]->getFieldVbi(1).inUse) {
+            if (!metaData[i]->getFieldVbi(1).inUse) {
                 qInfo() << "Source video" << i << "does not appear to have valid VBI data in the metadata.";
                 qInfo() << "Please try running ld-process-vbi on the source video and then try again";
                 return 1;
             }
 
             // Ensure that the video source standard matches the primary source
-            if (ldDecodeMetaData[0]->getVideoParameters().system != videoParameters.system) {
+            if (metaData[0]->getVideoParameters().system != videoParameters.system) {
                 qInfo() << "All additional input sources must have the same video system as the initial source!";
                 return 1;
             }
@@ -381,7 +381,7 @@ int main(int argc, char *argv[])
     qInfo() << "Initial source checks are ok and sources are loaded";
     qint32 result = 0;
     CorrectorPool correctorPool(outputFilename, outputMetadataFilename, maxThreads,
-                                ldDecodeMetaData, sourceVideos,
+                                metaData, sourceVideos,
                                 reverse, intraField, overCorrect);
     if (!correctorPool.process()) result = 1;
 
@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
     for (qint32 i = 0; i < totalNumberOfInputFiles; i++) sourceVideos[i]->close();
 
     // Remove metadata objects
-    for (qint32 i = 0; i < totalNumberOfInputFiles; i++) delete ldDecodeMetaData[i];
+    for (qint32 i = 0; i < totalNumberOfInputFiles; i++) delete metaData[i];
 
     // Remove source video objects
     for (qint32 i = 0; i < totalNumberOfInputFiles; i++) delete sourceVideos[i];

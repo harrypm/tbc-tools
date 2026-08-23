@@ -160,7 +160,7 @@ SecamDecoder::SecamDecoder(const SecamDecoder::SecamConfiguration &config)
     secamConfig = config;
 }
 
-bool SecamDecoder::updateConfiguration(const LdDecodeMetaData::VideoParameters &videoParameters,
+bool SecamDecoder::updateConfiguration(const TbcMetaData::VideoParameters &videoParameters,
                                        const SecamDecoder::SecamConfiguration &configuration)
 {
     if (!configure(videoParameters)) return false;
@@ -169,7 +169,7 @@ bool SecamDecoder::updateConfiguration(const LdDecodeMetaData::VideoParameters &
     return true;
 }
 
-bool SecamDecoder::configure(const LdDecodeMetaData::VideoParameters &videoParameters)
+bool SecamDecoder::configure(const TbcMetaData::VideoParameters &videoParameters)
 {
     // SECAM/ME-SECAM sources carry the PAL line structure, and vhs-decode
     // reports them as PAL.
@@ -226,7 +226,7 @@ QThread *SecamDecoder::makeThread(QAtomicInt& abort, DecoderPool& decoderPool) {
 // harmless, since only the sample-to-sample phase *difference* is read.
 void SecamDecoder::demodulateField(const SourceVideo::Data &data, FieldWork &work) const
 {
-    const LdDecodeMetaData::VideoParameters &videoParameters = secamConfig.videoParameters;
+    const TbcMetaData::VideoParameters &videoParameters = secamConfig.videoParameters;
     const qint32 fieldWidth = videoParameters.fieldWidth;
     const qint32 fieldHeight = videoParameters.fieldHeight;
     const qint32 halfTaps = DEMOD_NUM_TAPS / 2;
@@ -276,7 +276,7 @@ void SecamDecoder::demodulateField(const SourceVideo::Data &data, FieldWork &wor
 
 void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) const
 {
-    const LdDecodeMetaData::VideoParameters &videoParameters = secamConfig.videoParameters;
+    const TbcMetaData::VideoParameters &videoParameters = secamConfig.videoParameters;
     const qint32 fieldWidth = videoParameters.fieldWidth;
     const qint32 fieldHeight = videoParameters.fieldHeight;
     const qint32 firstLine = videoParameters.firstActiveFieldLine;
@@ -379,7 +379,7 @@ void SecamDecoder::decodeFrames(const QVector<SourceField>& inputFields,
                                 qint32 endIndex,
                                 QVector<ComponentFrame>& componentFrames)
 {
-    const LdDecodeMetaData::VideoParameters &videoParameters = secamConfig.videoParameters;
+    const TbcMetaData::VideoParameters &videoParameters = secamConfig.videoParameters;
     bool ignoreUV = false;
 
     const qint32 fieldWidth = videoParameters.fieldWidth;

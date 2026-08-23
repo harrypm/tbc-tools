@@ -6,7 +6,7 @@
 #include <optional>
 #include <vector>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 class FieldTimingWidget;
 class QLabel;
@@ -31,7 +31,7 @@ public:
                       const std::vector<uint16_t> &cSamples = {},
                       const std::vector<uint16_t> &ySamples2 = {},
                       const std::vector<uint16_t> &cSamples2 = {},
-                      const std::optional<LdDecodeMetaData::VideoParameters> &videoParameters = std::nullopt,
+                      const std::optional<TbcMetaData::VideoParameters> &videoParameters = std::nullopt,
                       qint32 firstFieldHeight = 0,
                       qint32 secondFieldHeight = 0);
 

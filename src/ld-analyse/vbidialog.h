@@ -13,7 +13,7 @@
 
 #include <QDialog>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "vbidecoder.h"
 #include "videoiddecoder.h"
 

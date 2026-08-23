@@ -25,7 +25,7 @@
 #ifndef NAVIGATION_H
 #define NAVIGATION_H
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include <QtGlobal>
 #include <set>
@@ -35,7 +35,7 @@
 // Positions are given in 0-based fields, relative to the start of the TBC file
 // (in case we're dealing with a clip from the middle of a disc).
 struct NavigationInfo {
-    NavigationInfo(LdDecodeMetaData &metaData);
+    NavigationInfo(TbcMetaData &metaData);
 
     struct Chapter {
         // First field number

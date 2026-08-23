@@ -14,7 +14,7 @@
 #ifndef TBC_CVBS_SIGNAL_CONSTANTS_H
 #define TBC_CVBS_SIGNAL_CONSTANTS_H
 
-#include "lddecodemetadata.h"  // global VideoSystem enum (PAL / NTSC / PAL_M)
+#include "tbcmetadata.h"  // global VideoSystem enum (PAL / NTSC / PAL_M)
 
 #include <cstdint>
 #include <utility>

@@ -33,7 +33,7 @@
 // TBC library includes
 #include "sourcevideo.h"
 #include "sourceaudio.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include "discmap.h"
 

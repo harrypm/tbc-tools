@@ -47,8 +47,8 @@
 // Read a VITC signal from a scanline.
 // Return true if a signal was found and successfully decoded, false otherwise.
 bool VitcCode::decodeLine(const SourceVideo::Data &lineData,
-                          const LdDecodeMetaData::VideoParameters& videoParameters,
-                          LdDecodeMetaData::Field& fieldMetadata)
+                          const TbcMetaData::VideoParameters& videoParameters,
+                          TbcMetaData::Field& fieldMetadata)
 {
     // Reset data to invalid
     fieldMetadata.vitc.inUse = false;
@@ -142,7 +142,7 @@ bool VitcCode::decodeLine(const SourceVideo::Data &lineData,
 }
 
 // Return the 1-based frame line numbers that are likely to contain VITC signals
-std::vector<qint32> VitcCode::getLineNumbers(const LdDecodeMetaData::VideoParameters& videoParameters)
+std::vector<qint32> VitcCode::getLineNumbers(const TbcMetaData::VideoParameters& videoParameters)
 {
     // VITC can be on any line between 10-20 (525-line) or 6-22 (625-line), but
     // the standards [ITU 6.20, SMPTE 10.6] recommend lines to use. Try the

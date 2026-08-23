@@ -17,7 +17,7 @@
 #define TBC_CVBS_CONVERSION_H
 
 #include "cvbs_signal_constants.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include <cmath>
 #include <cstdint>

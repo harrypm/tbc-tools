@@ -12,6 +12,9 @@
 #include "ui_blacksnranalysisdialog.h"
 
 #include <QPen>
+#include <QShortcut>
+#include <QApplication>
+#include <QClipboard>
 #include <QTimer>
 #include <algorithm>
 #include <algorithm>
@@ -40,6 +43,22 @@ BlackSnrAnalysisDialog::BlackSnrAnalysisDialog(QWidget *parent) :
     plotMarker = plot->addMarker();
     plotMarker->setStyle(PlotMarker::VLine);
     plotMarker->setPen(QPen(Qt::blue, 2));
+
+    // Enable hover readout: snap a crosshair to the nearest data point and show
+    // its exact value (formatter produces "Frame N: M.M dB").
+    plot->setHoverEnabled(true);
+    plot->setHoverFormatter([](const QPointF &p, const PlotSeries *) -> QString {
+        return BlackSnrAnalysisDialog::tr("Frame %1: %2 dB")
+            .arg(qRound(p.x())).arg(p.y(), 0, 'f', 1);
+    });
+
+    // Ctrl+C copies this graph (as a PNG) to the clipboard.
+    auto *copyShortcut = new QShortcut(QKeySequence::Copy, this);
+    connect(copyShortcut, &QShortcut::activated, this, [this]() {
+        if (QClipboard *clipboard = QApplication::clipboard()) {
+            clipboard->setImage(plot->grab().toImage());
+        }
+    });
 
     // Set the maximum Y scale to 48
     maxY = 48;
@@ -91,7 +110,8 @@ void BlackSnrAnalysisDialog::addDataPoint(qint32 frameNumber, double blackSnr)
         // Clamp SNR values to minimum threshold (20 dB)
         double clampedSnr = std::max(blackSnr, 20.0);
         blackPoints.append(QPointF(static_cast<qreal>(frameNumber), static_cast<qreal>(clampedSnr)));
-        if (clampedSnr > maxY) maxY = ceil(clampedSnr); // Round up
+        // NOTE: the Y-axis max is computed in finishUpdate() with headroom so the
+        // peak stays inside the plot boundary (not jammed against the top border).
 
         // Add to trendline data (use original unclamped value for trend calculation)
         tlPoint[frameNumber] = blackSnr;
@@ -113,7 +133,18 @@ void BlackSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
     plot->setAxisTitle(Qt::Horizontal, "Frame number");
     plot->setAxisTitle(Qt::Vertical, "SNR (in dB)");
     plot->setAxisRange(Qt::Horizontal, 0, numberOfFrames);
-    plot->setAxisRange(Qt::Vertical, 20, maxY);
+
+    // Compute the Y-axis max from the actual data with headroom so the peak
+    // stays inside the plot border (5% headroom, minimum 2 dB), keeping a 48 dB
+    // floor so short/low captures still have a sensible scale. The min is set to
+    // 19 dB (1 dB below the 20 dB clamp floor) so floor-clamped points sit
+    // inside the boundary instead of on the bottom border.
+    double actualMax = 20.0;
+    for (const QPointF &pt : blackPoints) {
+        actualMax = std::max(actualMax, pt.y());
+    }
+    maxY = std::max(48.0, std::ceil(actualMax + std::max(2.0, actualMax * 0.05)));
+    plot->setAxisRange(Qt::Vertical, 19.0, maxY);
 
     // Set the black series data
     blackSeries->setData(blackPoints);
@@ -123,7 +154,7 @@ void BlackSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
     trendSeries->setData(trendPoints);
 
     // Set the frame marker position
-    plotMarker->setPosition(QPointF(static_cast<double>(_currentFrameNumber), (maxY + 20) / 2));
+    plotMarker->setPosition(QPointF(static_cast<double>(_currentFrameNumber), (maxY + 19.0) / 2.0));
 
     // Render the plot
     plot->replot();
@@ -149,7 +180,7 @@ void BlackSnrAnalysisDialog::onUpdateTimerTimeout()
 {
     if (!hasPendingUpdate) return;
     
-    plotMarker->setPosition(QPointF(static_cast<double>(pendingFrameNumber), (maxY + 20) / 2));
+    plotMarker->setPosition(QPointF(static_cast<double>(pendingFrameNumber), (maxY + 19.0) / 2.0));
     // No need to call plot->replot() - marker update() handles the redraw
     
     hasPendingUpdate = false;

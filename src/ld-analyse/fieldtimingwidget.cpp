@@ -34,7 +34,7 @@ void FieldTimingWidget::setFieldData(const std::vector<uint16_t> &samples,
                                      const std::vector<uint16_t> &cSamples,
                                      const std::vector<uint16_t> &ySamples2,
                                      const std::vector<uint16_t> &cSamples2,
-                                     const std::optional<LdDecodeMetaData::VideoParameters> &videoParameters)
+                                     const std::optional<TbcMetaData::VideoParameters> &videoParameters)
 {
     field1Samples_ = samples;
     field2Samples_ = samples2;

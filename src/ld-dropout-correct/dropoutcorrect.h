@@ -33,7 +33,7 @@
 #include <QDebug>
 
 #include "sourcevideo.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 class CorrectorPool;
 
@@ -85,14 +85,14 @@ private:
     QAtomicInt& abort;
     CorrectorPool& correctorPool;
 
-    QVector<LdDecodeMetaData::VideoParameters> videoParameters;
+    QVector<TbcMetaData::VideoParameters> videoParameters;
 
     void correctField(const QVector<QVector<DropOutLocation> > &thisFieldDropouts,
                       const QVector<QVector<DropOutLocation> > &otherFieldDropouts,
                       QVector<SourceVideo::Data> &thisFieldData, const QVector<SourceVideo::Data> &otherFieldData,
                       bool thisFieldIsFirst, bool intraField, const QVector<qint32> &availableSourcesForFrame,
                       const QVector<double> &sourceFrameQuality, Statistics &statistics);
-    QVector<DropOutLocation> populateDropoutsVector(LdDecodeMetaData::Field field, bool overCorrect);
+    QVector<DropOutLocation> populateDropoutsVector(TbcMetaData::Field field, bool overCorrect);
     QVector<DropOutLocation> setDropOutLocations(QVector<DropOutLocation> dropOuts);
     Replacement findReplacementLine(const QVector<QVector<DropOutLocation>> &thisFieldDropouts,
                                     const QVector<QVector<DropOutLocation>> &otherFieldDropouts,

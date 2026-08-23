@@ -39,7 +39,7 @@ void VitsAnalyser::run()
 
     // Input data buffers
     SourceVideo::Data sourceFieldData;
-    LdDecodeMetaData::Field fieldMetadata;
+    TbcMetaData::Field fieldMetadata;
 
     while(!abort) {
         // Get the next field to process from the input file

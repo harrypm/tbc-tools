@@ -32,7 +32,7 @@
 #include <QThread>
 
 #include "sourcevideo.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "stacker.h"
 
 class StackingPool : public QObject
@@ -40,16 +40,16 @@ class StackingPool : public QObject
     Q_OBJECT
 public:
     explicit StackingPool(QString _outputFilename, QString _outputMetadataFilename,
-                           qint32 _maxThreads, QVector<LdDecodeMetaData *> &_ldDecodeMetaData, QVector<SourceVideo *> &_sourceVideos,
+                           qint32 _maxThreads, QVector<TbcMetaData *> &_metaData, QVector<SourceVideo *> &_sourceVideos,
                            qint32 _mode, qint32 _smartThreshold, bool _reverse, bool _noDiffDod, bool _passThrough, bool _integrityCheck, bool _verbose, QObject *parent = nullptr);
 
     bool process();
 
     // Member functions used by worker threads
     bool getInputFrame(qint32& frameNumber,
-                       QVector<qint32> &firstFieldNumber, QVector<SourceVideo::Data> &firstFieldVideoData, QVector<LdDecodeMetaData::Field> &firstFieldMetadata,
-                       QVector<qint32> &secondFieldNumber, QVector<SourceVideo::Data> &secondFieldVideoData, QVector<LdDecodeMetaData::Field> &secondFieldMetadata,
-                       QVector<LdDecodeMetaData::VideoParameters> &videoParameters,
+                       QVector<qint32> &firstFieldNumber, QVector<SourceVideo::Data> &firstFieldVideoData, QVector<TbcMetaData::Field> &firstFieldMetadata,
+                       QVector<qint32> &secondFieldNumber, QVector<SourceVideo::Data> &secondFieldVideoData, QVector<TbcMetaData::Field> &secondFieldMetadata,
+                       QVector<TbcMetaData::VideoParameters> &videoParameters,
                        qint32& _mode, qint32& _smartThreshold, bool& _reverse, bool &_noDiffDod, bool &_passThrough,
                        bool &_verbose, QVector<qint32> &availableSourcesForFrame);
 
@@ -81,7 +81,7 @@ private:
     QMutex inputMutex;
     qint32 inputFrameNumber;
     qint32 lastFrameNumber;
-    QVector<LdDecodeMetaData *> &ldDecodeMetaData;
+    QVector<TbcMetaData *> &metaData;
     QVector<SourceVideo *> &sourceVideos;
 
     // Output stream information (all guarded by outputMutex while threads are running)
@@ -111,10 +111,10 @@ private:
     QVector<qint32> getAvailableSourcesForFrame(qint32 vbiFrameNumber);
     bool writeOutputField(const SourceVideo::Data &fieldData);
     void correctPhaseIDs();
-    bool isIntegrityOk(const SourceVideo::Data& inputFields,const LdDecodeMetaData::VideoParameters& videoParameters);
+    bool isIntegrityOk(const SourceVideo::Data& inputFields,const TbcMetaData::VideoParameters& videoParameters);
     template<int field>
     void replaceFieldMetaData(qint32 frameNumber);
-    LdDecodeMetaData &correctMetaData();
+    TbcMetaData &correctMetaData();
 };
 
 #endif // STACKINGPOOL_H

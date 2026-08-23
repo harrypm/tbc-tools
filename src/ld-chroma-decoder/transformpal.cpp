@@ -39,7 +39,7 @@ TransformPal::~TransformPal()
 {
 }
 
-void TransformPal::updateConfiguration(const LdDecodeMetaData::VideoParameters &_videoParameters,
+void TransformPal::updateConfiguration(const TbcMetaData::VideoParameters &_videoParameters,
                                        double threshold, const QVector<double> &_thresholds)
 {
     videoParameters = _videoParameters;

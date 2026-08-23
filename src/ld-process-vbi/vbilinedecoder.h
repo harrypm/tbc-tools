@@ -30,7 +30,7 @@
 #include <QThread>
 #include <QDebug>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "sourcevideo.h"
 
 class DecoderPool;
@@ -54,7 +54,7 @@ private:
     DecoderPool& decoderPool;
 
     SourceVideo::Data getFieldLine(const SourceVideo::Data& sourceField, qint32 fieldLine,
-                                   const LdDecodeMetaData::VideoParameters& videoParameters);
+                                   const TbcMetaData::VideoParameters& videoParameters);
 };
 
 #endif // VBILINEDECODER_H

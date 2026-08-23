@@ -27,34 +27,34 @@
 
 #include <QString>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 /*!
     Write the per-field VITS metrics as a CSV file.
 
     Returns true on success, false on failure.
 */
-bool writeVitsCsv(LdDecodeMetaData &metaData, const QString &fileName);
+bool writeVitsCsv(TbcMetaData &metaData, const QString &fileName);
 
 /*!
     Write the per-frame VBI information as a CSV file.
 
     Returns true on success, false on failure.
 */
-bool writeVbiCsv(LdDecodeMetaData &metaData, const QString &fileName);
+bool writeVbiCsv(TbcMetaData &metaData, const QString &fileName);
 
 /*!
     Write user markers as a CSV log file.
 
     Returns true on success, false on failure.
 */
-bool writeUserMarkersCsv(LdDecodeMetaData &metaData, const QString &fileName);
+bool writeUserMarkersCsv(TbcMetaData &metaData, const QString &fileName);
 
 /*!
     Write user markers as a plain text log file.
 
     Returns true on success, false on failure.
 */
-bool writeUserMarkersTxt(LdDecodeMetaData &metaData, const QString &fileName);
+bool writeUserMarkersTxt(TbcMetaData &metaData, const QString &fileName);
 
 #endif

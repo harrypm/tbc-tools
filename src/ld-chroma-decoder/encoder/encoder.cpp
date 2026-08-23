@@ -48,7 +48,7 @@
 
 #include "encoder.h"
 
-Encoder::Encoder(QFile &_inputFile, QFile &_tbcFile, QFile &_chromaFile, LdDecodeMetaData &_metaData,
+Encoder::Encoder(QFile &_inputFile, QFile &_tbcFile, QFile &_chromaFile, TbcMetaData &_metaData,
                  int _fieldOffset, bool _isComponent)
     : inputFile(_inputFile), tbcFile(_tbcFile), chromaFile(_chromaFile), metaData(_metaData),
       fieldOffset(_fieldOffset), isComponent(_isComponent)
@@ -155,7 +155,7 @@ bool Encoder::encodeField(qint32 fieldNo)
     }
 
     // Generate field metadata
-    LdDecodeMetaData::Field fieldData;
+    TbcMetaData::Field fieldData;
     getFieldMetadata(fieldNo, fieldData);
     metaData.appendField(fieldData);
 

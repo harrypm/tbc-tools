@@ -32,7 +32,7 @@ PalDecoder::PalDecoder(const PalColour::Configuration &palConfig)
     config.pal = palConfig;
 }
 
-bool PalDecoder::configure(const LdDecodeMetaData::VideoParameters &videoParameters) {
+bool PalDecoder::configure(const TbcMetaData::VideoParameters &videoParameters) {
     // Ensure the source video is PAL
     if (videoParameters.system != PAL && videoParameters.system != PAL_M) {
         qCritical() << "This decoder is for PAL video sources only";

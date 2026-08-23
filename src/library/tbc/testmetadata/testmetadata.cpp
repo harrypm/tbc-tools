@@ -30,7 +30,7 @@
 #include <iostream>
 #include <sstream>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 // Run unit tests for VideoSystem
 void testVideoSystem() {
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
     }
 
     // Read the input file
-    LdDecodeMetaData metaData;
+    TbcMetaData metaData;
     if (!metaData.read(positionalArguments.at(0))) {
         qCritical("Unable to read input file");
         return 1;
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
     // Show statistics
     if (parser.isSet(statsOption)) {
-        // These are not very useful, but they ensure that LdDecodeMetaData has
+        // These are not very useful, but they ensure that TbcMetaData has
         // actually fully parsed all of the metadata.
 
         qint32 numFields = metaData.getNumberOfFields();
@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
         qint32 numDropOuts = 0;
 
         for (qint32 i = 1; i <= numFields; i++) {
-            const LdDecodeMetaData::Field &field = metaData.getField(i);
+            const TbcMetaData::Field &field = metaData.getField(i);
 
             if (field.vitsMetrics.inUse) {
                 ++numMetrics;

@@ -75,7 +75,7 @@ target_include_directories(ld-analyse PRIVATE
 
 target_link_libraries(ld-analyse PRIVATE
     Qt::Core Qt::Gui Qt::Widgets Qt::Svg Qt::Network
-    lddecode-library lddecode-chroma
+    tbc-library tbc-chroma
 )
 stage_windows_onnxruntime_runtime(ld-analyse)
 stage_windows_qt_platform_runtime(ld-analyse)
@@ -87,7 +87,7 @@ add_executable(tbc-efm-handler
 
 target_link_libraries(tbc-efm-handler PRIVATE
     Qt::Core Qt::Gui Qt::Widgets
-    lddecode-library
+    tbc-library
 )
 
 set(_audio_align_vendor_dir "${CMAKE_SOURCE_DIR}/src/audio-align/vendor/vhs_decode_auto_audio_align")

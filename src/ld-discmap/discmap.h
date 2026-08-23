@@ -31,7 +31,7 @@
 #include <QtMath>
 
 // TBC library includes
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "vbidecoder.h"
 
 #include "frame.h"
@@ -104,7 +104,7 @@ private:
     QString m_videoSystemDescription;
 
     std::vector<Frame> m_frames;
-    LdDecodeMetaData *ldDecodeMetaData;
+    TbcMetaData *metaData;
 
     bool isNtscAmendment2ClvFrameNumber(qint32 frameNumber);
     qint32 convertFrameToVbi(qint32 frameNumber);

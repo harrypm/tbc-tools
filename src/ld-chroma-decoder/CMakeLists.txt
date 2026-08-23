@@ -145,30 +145,30 @@ if(LDCHROMA_HAS_CUDA)
     list(APPEND lddecode_chroma_sources nnTransform3D_kernel.cu)
 endif()
 
-add_library(lddecode-chroma STATIC
+add_library(tbc-chroma STATIC
     ${lddecode_chroma_sources}
     ${_nn_model_source}
 )
 if(LDCHROMA_HAS_CUDA)
-    target_link_libraries(lddecode-chroma PRIVATE
+    target_link_libraries(tbc-chroma PRIVATE
         CUDA::cufft
         CUDA::cudart
     )
 endif()
 
-target_include_directories(lddecode-chroma PUBLIC
+target_include_directories(tbc-chroma PUBLIC
     .
     ${CMAKE_CURRENT_BINARY_DIR}
     ${ONNXRUNTIME_INCLUDE_DIR}
 )
-target_link_libraries(lddecode-chroma PRIVATE
+target_link_libraries(tbc-chroma PRIVATE
     Qt::Core
     ${FFTW_LIBRARY}
     onnxruntime::onnxruntime
-    lddecode-library
+    tbc-library
 )
 
-target_include_directories(lddecode-chroma PRIVATE ${FFTW_INCLUDE_DIR})
+target_include_directories(tbc-chroma PRIVATE ${FFTW_INCLUDE_DIR})
 
 # ==========================================
 # 4. Executable target (ld-chroma-decoder)
@@ -183,15 +183,15 @@ add_executable(ld-chroma-decoder
     secamdecoder.cpp
 )
 
-set_target_properties(lddecode-chroma PROPERTIES AUTOMOC ON)
+set_target_properties(tbc-chroma PROPERTIES AUTOMOC ON)
 
 target_include_directories(ld-chroma-decoder PRIVATE ${FFTW_INCLUDE_DIR})
 target_link_libraries(ld-chroma-decoder PRIVATE
     Qt::Core
     ${FFTW_LIBRARY}
     onnxruntime::onnxruntime
-    lddecode-library
-    lddecode-chroma
+    tbc-library
+    tbc-chroma
 )
 stage_windows_onnxruntime_runtime(ld-chroma-decoder)
 if(LDCHROMA_HAS_CUDA)

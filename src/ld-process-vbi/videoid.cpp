@@ -44,8 +44,8 @@
 // Public method to read IEC 61880 data.
 // Return true if data was decoded successfully, false otherwise.
 bool VideoID::decodeLine(const SourceVideo::Data& lineData,
-                      const LdDecodeMetaData::VideoParameters& videoParameters,
-                      LdDecodeMetaData::Field& fieldMetadata)
+                      const TbcMetaData::VideoParameters& videoParameters,
+                      TbcMetaData::Field& fieldMetadata)
 {
     // Reset data to invalid
     fieldMetadata.ntsc.isVideoIdDataValid = false;

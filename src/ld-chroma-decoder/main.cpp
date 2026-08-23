@@ -36,7 +36,7 @@
 #include <memory>
 
 #include "decoderpool.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "tbc/logging.h"
 
 #include "comb.h"
@@ -503,7 +503,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    LdDecodeMetaData::LineParameters lineParameters;
+    TbcMetaData::LineParameters lineParameters;
     if (parser.isSet(firstFieldLineOption)) {
         lineParameters.firstActiveFieldLine = parser.value(firstFieldLineOption).toInt();
     }
@@ -535,7 +535,7 @@ int main(int argc, char *argv[])
     }
 
     // Load the source video metadata
-    LdDecodeMetaData metaData;
+    TbcMetaData metaData;
     if (!metaData.read(inputMetadataFileName)) {
         qCritical() << "Unable to open ld-decode metadata file:" << inputMetadataFileName;
         return -1;
@@ -548,7 +548,7 @@ int main(int argc, char *argv[])
         qInfo() << "Expected field order is reversed to second field/first field";
         metaData.setIsFirstFieldFirst(false);
     }
-    const LdDecodeMetaData::VideoParameters &videoParameters = metaData.getVideoParameters();
+    const TbcMetaData::VideoParameters &videoParameters = metaData.getVideoParameters();
     if (!parser.isSet(chromaGainOption) && !bwMode && videoParameters.chromaGain >= 0.0) {
         palConfig.chromaGain = videoParameters.chromaGain;
         combConfig.chromaGain = videoParameters.chromaGain;

@@ -28,7 +28,7 @@
 #include <QtGlobal>
 #include <cassert>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 /*
 The lines in a ComponentField or OutputField are numbered as follows:

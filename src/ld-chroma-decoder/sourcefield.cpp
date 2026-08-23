@@ -26,12 +26,12 @@
 
 #include "sourcevideo.h"
 
-void SourceField::loadFields(SourceVideo &sourceVideo, LdDecodeMetaData &ldDecodeMetaData,
+void SourceField::loadFields(SourceVideo &sourceVideo, TbcMetaData &metaData,
                              qint32 firstFrameNumber, qint32 numFrames,
                              qint32 lookBehindFrames, qint32 lookAheadFrames,
                              QVector<SourceField> &fields, qint32 &startIndex, qint32 &endIndex)
 {
-    const LdDecodeMetaData::VideoParameters &videoParameters = ldDecodeMetaData.getVideoParameters();
+    const TbcMetaData::VideoParameters &videoParameters = metaData.getVideoParameters();
 
     // Work out indexes.
     // fields will contain {lookbehind fields... [startIndex] real fields... [endIndex] lookahead fields...}.
@@ -40,8 +40,8 @@ void SourceField::loadFields(SourceVideo &sourceVideo, LdDecodeMetaData &ldDecod
     fields.resize(endIndex + (2 * lookAheadFrames));
 
     // Populate fields
-    const qint32 numInputFrames = ldDecodeMetaData.getNumberOfFrames();
-    const qint32 numMetadataFields = ldDecodeMetaData.getNumberOfFields();
+    const qint32 numInputFrames = metaData.getNumberOfFrames();
+    const qint32 numMetadataFields = metaData.getNumberOfFields();
     const qint32 numSourceFields = sourceVideo.getNumberOfAvailableFields();
     bool warnedMetadataFieldRange = false;
     bool warnedSourceFieldRange = false;
@@ -54,8 +54,8 @@ void SourceField::loadFields(SourceVideo &sourceVideo, LdDecodeMetaData &ldDecod
 
         // Resolve field numbers for this frame.
         qint32 metadataFrame = useBlankFrame ? 1 : frameNumber;
-        qint32 firstFieldNumber = ldDecodeMetaData.getFirstFieldNumber(metadataFrame);
-        qint32 secondFieldNumber = ldDecodeMetaData.getSecondFieldNumber(metadataFrame);
+        qint32 firstFieldNumber = metaData.getFirstFieldNumber(metadataFrame);
+        qint32 secondFieldNumber = metaData.getSecondFieldNumber(metadataFrame);
 
         auto fieldNumbersAreMetadataSafe = [numMetadataFields](qint32 firstField, qint32 secondField) {
             return firstField >= 1 && secondField >= 1
@@ -89,19 +89,19 @@ void SourceField::loadFields(SourceVideo &sourceVideo, LdDecodeMetaData &ldDecod
 
             useBlankFrame = true;
             metadataFrame = 1;
-            firstFieldNumber = ldDecodeMetaData.getFirstFieldNumber(metadataFrame);
-            secondFieldNumber = ldDecodeMetaData.getSecondFieldNumber(metadataFrame);
+            firstFieldNumber = metaData.getFirstFieldNumber(metadataFrame);
+            secondFieldNumber = metaData.getSecondFieldNumber(metadataFrame);
             metadataFieldRangeInvalid = !fieldNumbersAreMetadataSafe(firstFieldNumber, secondFieldNumber);
         }
 
         if (!metadataFieldRangeInvalid) {
-            fields[i].field = ldDecodeMetaData.getField(firstFieldNumber);
-            fields[i + 1].field = ldDecodeMetaData.getField(secondFieldNumber);
+            fields[i].field = metaData.getField(firstFieldNumber);
+            fields[i + 1].field = metaData.getField(secondFieldNumber);
         } else {
             // If metadata is irrecoverably inconsistent, synthesize minimal field
             // metadata and continue with blank picture data.
-            fields[i].field = LdDecodeMetaData::Field();
-            fields[i + 1].field = LdDecodeMetaData::Field();
+            fields[i].field = TbcMetaData::Field();
+            fields[i + 1].field = TbcMetaData::Field();
             fields[i].field.isFirstField = true;
             fields[i + 1].field.isFirstField = false;
             useBlankFrame = true;

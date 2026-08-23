@@ -33,7 +33,7 @@
 #include <QDebug>
 
 #include "componentframe.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "sourcevideo.h"
 
 #include "comb.h"
@@ -46,7 +46,7 @@ class DecoderPool;
 class NtscDecoder : public Decoder {
 public:
     NtscDecoder(const Comb::Configuration &combConfig);
-    bool configure(const LdDecodeMetaData::VideoParameters &videoParameters) override;
+    bool configure(const TbcMetaData::VideoParameters &videoParameters) override;
     qint32 getLookBehind() const override;
     qint32 getLookAhead() const override;
     QThread *makeThread(QAtomicInt& abort, DecoderPool& decoderPool) override;

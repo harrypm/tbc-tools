@@ -32,7 +32,7 @@
 #include <QDebug>
 
 #include "componentframe.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "sourcevideo.h"
 
 #include "decoder.h"
@@ -45,7 +45,7 @@ class DecoderPool;
 class PalDecoder : public Decoder {
 public:
     PalDecoder(const PalColour::Configuration &palConfig);
-    bool configure(const LdDecodeMetaData::VideoParameters &videoParameters) override;
+    bool configure(const TbcMetaData::VideoParameters &videoParameters) override;
     qint32 getLookBehind() const override;
     qint32 getLookAhead() const override;
     QThread *makeThread(QAtomicInt& abort, DecoderPool& decoderPool) override;

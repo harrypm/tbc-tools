@@ -31,7 +31,7 @@
 #include <QTextStream>
 #include "tbc/logging.h"
 
-bool writeAudacityLabels(LdDecodeMetaData &metaData, const QString &fileName)
+bool writeAudacityLabels(TbcMetaData &metaData, const QString &fileName)
 {
     const auto videoParameters = metaData.getVideoParameters();
 

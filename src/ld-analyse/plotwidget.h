@@ -33,6 +33,8 @@
 #include <QFontMetrics>
 #include <QVector>
 #include <QPointF>
+#include <QGraphicsTextItem>
+#include <functional>
 
 class PlotGrid;
 class PlotSeries;
@@ -86,7 +88,13 @@ public:
     void setZoomEnabled(bool enabled);
     void setPanEnabled(bool enabled);
     void resetZoom();
-    
+
+    // Hover readout: when enabled, moving the mouse (no button held) snaps a
+    // crosshair to the nearest data point of the nearest visible series and
+    // shows a label formatted by m_hoverFormatter (or a default "x/y").
+    void setHoverEnabled(bool enabled);
+    void setHoverFormatter(std::function<QString(const QPointF &, const PlotSeries *)> formatter);
+
     // Canvas
     void setCanvasBackground(const QColor &color);
     
@@ -102,6 +110,7 @@ signals:
     void seriesClicked(PlotSeries *series, const QPointF &point);
     void plotClicked(const QPointF &dataPoint);  // Emitted when plot area is clicked, in data coordinates
     void plotDragged(const QPointF &dataPoint);  // Emitted continuously during drag, in data coordinates
+    void plotHovered(const QPointF &dataPoint, const PlotSeries *series);  // Nearest data point under the cursor
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -153,7 +162,13 @@ private:
     QList<PlotSeries*> m_series;
     QList<PlotMarker*> m_markers;
     QGraphicsTextItem *m_noDataTextItem;  // Track "no data" message
-    
+
+    // Hover readout
+    bool m_hoverEnabled = true;
+    PlotMarker *m_hoverMarker = nullptr;
+    QGraphicsTextItem *m_hoverLabel = nullptr;
+    std::function<QString(const QPointF &, const PlotSeries *)> m_hoverFormatter;
+
     // Settings
     bool m_gridEnabled;
     bool m_legendEnabled;
@@ -178,6 +193,12 @@ private:
     void calculateDataRange();
     void zoomAt(const QPointF &scenePos, double scaleFactor);
     void panBySceneDelta(const QPointF &sceneDelta);
+    // Hover: find nearest data point across visible series to scenePos; returns
+    // false if none. Sets outPoint/outSeries.
+    bool findNearestDataPoint(const QPointF &scenePos, QPointF &outPoint, const PlotSeries *&outSeries) const;
+    // Show/hide + position the hover crosshair + label for a data point.
+    void showHoverReadout(const QPointF &dataPoint, const PlotSeries *series);
+    void hideHoverReadout();
 };
 
 // Plot series class for drawing data series
@@ -202,18 +223,24 @@ public:
     
     void setData(const QVector<QPointF> &data);
     void setData(const QVector<double> &xData, const QVector<double> &yData);
-    
+
     void setVisible(bool visible);
-    
+
     QVector<QPointF> data() const { return m_data; }
-    
+
     void updatePath(const QRectF &plotRect, const QRectF &dataRect);
+
+protected:
+    // Clip the plotted line/bars to the plot rectangle so the pen never draws
+    // into the axis margins (keeps the curve inside the H/V scale frame).
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
 private:
     QString m_title;
     QVector<QPointF> m_data;
     PlotStyle m_style;
     PlotWidget *m_plotWidget;
+    QRectF m_plotRect;  // cached in updatePath for clipping in paint()
 };
 
 // Plot grid class for drawing grid lines

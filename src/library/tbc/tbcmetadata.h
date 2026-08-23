@@ -1,5 +1,5 @@
 /******************************************************************************
- * lddecodemetadata.h
+ * tbcmetadata.h
  * tbc-tools TBC library
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -10,8 +10,8 @@
  * This file is part of tbc-tools.
  ******************************************************************************/
 
-#ifndef LDDECODEMETADATA_H
-#define LDDECODEMETADATA_H
+#ifndef TBCMETADATA_H
+#define TBCMETADATA_H
 
 #include <QString>
 #include <QVector>
@@ -36,7 +36,7 @@ enum VideoSystem {
 
 bool parseVideoSystemName(QString name, VideoSystem &system);
 
-class LdDecodeMetaData
+class TbcMetaData
 {
 
 public:
@@ -238,11 +238,11 @@ public:
         qint32 pictureNumber;
     };
 
-    LdDecodeMetaData();
+    TbcMetaData();
 
     // Prevent copying or assignment
-    LdDecodeMetaData(const LdDecodeMetaData &) = delete;
-    LdDecodeMetaData& operator=(const LdDecodeMetaData &) = delete;
+    TbcMetaData(const TbcMetaData &) = delete;
+    TbcMetaData& operator=(const TbcMetaData &) = delete;
 
     void clear();
     bool read(QString fileName);
@@ -259,7 +259,7 @@ public:
     void setPcmAudioParameters(const PcmAudioParameters &pcmAudioParam);
 
     // Handle line parameters
-    void processLineParameters(LdDecodeMetaData::LineParameters &_lineParameters);
+    void processLineParameters(TbcMetaData::LineParameters &_lineParameters);
 
     // Get field metadata
     const Field &getField(qint32 sequentialFieldNumber) const;
@@ -272,11 +272,11 @@ public:
 
     // Set field metadata
     void updateField(const Field &field, qint32 sequentialFieldNumber);
-    void updateFieldVitsMetrics(const LdDecodeMetaData::VitsMetrics &vitsMetrics, qint32 sequentialFieldNumber);
-    void updateFieldVbi(const LdDecodeMetaData::Vbi &vbi, qint32 sequentialFieldNumber);
-    void updateFieldNtsc(const LdDecodeMetaData::Ntsc &ntsc, qint32 sequentialFieldNumber);
-    void updateFieldVitc(const LdDecodeMetaData::Vitc &vitc, qint32 sequentialFieldNumber);
-    void updateFieldClosedCaption(const LdDecodeMetaData::ClosedCaption &closedCaption, qint32 sequentialFieldNumber);
+    void updateFieldVitsMetrics(const TbcMetaData::VitsMetrics &vitsMetrics, qint32 sequentialFieldNumber);
+    void updateFieldVbi(const TbcMetaData::Vbi &vbi, qint32 sequentialFieldNumber);
+    void updateFieldNtsc(const TbcMetaData::Ntsc &ntsc, qint32 sequentialFieldNumber);
+    void updateFieldVitc(const TbcMetaData::Vitc &vitc, qint32 sequentialFieldNumber);
+    void updateFieldClosedCaption(const TbcMetaData::ClosedCaption &closedCaption, qint32 sequentialFieldNumber);
     void updateFieldDropOuts(const DropOuts &dropOuts, qint32 sequentialFieldNumber);
     void clearFieldDropOuts(qint32 sequentialFieldNumber);
 
@@ -291,8 +291,8 @@ public:
     void setIsFirstFieldFirst(bool flag);
     bool getIsFirstFieldFirst() const;
 
-    qint32 convertClvTimecodeToFrameNumber(LdDecodeMetaData::ClvTimecode clvTimeCode);
-    LdDecodeMetaData::ClvTimecode convertFrameNumberToClvTimecode(qint32 clvFrameNumber);
+    qint32 convertClvTimecodeToFrameNumber(TbcMetaData::ClvTimecode clvTimeCode);
+    TbcMetaData::ClvTimecode convertFrameNumberToClvTimecode(qint32 clvFrameNumber);
 
     // PCM Analogue audio helper methods
     qint32 getFieldPcmAudioStart(qint32 sequentialFieldNumber) const;
@@ -314,4 +314,4 @@ private:
     void generatePcmAudioMap();
 };
 
-#endif // LDDECODEMETADATA_H
+#endif // TBCMETADATA_H

@@ -25,19 +25,19 @@
 #ifndef SOURCEFIELD_H
 #define SOURCEFIELD_H
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "sourcevideo.h"
 
 // A field read from the input, with metadata and data
 struct SourceField {
-    LdDecodeMetaData::Field field;
+    TbcMetaData::Field field;
     SourceVideo::Data data;
 
     // Load a sequence of frames from the input files.
     //
     // fields will contain {lookbehind fields... [startIndex] real fields... [endIndex] lookahead fields...}.
     // Fields requested outside the bounds of the file will have dummy metadata and black data.
-    static void loadFields(SourceVideo &sourceVideo, LdDecodeMetaData &ldDecodeMetaData,
+    static void loadFields(SourceVideo &sourceVideo, TbcMetaData &metaData,
                            qint32 firstFrameNumber, qint32 numFrames,
                            qint32 lookBehindFrames, qint32 lookAheadFrames,
                            QVector<SourceField> &fields, qint32 &startIndex, qint32 &endIndex);
@@ -50,10 +50,10 @@ struct SourceField {
 
     // Return the first/last active line numbers within this field's data,
     // given the video parameters.
-    qint32 getFirstActiveLine(const LdDecodeMetaData::VideoParameters &videoParameters) const {
+    qint32 getFirstActiveLine(const TbcMetaData::VideoParameters &videoParameters) const {
         return (videoParameters.firstActiveFrameLine + 1 - getOffset()) / 2;
     }
-    qint32 getLastActiveLine(const LdDecodeMetaData::VideoParameters &videoParameters) const {
+    qint32 getLastActiveLine(const TbcMetaData::VideoParameters &videoParameters) const {
         return (videoParameters.lastActiveFrameLine + 1 - getOffset()) / 2;
     }
 };

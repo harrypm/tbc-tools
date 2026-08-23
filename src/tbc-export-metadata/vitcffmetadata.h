@@ -27,7 +27,7 @@
 
 #include <QString>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 /*!
     Write all available VITC values in FFmpeg metadata=print style text.
@@ -39,6 +39,6 @@
 
     Returns true on success, false on failure.
 */
-bool writeVitcFfmetadataText(LdDecodeMetaData &metaData, const QString &fileName);
+bool writeVitcFfmetadataText(TbcMetaData &metaData, const QString &fileName);
 
 #endif // VITCFFMETADATA_H

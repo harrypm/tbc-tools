@@ -20,7 +20,7 @@
 #include <QImage>
 
 #include "componentframe.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "tbcsource.h"
 
 namespace Ui {
@@ -36,7 +36,7 @@ public:
     explicit VectorscopeDialog(QWidget *parent = nullptr);
     ~VectorscopeDialog();
 
-    void showTraceImage(const ComponentFrame &componentFrame, const LdDecodeMetaData::VideoParameters &videoParameters,
+    void showTraceImage(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters,
                         const TbcSource::ViewMode& viewMode, const bool isFirstField);
     bool isCustomAreaModeSelected() const;
     QRect customAreaRect() const;
@@ -65,10 +65,10 @@ private slots:
 private:
     Ui::VectorscopeDialog *ui;
 
-    QImage getTraceImage(const ComponentFrame &componentFrame, const LdDecodeMetaData::VideoParameters &videoParameters);
+    QImage getTraceImage(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters);
     void updateScopeLabelPixmap();
     void initialiseAdvancedControls();
-    void updateAreaControlState(const ComponentFrame &componentFrame, const LdDecodeMetaData::VideoParameters &videoParameters);
+    void updateAreaControlState(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters);
     void applyAreaPreset();
     QImage cachedTraceImage;
 

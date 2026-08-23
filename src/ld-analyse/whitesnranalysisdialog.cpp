@@ -12,6 +12,9 @@
 #include "ui_whitesnranalysisdialog.h"
 
 #include <QTimer>
+#include <QShortcut>
+#include <QApplication>
+#include <QClipboard>
 #include <algorithm>
 
 WhiteSnrAnalysisDialog::WhiteSnrAnalysisDialog(QWidget *parent) :
@@ -37,8 +40,24 @@ WhiteSnrAnalysisDialog::WhiteSnrAnalysisDialog(QWidget *parent) :
     plotMarker->setStyle(PlotMarker::VLine);
     plotMarker->setPen(QPen(Qt::blue, 2));
 
+    // Enable hover readout: snap a crosshair to the nearest data point and show
+    // its exact value (formatter produces "Frame N: M.M dB").
+    plot->setHoverEnabled(true);
+    plot->setHoverFormatter([](const QPointF &p, const PlotSeries *) -> QString {
+        return WhiteSnrAnalysisDialog::tr("Frame %1: %2 dB")
+            .arg(qRound(p.x())).arg(p.y(), 0, 'f', 1);
+    });
+
+    // Ctrl+C copies this graph (as a PNG) to the clipboard.
+    auto *copyShortcut = new QShortcut(QKeySequence::Copy, this);
+    connect(copyShortcut, &QShortcut::activated, this, [this]() {
+        if (QClipboard *clipboard = QApplication::clipboard()) {
+            clipboard->setImage(plot->grab().toImage());
+        }
+    });
+
     // Set the maximum Y scale to 48
-    maxY = 48;
+    maxY = 42;
 
     // Set the default number of frames
     numberOfFrames = 0;
@@ -87,7 +106,8 @@ void WhiteSnrAnalysisDialog::addDataPoint(qint32 frameNumber, double whiteSnr)
         // Clamp SNR values to minimum threshold (14 dB)
         double clampedSnr = std::max(whiteSnr, 14.0);
         whitePoints.append(QPointF(static_cast<qreal>(frameNumber), static_cast<qreal>(clampedSnr)));
-        if (clampedSnr > maxY) maxY = ceil(clampedSnr); // Round up
+        // NOTE: the Y-axis max is computed in finishUpdate() with headroom so the
+        // peak stays inside the plot boundary (not jammed against the top border).
 
         // Add to trendline data (use original unclamped value for trend calculation)
         tlPoint[frameNumber] = whiteSnr;
@@ -110,7 +130,18 @@ void WhiteSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
     plot->setAxisTitle(Qt::Horizontal, "Frame number");
     plot->setAxisTitle(Qt::Vertical, "SNR (in dB)");
     plot->setAxisRange(Qt::Horizontal, 0, numberOfFrames);
-    plot->setAxisRange(Qt::Vertical, 14, maxY);
+
+    // Compute the Y-axis max from the actual data with headroom so the peak
+    // stays inside the plot border (5% headroom, minimum 2 dB), keeping a 42 dB
+    // floor so short/low captures still have a sensible scale. The min is set to
+    // 13 dB (1 dB below the 14 dB clamp floor) so floor-clamped points sit
+    // inside the boundary instead of on the bottom border.
+    double actualMax = 14.0;
+    for (const QPointF &pt : whitePoints) {
+        actualMax = std::max(actualMax, pt.y());
+    }
+    maxY = std::max(42.0, std::ceil(actualMax + std::max(2.0, actualMax * 0.05)));
+    plot->setAxisRange(Qt::Vertical, 13.0, maxY);
 
     // Set the white series data (change color to dark gray)
     whiteSeries->setPen(QPen(Qt::darkGray, 1));
@@ -121,7 +152,7 @@ void WhiteSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
     trendSeries->setData(trendPoints);
 
     // Set the frame marker position
-    plotMarker->setPosition(QPointF(static_cast<double>(_currentFrameNumber), (maxY + 14) / 2));
+    plotMarker->setPosition(QPointF(static_cast<double>(_currentFrameNumber), (maxY + 13.0) / 2.0));
 
     // Render the plot
     plot->replot();
@@ -147,7 +178,7 @@ void WhiteSnrAnalysisDialog::onUpdateTimerTimeout()
 {
     if (!hasPendingUpdate) return;
     
-    plotMarker->setPosition(QPointF(static_cast<double>(pendingFrameNumber), (maxY + 14) / 2));
+    plotMarker->setPosition(QPointF(static_cast<double>(pendingFrameNumber), (maxY + 13.0) / 2.0));
     // No need to call plot->replot() - marker update() handles the redraw
     
     hasPendingUpdate = false;

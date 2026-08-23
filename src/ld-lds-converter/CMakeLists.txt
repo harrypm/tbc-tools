@@ -19,7 +19,7 @@ add_executable(ld-lds-converter
 )
 target_link_libraries(ld-lds-converter PRIVATE
     Qt::Core Qt::Gui Qt::Widgets
-    lddecode-library
+    tbc-library
     ${_ld_lds_converter_flac_target}
 )
 

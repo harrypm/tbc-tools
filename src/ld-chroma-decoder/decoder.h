@@ -31,7 +31,7 @@
 #include <QThread>
 #include <cassert>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include "componentframe.h"
 #include "outputwriter.h"
@@ -63,7 +63,7 @@ public:
 
     // Configure the decoder given input video parameters.
     // If the video is not compatible, print an error message and return false.
-    virtual bool configure(const LdDecodeMetaData::VideoParameters &videoParameters) = 0;
+    virtual bool configure(const TbcMetaData::VideoParameters &videoParameters) = 0;
 
     // After configuration, return the number of frames that the decoder needs
     // to be able to see into the past (each frame being two SourceFields).
@@ -81,7 +81,7 @@ public:
     // Parameters used by the decoder and its threads.
     // This may be subclassed by decoders to add extra parameters.
     struct Configuration {
-        LdDecodeMetaData::VideoParameters videoParameters;
+        TbcMetaData::VideoParameters videoParameters;
     };
 };
 

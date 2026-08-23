@@ -28,18 +28,18 @@
 #include <QFile>
 #include <vector>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include "encoder.h"
 
 class PALEncoder : public Encoder
 {
 public:
-    PALEncoder(QFile &inputFile, QFile &tbcFile, QFile &chromaFile, LdDecodeMetaData &metaData,
+    PALEncoder(QFile &inputFile, QFile &tbcFile, QFile &chromaFile, TbcMetaData &metaData,
                int fieldOffset, bool isComponent, bool scLocked);
 
 private:
-    virtual void getFieldMetadata(qint32 fieldNo, LdDecodeMetaData::Field &fieldData);
+    virtual void getFieldMetadata(qint32 fieldNo, TbcMetaData::Field &fieldData);
     virtual void encodeLine(qint32 fieldNo, qint32 frameLine, const quint16 *inputData,
                             std::vector<double> &outputC, std::vector<double> &outputVBS);
 

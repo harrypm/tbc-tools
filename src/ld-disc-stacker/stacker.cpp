@@ -39,8 +39,8 @@ void Stacker::run()
     QVector<qint32> secondFieldSeqNo;
     QVector<SourceVideo::Data> firstSourceField;
     QVector<SourceVideo::Data> secondSourceField;
-    QVector<LdDecodeMetaData::Field> firstFieldMetadata;
-    QVector<LdDecodeMetaData::Field> secondFieldMetadata;
+    QVector<TbcMetaData::Field> firstFieldMetadata;
+    QVector<TbcMetaData::Field> secondFieldMetadata;
     qint32 mode;
     qint32 smartThreshold;
     bool reverse;
@@ -77,8 +77,8 @@ void Stacker::run()
 
 // Method to stack fields
 void Stacker::stackField(const qint32 frameNumber,const QVector<SourceVideo::Data>& inputFields,
-                                      const LdDecodeMetaData::VideoParameters& videoParameters,
-                                      const QVector<LdDecodeMetaData::Field>& fieldMetadata,
+                                      const TbcMetaData::VideoParameters& videoParameters,
+                                      const QVector<TbcMetaData::Field>& fieldMetadata,
                                       const QVector<qint32> availableSourcesForFrame,
                                       const bool& noDiffDod,const bool& passThrough,
                                       SourceVideo::Data &outputField,
@@ -445,7 +445,7 @@ inline quint16 Stacker::closest(const QVector<quint16>& elements, const qint32 t
 }
 
 // get value that are unprocessed and reuse processed one for mode >= 3
-void Stacker::getProcessedSample(const qint32 x, const qint32 y, const QVector<qint32>& availableSourcesForFrame, const QVector<SourceVideo::Data>& inputFields, QVector<QVector<quint16>>& tmpField, const LdDecodeMetaData::VideoParameters& videoParameters, const QVector<LdDecodeMetaData::Field>& fieldMetadata, QVector<quint16>& sample, QVector<quint16>& sampleN, QVector<quint16>& sampleS, QVector<quint16>& sampleE, QVector<quint16>& sampleW, QVector<bool>& isAllDropout, const bool& noDiffDod, const bool& verbose)
+void Stacker::getProcessedSample(const qint32 x, const qint32 y, const QVector<qint32>& availableSourcesForFrame, const QVector<SourceVideo::Data>& inputFields, QVector<QVector<quint16>>& tmpField, const TbcMetaData::VideoParameters& videoParameters, const QVector<TbcMetaData::Field>& fieldMetadata, QVector<quint16>& sample, QVector<quint16>& sampleN, QVector<quint16>& sampleS, QVector<quint16>& sampleE, QVector<quint16>& sampleW, QVector<bool>& isAllDropout, const bool& noDiffDod, const bool& verbose)
 {
     quint16 pixelValue = 0;
     qint32 source = 0;
@@ -770,7 +770,7 @@ inline bool Stacker::isDropout(const DropOuts& dropOuts, const qint32 fieldX, co
 }
 
 // Method returns true if all specified pixel are dropouts
-inline bool Stacker::haveAllDropout(const QVector<LdDecodeMetaData::Field>& fieldMetadata, const qint32 x, const qint32 y)
+inline bool Stacker::haveAllDropout(const QVector<TbcMetaData::Field>& fieldMetadata, const qint32 x, const qint32 y)
 {
     const qint32 size = fieldMetadata.size();
     for (qint32 i = 0; i < size; i++) {
@@ -786,7 +786,7 @@ inline bool Stacker::haveAllDropout(const QVector<LdDecodeMetaData::Field>& fiel
 // might cause an increase in errors for really noisy frames (where the DOs are in the same place in
 // multiple sources).  Another possible disadvantage is that diffDOD might pass through master plate errors
 // which, whilst not technically errors, may be undesirable.
-QVector<quint16> Stacker::diffDod(const QVector<quint16>& inputValues, const LdDecodeMetaData::VideoParameters& videoParameters, const bool& verbose)
+QVector<quint16> Stacker::diffDod(const QVector<quint16>& inputValues, const TbcMetaData::VideoParameters& videoParameters, const bool& verbose)
 {
     QVector<quint16> outputValues;
 

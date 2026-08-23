@@ -26,7 +26,7 @@
 #define VITCCODE_H
 
 #include "sourcevideo.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include <vector>
 
@@ -34,10 +34,10 @@ class VitcCode
 {
 public:
     bool decodeLine(const SourceVideo::Data &lineData,
-                    const LdDecodeMetaData::VideoParameters& videoParameters,
-                    LdDecodeMetaData::Field& fieldMetadata);
+                    const TbcMetaData::VideoParameters& videoParameters,
+                    TbcMetaData::Field& fieldMetadata);
 
-    std::vector<qint32> getLineNumbers(const LdDecodeMetaData::VideoParameters& videoParameters);
+    std::vector<qint32> getLineNumbers(const TbcMetaData::VideoParameters& videoParameters);
 };
 
 #endif // VITCCODE_H

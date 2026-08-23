@@ -52,14 +52,14 @@ bool writeTestTbc(const QString &filePath, qint32 fieldLength)
     return true;
 }
 
-void initializeMetadataWithMoreFieldsThanSource(LdDecodeMetaData &metadata,
+void initializeMetadataWithMoreFieldsThanSource(TbcMetaData &metadata,
                                                 qint32 metadataFields,
                                                 qint32 fieldWidth,
                                                 qint32 fieldHeight,
                                                 qint32 blackLevel)
 {
 
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::VideoParameters videoParameters;
     videoParameters.system = NTSC;
     videoParameters.fieldWidth = fieldWidth;
     videoParameters.fieldHeight = fieldHeight;
@@ -71,7 +71,7 @@ void initializeMetadataWithMoreFieldsThanSource(LdDecodeMetaData &metadata,
     metadata.setVideoParameters(videoParameters);
 
     for (qint32 i = 0; i < metadataFields; i++) {
-        LdDecodeMetaData::Field field;
+        TbcMetaData::Field field;
         field.isFirstField = (i % 2) == 0;
         field.audioSamples = 0;
         metadata.appendField(field);
@@ -97,7 +97,7 @@ int main()
     }
 
     // Source has 2 fields (1 frame), metadata claims 4 fields (2 frames).
-    LdDecodeMetaData metadata;
+    TbcMetaData metadata;
     initializeMetadataWithMoreFieldsThanSource(metadata, 4, fieldWidth, fieldHeight, blackLevel);
 
     SourceVideo sourceVideo;

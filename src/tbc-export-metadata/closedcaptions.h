@@ -28,10 +28,10 @@
 
 #include <QString>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 QString generateTimeStamp(qint32 fieldIndex);
 qint32 sanityCheckData(qint32 dataByte);
-bool writeClosedCaptions(LdDecodeMetaData &metaData, const QString &fileName);
+bool writeClosedCaptions(TbcMetaData &metaData, const QString &fileName);
 
 #endif // CLOSEDCAPTIONS_H

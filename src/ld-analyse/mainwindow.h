@@ -162,7 +162,7 @@ private slots:
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void mouseReleaseEvent(QMouseEvent *event);
-    void videoParametersChangedSignalHandler(const LdDecodeMetaData::VideoParameters &videoParameters);
+    void videoParametersChangedSignalHandler(const TbcMetaData::VideoParameters &videoParameters);
     void videoLevelsChangedSignalHandler(qint32 blackLevel, qint32 whiteLevel);
     void chromaDecoderConfigChangedSignalHandler();
     void exportRangeSelectionChangedSignalHandler(int inPoint, int outPoint, bool clearMetadataValues);
@@ -338,6 +338,10 @@ private:
     void updateImage();
     qint32 getAspectAdjustment() const;
     QImage renderedCurrentImageForExport();
+    // Copy the current video frame (renderedCurrentImageForExport) to the
+    // clipboard. Shared by the main-window Ctrl+C action and the graph-window
+    // copyFrameRequested() signal handlers.
+    void copyCurrentFrameToClipboard();
     bool isViewerTabActive() const;
     QString outputRootDirectoryForCurrentSource();
     QString outputBaseNameForCurrentSource();

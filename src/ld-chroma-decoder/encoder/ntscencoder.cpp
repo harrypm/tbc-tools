@@ -40,7 +40,7 @@
 #include <array>
 #include <cmath>
 
-NTSCEncoder::NTSCEncoder(QFile &_inputFile, QFile &_tbcFile, QFile &_chromaFile, LdDecodeMetaData &_metaData,
+NTSCEncoder::NTSCEncoder(QFile &_inputFile, QFile &_tbcFile, QFile &_chromaFile, TbcMetaData &_metaData,
                          int _fieldOffset, bool _isComponent, ChromaMode _chromaMode, bool _addSetup)
     : Encoder(_inputFile, _tbcFile, _chromaFile, _metaData, _fieldOffset, _isComponent),
       chromaMode(_chromaMode), addSetup(_addSetup)
@@ -110,7 +110,7 @@ NTSCEncoder::NTSCEncoder(QFile &_inputFile, QFile &_tbcFile, QFile &_chromaFile,
     C2.resize(videoParameters.fieldWidth);
 }
 
-void NTSCEncoder::getFieldMetadata(qint32 fieldNo, LdDecodeMetaData::Field &fieldData)
+void NTSCEncoder::getFieldMetadata(qint32 fieldNo, TbcMetaData::Field &fieldData)
 {
     fieldData.seqNo = fieldNo + 1;  // Convert 0-indexed fieldNo to 1-indexed seqNo
     fieldData.isFirstField = (fieldNo % 2) == 0;

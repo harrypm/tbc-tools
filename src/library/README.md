@@ -51,7 +51,7 @@ See individual header files for detailed API documentation.
 Time Base Corrected video format handling and metadata management.
 
 #### Components
-- **`lddecodemetadata.h/cpp`**: TBC metadata management
+- **`tbcmetadata.h/cpp`**: TBC metadata management
 - **`sourcevideo.h/cpp`**: TBC video file I/O
 - **`sourceaudio.h/cpp`**: TBC audio file I/O
 - **`dropouts.h/cpp`**: Dropout detection and management
@@ -69,13 +69,13 @@ Time Base Corrected video format handling and metadata management.
 
 #### Key Classes
 
-##### `LdDecodeMetaData`
+##### `TbcMetaData`
 Central metadata management for TBC files.
 
 ```cpp
-#include "tbc/lddecodemetadata.h"
+#include "tbc/tbcmetadata.h"
 
-LdDecodeMetaData metadata;
+TbcMetaData metadata;
 metadata.read("video.tbc.db");
 
 // Access video parameters
@@ -188,7 +188,7 @@ Documentation includes:
 
 ### 1. Read TBC Metadata
 ```cpp
-LdDecodeMetaData metadata;
+TbcMetaData metadata;
 if (metadata.read("video.tbc.db")) {
     VideoParameters params = metadata.getVideoParameters();
     // Process video parameters

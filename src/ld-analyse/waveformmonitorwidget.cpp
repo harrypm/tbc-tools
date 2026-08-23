@@ -4,7 +4,7 @@
  * Purpose:     Waveform monitor raster widget implementation
  *
  * Ported from decode-orc (orc/gui/waveformmonitorwidget.cpp), adapted to
- * ld-analyse's 10-bit-CVBS-domain input + LdDecodeMetaData::VideoParameters.
+ * ld-analyse's 10-bit-CVBS-domain input + TbcMetaData::VideoParameters.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -42,7 +42,7 @@ QRect WaveformMonitorWidget::plotArea() const {
 void WaveformMonitorWidget::setData(
     const std::vector<int16_t> &composite_samples, int first_field_height,
     int second_field_height,
-    const LdDecodeMetaData::VideoParameters &video_params) {
+    const TbcMetaData::VideoParameters &video_params) {
   system_ = video_params.system;
 
   // Resolve the 16-bit blanking (handles NTSC 7.5 IRE setup derivation) and

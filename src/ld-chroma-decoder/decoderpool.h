@@ -33,7 +33,7 @@
 #include <QThread>
 #include <QVector>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "sourcevideo.h"
 
 #include "decoder.h"
@@ -44,7 +44,7 @@ class DecoderPool
 {
 public:
     explicit DecoderPool(Decoder &decoder, QString inputFileName,
-                         LdDecodeMetaData &ldDecodeMetaData,
+                         TbcMetaData &metaData,
                          OutputWriter::Configuration &outputConfig, QString outputFileName,
                          qint32 startFrame, qint32 length, qint32 maxThreads);
 
@@ -108,7 +108,7 @@ private:
     qint32 decoderLookAhead;
     qint32 inputFrameNumber;
     qint32 lastFrameNumber;
-    LdDecodeMetaData &ldDecodeMetaData;
+    TbcMetaData &metaData;
     SourceVideo sourceVideo;
 
     // Output stream information (all guarded by outputMutex while threads are running)

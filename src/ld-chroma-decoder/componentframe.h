@@ -29,7 +29,7 @@
 #include <QVector>
 #include <cassert>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 // Two complete, interlaced fields' worth of decoded luma and chroma information.
 //
@@ -43,7 +43,7 @@ public:
 
     // Set the frame's size and clear it to black
     // If mono is true, only Y set to black, while U and V are cleared.
-    void init(const LdDecodeMetaData::VideoParameters &videoParameters, bool mono=false);
+    void init(const TbcMetaData::VideoParameters &videoParameters, bool mono=false);
 
     // Get a pointer to a line of samples. Line numbers are 0-based within the frame.
     // Lines are stored in a contiguous array, so it's safe to get a pointer to

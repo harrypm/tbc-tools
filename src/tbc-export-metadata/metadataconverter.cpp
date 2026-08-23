@@ -26,10 +26,10 @@ MetadataConverter::~MetadataConverter()
 
 bool MetadataConverter::process()
 {
-    LdDecodeMetaData ldDecodeMetaData;
+    TbcMetaData metaData;
     ExportMetaData exportMetaData;
 
-    if (!ldDecodeMetaData.read(m_inputSqliteFilename)) {
+    if (!metaData.read(m_inputSqliteFilename)) {
 		qCritical() << "Unable to open TBC metadata file - cannot continue";
 		return false;
 	}
@@ -38,25 +38,25 @@ bool MetadataConverter::process()
 
 	ExportMetaData::VideoParameters out_VideoParameters;
 
-	if (!ExportMetaData::parseVideoSystemName(ldDecodeMetaData.getVideoSystemDescription(), out_VideoParameters.system)) {
+	if (!ExportMetaData::parseVideoSystemName(metaData.getVideoSystemDescription(), out_VideoParameters.system)) {
 		qCritical() << "Unsupported video system - cannot continue";
 		return false;
 	}
 
-	convertVideoParamters(ldDecodeMetaData.getVideoParameters(), out_VideoParameters);
+	convertVideoParamters(metaData.getVideoParameters(), out_VideoParameters);
 	exportMetaData.setVideoParameters(out_VideoParameters);
 
 	try {
 		ExportMetaData::PcmAudioParameters out_PcmAudioParameters;
-		convertPcmAudioParamters(ldDecodeMetaData.getPcmAudioParameters(), out_PcmAudioParameters);
+		convertPcmAudioParamters(metaData.getPcmAudioParameters(), out_PcmAudioParameters);
 		exportMetaData.setPcmAudioParameters(out_PcmAudioParameters);
 	} catch (...) {
 		qInfo() << "No valid PcmAudioParameters, will not export audio information.";
 	}
 
-	for (qint32 fieldNum = 1; fieldNum <= ldDecodeMetaData.getNumberOfFields(); fieldNum++) {
+	for (qint32 fieldNum = 1; fieldNum <= metaData.getNumberOfFields(); fieldNum++) {
 		ExportMetaData::Field out_field;
-		convertField(ldDecodeMetaData.getField(fieldNum), out_field);
+		convertField(metaData.getField(fieldNum), out_field);
 		exportMetaData.appendField(out_field);
 	}
 
@@ -70,7 +70,7 @@ bool MetadataConverter::process()
     return true;
 }
 
-void MetadataConverter::convertVideoParamters(const LdDecodeMetaData::VideoParameters &in_VideoParameters,
+void MetadataConverter::convertVideoParamters(const TbcMetaData::VideoParameters &in_VideoParameters,
                                               ExportMetaData::VideoParameters &out_VideoParameters)
 {
 	out_VideoParameters.isSubcarrierLocked = in_VideoParameters.isSubcarrierLocked;
@@ -90,7 +90,7 @@ void MetadataConverter::convertVideoParamters(const LdDecodeMetaData::VideoParam
 	out_VideoParameters.gitCommit = in_VideoParameters.gitCommit;
 }
 
-void MetadataConverter::convertPcmAudioParamters(const LdDecodeMetaData::PcmAudioParameters &in_PcmAudioParameters,
+void MetadataConverter::convertPcmAudioParamters(const TbcMetaData::PcmAudioParameters &in_PcmAudioParameters,
                                                  ExportMetaData::PcmAudioParameters &out_PcmAudioParameters)
 {
 	out_PcmAudioParameters.sampleRate = in_PcmAudioParameters.sampleRate;
@@ -100,7 +100,7 @@ void MetadataConverter::convertPcmAudioParamters(const LdDecodeMetaData::PcmAudi
 	out_PcmAudioParameters.isValid = true;
 }
 
-void MetadataConverter::convertField(const LdDecodeMetaData::Field &in_field,
+void MetadataConverter::convertField(const TbcMetaData::Field &in_field,
                                      ExportMetaData::Field &out_field)
 {
 	out_field.seqNo = in_field.seqNo;

@@ -27,11 +27,11 @@
 #include "tbc/logging.h"
 
 StackingPool::StackingPool(QString _outputFilename, QString _outputMetadataFilename,
-                             qint32 _maxThreads, QVector<LdDecodeMetaData *> &_ldDecodeMetaData, QVector<SourceVideo *> &_sourceVideos,
+                             qint32 _maxThreads, QVector<TbcMetaData *> &_metaData, QVector<SourceVideo *> &_sourceVideos,
                              qint32 _mode, qint32 _smartThreshold, bool _reverse, bool _noDiffDod, bool _passThrough, bool _integrityCheck, bool _verbose, QObject *parent)
     : QObject(parent), outputFilename(_outputFilename), outputMetadataFilename(_outputMetadataFilename),
       maxThreads(_maxThreads), mode(_mode), smartThreshold(_smartThreshold), reverse(_reverse), noDiffDod(_noDiffDod), passThrough(_passThrough), integrityCheck(_integrityCheck), verbose(_verbose),
-      abort(false), ldDecodeMetaData(_ldDecodeMetaData), sourceVideos(_sourceVideos)
+      abort(false), metaData(_metaData), sourceVideos(_sourceVideos)
 {
 }
 
@@ -57,8 +57,8 @@ bool StackingPool::process()
     // If there is a leading field in the TBC which is out of field order, we need to copy it
     // to ensure the metadata files match up
     qInfo() << "Verifying leading fields match...";
-    qint32 firstFieldNumber = ldDecodeMetaData[0]->getFirstFieldNumber(1);
-    qint32 secondFieldNumber = ldDecodeMetaData[0]->getSecondFieldNumber(1);
+    qint32 firstFieldNumber = metaData[0]->getFirstFieldNumber(1);
+    qint32 secondFieldNumber = metaData[0]->getSecondFieldNumber(1);
 
     if (firstFieldNumber != 1 && secondFieldNumber != 1) {
         SourceVideo::Data sourceField = sourceVideos[0]->getVideoField(1);
@@ -78,12 +78,12 @@ bool StackingPool::process()
     }
 
     // Show some information for the user
-    qInfo() << "Using" << maxThreads << "threads to process" << ldDecodeMetaData[0]->getNumberOfFrames() << "frames";
+    qInfo() << "Using" << maxThreads << "threads to process" << metaData[0]->getNumberOfFrames() << "frames";
 
     // Initialise processing state
     inputFrameNumber = 1;
     outputFrameNumber = 1;
-    lastFrameNumber = ldDecodeMetaData[0]->getNumberOfFrames();
+    lastFrameNumber = metaData[0]->getNumberOfFrames();
     skippedFrame = 0;
     totalTimer.start();
 
@@ -130,9 +130,9 @@ bool StackingPool::process()
 // Returns true if a frame was returned, false if the end of the input has been
 // reached.
 bool StackingPool::getInputFrame(qint32& frameNumber,
-                                  QVector<qint32>& firstFieldNumber, QVector<SourceVideo::Data>& firstFieldVideoData, QVector<LdDecodeMetaData::Field>& firstFieldMetadata,
-                                  QVector<qint32>& secondFieldNumber, QVector<SourceVideo::Data>& secondFieldVideoData, QVector<LdDecodeMetaData::Field>& secondFieldMetadata,
-                                  QVector<LdDecodeMetaData::VideoParameters>& videoParameters,
+                                  QVector<qint32>& firstFieldNumber, QVector<SourceVideo::Data>& firstFieldVideoData, QVector<TbcMetaData::Field>& firstFieldMetadata,
+                                  QVector<qint32>& secondFieldNumber, QVector<SourceVideo::Data>& secondFieldVideoData, QVector<TbcMetaData::Field>& secondFieldMetadata,
+                                  QVector<TbcMetaData::VideoParameters>& videoParameters,
                                   qint32& _mode, qint32& _smartThreshold, bool& _reverse, bool& _noDiffDod, bool& _passThrough,
                                   bool& _verbose, QVector<qint32>& availableSourcesForFrame)
 {
@@ -172,8 +172,8 @@ bool StackingPool::getInputFrame(qint32& frameNumber,
 
         if (sourceNo == 0) {
             // No need to perform VBI frame number mapping on the first source
-            firstFieldNumber[sourceNo] = ldDecodeMetaData[sourceNo]->getFirstFieldNumber(frameNumber);
-            secondFieldNumber[sourceNo] = ldDecodeMetaData[sourceNo]->getSecondFieldNumber(frameNumber);
+            firstFieldNumber[sourceNo] = metaData[sourceNo]->getFirstFieldNumber(frameNumber);
+            secondFieldNumber[sourceNo] = metaData[sourceNo]->getSecondFieldNumber(frameNumber);
             if(verbose){tbcDebugStream().nospace() << "Source #0 fields are " <<
                                   firstFieldNumber[sourceNo] << "/" << secondFieldNumber[sourceNo];}
         } else if (currentVbiFrame >= sourceMinimumVbiFrame[sourceNo] && currentVbiFrame <= sourceMaximumVbiFrame[sourceNo]) {
@@ -182,14 +182,14 @@ bool StackingPool::getInputFrame(qint32& frameNumber,
             qint32 currentSourceFrameNumber = convertVbiFrameNumberToSequential(currentVbiFrame, sourceNo);
 
             // Check the current source contains the frame
-            if (ldDecodeMetaData[sourceNo]->getNumberOfFrames() < currentSourceFrameNumber) {
+            if (metaData[sourceNo]->getNumberOfFrames() < currentSourceFrameNumber) {
                 firstFieldNumber[sourceNo] = -1;
                 secondFieldNumber[sourceNo] = -1;
 
                 if(verbose){tbcDebugStream().nospace() << "Source #" << sourceNo << " does not contain VBI frame number " << currentVbiFrame;}
             } else {
-                firstFieldNumber[sourceNo] = ldDecodeMetaData[sourceNo]->getFirstFieldNumber(currentSourceFrameNumber);
-                secondFieldNumber[sourceNo] = ldDecodeMetaData[sourceNo]->getSecondFieldNumber(currentSourceFrameNumber);
+                firstFieldNumber[sourceNo] = metaData[sourceNo]->getFirstFieldNumber(currentSourceFrameNumber);
+                secondFieldNumber[sourceNo] = metaData[sourceNo]->getSecondFieldNumber(currentSourceFrameNumber);
 
                 if(verbose){tbcDebugStream().nospace() << "Source #" << sourceNo << " has VBI frame number " << currentVbiFrame <<
                             " and fields " << firstFieldNumber[sourceNo] << "/" << secondFieldNumber[sourceNo];}
@@ -209,9 +209,9 @@ bool StackingPool::getInputFrame(qint32& frameNumber,
                 firstFieldVideoData[sourceNo] = sourceVideos[sourceNo]->getVideoField(firstFieldNumber[sourceNo]);
             }
 
-            firstFieldMetadata[sourceNo] = ldDecodeMetaData[sourceNo]->getField(firstFieldNumber[sourceNo]);
-            secondFieldMetadata[sourceNo] = ldDecodeMetaData[sourceNo]->getField(secondFieldNumber[sourceNo]);
-            videoParameters[sourceNo] = ldDecodeMetaData[sourceNo]->getVideoParameters();
+            firstFieldMetadata[sourceNo] = metaData[sourceNo]->getField(firstFieldNumber[sourceNo]);
+            secondFieldMetadata[sourceNo] = metaData[sourceNo]->getField(secondFieldNumber[sourceNo]);
+            videoParameters[sourceNo] = metaData[sourceNo]->getVideoParameters();
         }
     }
 
@@ -324,12 +324,12 @@ bool StackingPool::setOutputFrame(qint32 frameNumber,
         }
 
         // Clear any existing dropout data
-        ldDecodeMetaData[0]->clearFieldDropOuts(outputFrame.firstFieldSeqNo);
-        ldDecodeMetaData[0]->clearFieldDropOuts(outputFrame.secondFieldSeqNo);
+        metaData[0]->clearFieldDropOuts(outputFrame.firstFieldSeqNo);
+        metaData[0]->clearFieldDropOuts(outputFrame.secondFieldSeqNo);
 
-        // Write the new dropout data into the LdDecodeMetaData output
-        ldDecodeMetaData[0]->updateFieldDropOuts(outputFrame.firstTargetFieldDropOuts, outputFrame.firstFieldSeqNo);
-        ldDecodeMetaData[0]->updateFieldDropOuts(outputFrame.secondTargetFieldDropOuts, outputFrame.secondFieldSeqNo);
+        // Write the new dropout data into the TbcMetaData output
+        metaData[0]->updateFieldDropOuts(outputFrame.firstTargetFieldDropOuts, outputFrame.firstFieldSeqNo);
+        metaData[0]->updateFieldDropOuts(outputFrame.secondTargetFieldDropOuts, outputFrame.secondFieldSeqNo);
 
         // Show debug
         tbcDebugStream().nospace() << "Processed frame " << outputFrameNumber;
@@ -346,7 +346,7 @@ bool StackingPool::setOutputFrame(qint32 frameNumber,
 }
 
 // Determine the minimum and maximum VBI frame numbers for all sources
-// Expects sourceVideos[] and ldDecodeMetaData[] to be populated
+// Expects sourceVideos[] and metaData[] to be populated
 // Note: This function returns frame number even if the disc is CLV - conversion
 // from timecodes is performed automatically.
 bool StackingPool::setMinAndMaxVbiFrames()
@@ -374,10 +374,10 @@ bool StackingPool::setMinAndMaxVbiFrames()
         sourceDiscTypeCav[sourceNumber] = false;
 
         // Using sequential frame numbering starting from 1
-        for (qint32 seqFrame = 1; seqFrame <= ldDecodeMetaData[sourceNumber]->getNumberOfFrames(); seqFrame++) {
+        for (qint32 seqFrame = 1; seqFrame <= metaData[sourceNumber]->getNumberOfFrames(); seqFrame++) {
             // Get the VBI data and then decode
-            auto vbi1 = ldDecodeMetaData[sourceNumber]->getFieldVbi(ldDecodeMetaData[sourceNumber]->getFirstFieldNumber(seqFrame)).vbiData;
-            auto vbi2 = ldDecodeMetaData[sourceNumber]->getFieldVbi(ldDecodeMetaData[sourceNumber]->getSecondFieldNumber(seqFrame)).vbiData;
+            auto vbi1 = metaData[sourceNumber]->getFieldVbi(metaData[sourceNumber]->getFirstFieldNumber(seqFrame)).vbiData;
+            auto vbi2 = metaData[sourceNumber]->getFieldVbi(metaData[sourceNumber]->getSecondFieldNumber(seqFrame)).vbiData;
             VbiDecoder::Vbi vbi = vbiDecoder.decodeFrame(vbi1[0], vbi1[1], vbi1[2], vbi2[0], vbi2[1], vbi2[2]);
 
             // Look for a complete, valid CAV picture number or CLV time-code
@@ -392,12 +392,12 @@ bool StackingPool::setMinAndMaxVbiFrames()
                     vbi.clvSec != -1 && vbi.clvPicNo != -1) {
                 clvCount++;
 
-                LdDecodeMetaData::ClvTimecode timecode;
+                TbcMetaData::ClvTimecode timecode;
                 timecode.hours = vbi.clvHr;
                 timecode.minutes = vbi.clvMin;
                 timecode.seconds = vbi.clvSec;
                 timecode.pictureNumber = vbi.clvPicNo;
-                qint32 cvFrameNumber = ldDecodeMetaData[sourceNumber]->convertClvTimecodeToFrameNumber(timecode);
+                qint32 cvFrameNumber = metaData[sourceNumber]->convertClvTimecodeToFrameNumber(timecode);
 
                 if (cvFrameNumber < clvMin) clvMin = cvFrameNumber;
                 if (cvFrameNumber > clvMax) clvMax = cvFrameNumber;
@@ -448,7 +448,7 @@ qint32 StackingPool::convertVbiFrameNumberToSequential(qint32 vbiFrameNumber, qi
     return vbiFrameNumber - sourceMinimumVbiFrame[sourceNumber] + 1;
 }
 
-bool StackingPool::isIntegrityOk(const SourceVideo::Data& inputFields,const LdDecodeMetaData::VideoParameters& videoParameters)
+bool StackingPool::isIntegrityOk(const SourceVideo::Data& inputFields,const TbcMetaData::VideoParameters& videoParameters)
 {
     qint32 count = 0;
     for (qint32 y = 0; y < videoParameters.fieldHeight; y++)
@@ -479,21 +479,21 @@ QVector<qint32> StackingPool::getAvailableSourcesForFrame(qint32 vbiFrameNumber)
             qint32 sequentialFrameNumber = convertVbiFrameNumberToSequential(vbiFrameNumber, sourceNo);
 
             // Check the source contains enough frames to have the required sequential frame
-            if (ldDecodeMetaData[sourceNo]->getNumberOfFrames() < sequentialFrameNumber)
+            if (metaData[sourceNo]->getNumberOfFrames() < sequentialFrameNumber)
             {
                 // Sequential frame is out of bounds
                 tbcDebugStream() << "VBI Frame number" << vbiFrameNumber << "is out of bounds for source " << sourceNo;
             } else {
                 // Sequential frame is in bounds
-                qint32 firstFieldNumber = ldDecodeMetaData[sourceNo]->getFirstFieldNumber(sequentialFrameNumber);
-                qint32 secondFieldNumber = ldDecodeMetaData[sourceNo]->getSecondFieldNumber(sequentialFrameNumber);
+                qint32 firstFieldNumber = metaData[sourceNo]->getFirstFieldNumber(sequentialFrameNumber);
+                qint32 secondFieldNumber = metaData[sourceNo]->getSecondFieldNumber(sequentialFrameNumber);
 
                 // Ensure the frame is not a padded field (i.e. missing)
-                if (ldDecodeMetaData[sourceNo]->getField(firstFieldNumber).pad == false && ldDecodeMetaData[sourceNo]->getField(secondFieldNumber).pad == false) {
+                if (metaData[sourceNo]->getField(firstFieldNumber).pad == false && metaData[sourceNo]->getField(secondFieldNumber).pad == false) {
                     availableSourcesForFrame.append(sourceNo);
                 } else if(verbose){
-                    if (ldDecodeMetaData[sourceNo]->getField(firstFieldNumber).pad == true) tbcDebugStream() << "First field number" << firstFieldNumber << "of source" << sourceNo << "is padded";
-                    if (ldDecodeMetaData[sourceNo]->getField(secondFieldNumber).pad == true) tbcDebugStream() << "Second field number" << firstFieldNumber << "of source" << sourceNo << "is padded";
+                    if (metaData[sourceNo]->getField(firstFieldNumber).pad == true) tbcDebugStream() << "First field number" << firstFieldNumber << "of source" << sourceNo << "is padded";
+                    if (metaData[sourceNo]->getField(secondFieldNumber).pad == true) tbcDebugStream() << "Second field number" << firstFieldNumber << "of source" << sourceNo << "is padded";
                 }
             }
         }
@@ -521,11 +521,11 @@ void StackingPool::correctPhaseIDs()
 {
     constexpr qint32 PHASE_COUNT = 4;
 
-    const qint32 fieldCount = ldDecodeMetaData[0]->getNumberOfFields();
+    const qint32 fieldCount = metaData[0]->getNumberOfFields();
 
     // Find the first non-padded field
     qint32 pivotField = 1;
-    while (pivotField <= fieldCount && ldDecodeMetaData[0]->getField(pivotField).pad) {
+    while (pivotField <= fieldCount && metaData[0]->getField(pivotField).pad) {
         ++pivotField;
     }
     if (pivotField >= fieldCount)
@@ -534,7 +534,7 @@ void StackingPool::correctPhaseIDs()
     }
 
     // Get the starting phase ID - 1
-    qint32 currentPhaseID = ldDecodeMetaData[0]->getField(pivotField).fieldPhaseID - 1;
+    qint32 currentPhaseID = metaData[0]->getField(pivotField).fieldPhaseID - 1;
     currentPhaseID -= (pivotField - 1) % PHASE_COUNT;
     currentPhaseID += PHASE_COUNT;
     currentPhaseID %= PHASE_COUNT;
@@ -542,9 +542,9 @@ void StackingPool::correctPhaseIDs()
     // Overwrite phase IDs
     for (qint32 fieldNumber = 1; fieldNumber <= fieldCount; ++fieldNumber)
     {
-        LdDecodeMetaData::Field field = ldDecodeMetaData[0]->getField(fieldNumber);
+        TbcMetaData::Field field = metaData[0]->getField(fieldNumber);
         field.fieldPhaseID = currentPhaseID + 1;
-        ldDecodeMetaData[0]->updateField(field, fieldNumber);
+        metaData[0]->updateField(field, fieldNumber);
         ++currentPhaseID;
         currentPhaseID %= PHASE_COUNT;
     }
@@ -557,47 +557,47 @@ void StackingPool::replaceFieldMetaData(qint32 frameNumber)
 
     qint32 fieldNumber = 0;
     if constexpr (field == 1) {
-        fieldNumber = ldDecodeMetaData[0]->getFirstFieldNumber(frameNumber);
+        fieldNumber = metaData[0]->getFirstFieldNumber(frameNumber);
     } else {
-        fieldNumber = ldDecodeMetaData[0]->getSecondFieldNumber(frameNumber);
+        fieldNumber = metaData[0]->getSecondFieldNumber(frameNumber);
     }
 
-    const LdDecodeMetaData::Field &currentField = ldDecodeMetaData[0]->getField(fieldNumber);
+    const TbcMetaData::Field &currentField = metaData[0]->getField(fieldNumber);
     if (currentField.pad) {
-        for (int sourceNo = 1; sourceNo < ldDecodeMetaData.size(); ++sourceNo) {
+        for (int sourceNo = 1; sourceNo < metaData.size(); ++sourceNo) {
             if (currentVbiFrame < sourceMinimumVbiFrame[sourceNo] || currentVbiFrame > sourceMaximumVbiFrame[sourceNo]) {
                 continue;
             }
             const qint32 currentSourceFrameNumber = convertVbiFrameNumberToSequential(currentVbiFrame, sourceNo);
-            if (ldDecodeMetaData[sourceNo]->getNumberOfFrames() < currentSourceFrameNumber) {
+            if (metaData[sourceNo]->getNumberOfFrames() < currentSourceFrameNumber) {
                 continue;
             }
             qint32 otherFieldNumber = 0;
             if constexpr (field == 1) {
-                otherFieldNumber = ldDecodeMetaData[sourceNo]->getFirstFieldNumber(frameNumber);
+                otherFieldNumber = metaData[sourceNo]->getFirstFieldNumber(frameNumber);
             } else {
-                otherFieldNumber = ldDecodeMetaData[sourceNo]->getSecondFieldNumber(frameNumber);
+                otherFieldNumber = metaData[sourceNo]->getSecondFieldNumber(frameNumber);
             }
-            if (ldDecodeMetaData[sourceNo]->getField(otherFieldNumber).pad) {
+            if (metaData[sourceNo]->getField(otherFieldNumber).pad) {
                 continue;
             }
-            LdDecodeMetaData::Field potentialField = ldDecodeMetaData[sourceNo]->getField(otherFieldNumber);
+            TbcMetaData::Field potentialField = metaData[sourceNo]->getField(otherFieldNumber);
             potentialField.seqNo = currentField.seqNo;
             potentialField.fieldPhaseID = currentField.fieldPhaseID;
             potentialField.dropOuts = currentField.dropOuts;
-            ldDecodeMetaData[0]->updateField(potentialField, fieldNumber);
+            metaData[0]->updateField(potentialField, fieldNumber);
             break;
         }
     }
 }
 
-LdDecodeMetaData &StackingPool::correctMetaData()
+TbcMetaData &StackingPool::correctMetaData()
 {
     correctPhaseIDs();
-    const qint32 frameCount = ldDecodeMetaData[0]->getNumberOfFrames();
+    const qint32 frameCount = metaData[0]->getNumberOfFrames();
     for (qint32 frameNumber = 1; frameNumber <= frameCount; ++frameNumber) {
         replaceFieldMetaData<1>(frameNumber);
         replaceFieldMetaData<2>(frameNumber);
     }
-    return *ldDecodeMetaData[0];
+    return *metaData[0];
 }

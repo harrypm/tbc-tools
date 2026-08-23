@@ -5,6 +5,6 @@ add_executable(ld-discmap
     main.cpp
 )
 
-target_link_libraries(ld-discmap PRIVATE Qt::Core lddecode-library)
+target_link_libraries(ld-discmap PRIVATE Qt::Core tbc-library)
 
 install(TARGETS ld-discmap)

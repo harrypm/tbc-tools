@@ -31,7 +31,7 @@
 #include <QDebug>
 
 #include "componentframe.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "sourcevideo.h"
 
 #include "comb.h"
@@ -46,12 +46,12 @@ public:
 
 	struct MonoConfiguration {
 		double yNRLevel = 0.0;
-		LdDecodeMetaData::VideoParameters videoParameters;
+		TbcMetaData::VideoParameters videoParameters;
 	};
 	MonoDecoder();
 	MonoDecoder(const MonoDecoder::MonoConfiguration &config);
-	bool updateConfiguration(const LdDecodeMetaData::VideoParameters &videoParameters, const MonoDecoder::MonoConfiguration &configuration);
-	bool configure(const LdDecodeMetaData::VideoParameters &videoParameters) override;
+	bool updateConfiguration(const TbcMetaData::VideoParameters &videoParameters, const MonoDecoder::MonoConfiguration &configuration);
+	bool configure(const TbcMetaData::VideoParameters &videoParameters) override;
     QThread *makeThread(QAtomicInt& abort, DecoderPool& decoderPool) override;
 	/// Synchronously decode luma-only frames (no filtering)
 	void decodeFrames(const QVector<SourceField>& inputFields,

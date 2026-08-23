@@ -27,7 +27,7 @@
 
 #include <QString>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 /*!
     Write an Audacity labels file containing navigation information.
@@ -36,6 +36,6 @@
 
     Returns true on success, false on failure.
 */
-bool writeAudacityLabels(LdDecodeMetaData &metaData, const QString &fileName);
+bool writeAudacityLabels(TbcMetaData &metaData, const QString &fileName);
 
 #endif

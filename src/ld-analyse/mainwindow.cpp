@@ -1011,7 +1011,7 @@ QVector<UserNoteMarker> parseUserMarkersJson(const QString &userMarkersJson, qin
 }
 
 QVector<UserNoteMarker> userNoteMarkersFromVideoParameters(
-    const LdDecodeMetaData::VideoParameters &videoParameters,
+    const TbcMetaData::VideoParameters &videoParameters,
     qint32 totalFrames)
 {
     QVector<UserNoteMarker> combinedMarkers;
@@ -1070,7 +1070,7 @@ QString serializeUserNoteMarkersJson(const QVector<UserNoteMarker> &noteMarkers)
     return QString::fromUtf8(QJsonDocument(markersArray).toJson(QJsonDocument::Compact));
 }
 
-bool applyUserNoteMarkersToVideoParameters(LdDecodeMetaData::VideoParameters &videoParameters,
+bool applyUserNoteMarkersToVideoParameters(TbcMetaData::VideoParameters &videoParameters,
                                            const QVector<UserNoteMarker> &noteMarkers)
 {
     const QVector<UserNoteMarker> normalizedMarkers = normaliseUserNoteMarkers(noteMarkers, -1);
@@ -1419,7 +1419,7 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
                 }
                 updatedMarkers = normaliseUserNoteMarkers(updatedMarkers, totalFrames);
 
-                LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+                TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
                 bool changed = false;
                 if (videoParameters.userEditInSelection != clampedIn) {
                     videoParameters.userEditInSelection = clampedIn;
@@ -2465,7 +2465,7 @@ void MainWindow::updateMetadataStatusPanel()
         return;
     }
 
-    const LdDecodeMetaData::VideoParameters &videoParameters = tbcSource.getVideoParameters();
+    const TbcMetaData::VideoParameters &videoParameters = tbcSource.getVideoParameters();
 
     const QString metadataPath = tbcSource.getCurrentMetadataFilename();
     const bool metadataIsJson = metadataPath.endsWith(".json", Qt::CaseInsensitive);
@@ -2982,7 +2982,7 @@ QVector<QRect> MainWindow::getActiveVideoRects() const
         return rects;
     }
 
-    const LdDecodeMetaData::VideoParameters &videoParameters = tbcSource.getVideoParameters();
+    const TbcMetaData::VideoParameters &videoParameters = tbcSource.getVideoParameters();
     if (videoParameters.activeVideoStart < 0 || videoParameters.activeVideoEnd <= videoParameters.activeVideoStart) {
         return rects;
     }
@@ -3176,7 +3176,7 @@ void MainWindow::applyExportBoundaryDragAtViewerPoint(const QPoint &viewerPoint)
         return;
     }
 
-    LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     bool changed = false;
 
     switch (exportBoundaryDragHandle) {
@@ -3238,7 +3238,7 @@ void MainWindow::applyExportBoundaryWheelStep(qint32 step)
         return;
     }
 
-    LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     bool changed = false;
     switch (exportBoundarySelectedHandle) {
     case ExportBoundaryHandle::Top: {
@@ -3562,7 +3562,7 @@ void MainWindow::updateFieldTimingDialogue()
     const std::optional<qint32> secondFieldNumber = timingData.hasSecondField
         ? std::optional<qint32>(timingData.secondFieldNumber)
         : std::nullopt;
-    const std::optional<LdDecodeMetaData::VideoParameters> videoParameters = tbcSource.getVideoParameters();
+    const std::optional<TbcMetaData::VideoParameters> videoParameters = tbcSource.getVideoParameters();
 
     fieldTimingDialog->setFieldData(
         tbcSource.getCurrentSourceFilename(),
@@ -3958,7 +3958,7 @@ void MainWindow::updateTimelineMarkers()
     }
     const qint32 totalFrames = qMax<qint32>(1, tbcSource.getNumberOfFrames());
 
-    const LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+    const TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     const qint32 inPosition = sliderPositionForFrame(videoParameters.userEditInSelection);
     const qint32 outPosition = sliderPositionForFrame(videoParameters.userEditOutSelection);
     const QVector<UserNoteMarker> noteMarkers = userNoteMarkersFromVideoParameters(videoParameters, totalFrames);
@@ -3985,7 +3985,7 @@ void MainWindow::updateNotesViewerState()
 
     if (tbcSource.getIsSourceLoaded()) {
         const qint32 totalFrames = qMax<qint32>(1, tbcSource.getNumberOfFrames());
-        const LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+        const TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
         state.totalFrames = totalFrames;
         state.currentFrame = qBound<qint32>(1, currentFrameNumber, totalFrames);
         state.inFrame = videoParameters.userEditInSelection;
@@ -5693,6 +5693,29 @@ void MainWindow::on_actionSave_frame_as_PNG_triggered()
     }
 }
 
+void MainWindow::copyCurrentFrameToClipboard()
+{
+    if (!tbcSource.getIsSourceLoaded()) {
+        statusBar()->showMessage(tr("No source loaded to copy."), 3000);
+        return;
+    }
+
+    const QImage imageToCopy = renderedCurrentImageForExport();
+    if (imageToCopy.isNull()) {
+        statusBar()->showMessage(tr("No display image available to copy."), 3000);
+        return;
+    }
+
+    QClipboard *clipboard = QApplication::clipboard();
+    if (!clipboard) {
+        statusBar()->showMessage(tr("Clipboard is unavailable."), 3000);
+        return;
+    }
+
+    clipboard->setImage(imageToCopy);
+    statusBar()->showMessage(tr("Copied current frame to clipboard."), 3000);
+}
+
 void MainWindow::on_actionCopy_current_display_to_clipboard_triggered()
 {
     if (!tbcSource.getIsSourceLoaded()) {
@@ -5714,20 +5737,7 @@ void MainWindow::on_actionCopy_current_display_to_clipboard_triggered()
         return;
     }
 
-    const QImage imageToCopy = renderedCurrentImageForExport();
-    if (imageToCopy.isNull()) {
-        statusBar()->showMessage(tr("No display image available to copy."), 3000);
-        return;
-    }
-
-    QClipboard *clipboard = QApplication::clipboard();
-    if (!clipboard) {
-        statusBar()->showMessage(tr("Clipboard is unavailable."), 3000);
-        return;
-    }
-
-    clipboard->setImage(imageToCopy);
-    statusBar()->showMessage(tr("Copied current display to clipboard."), 3000);
+    copyCurrentFrameToClipboard();
 }
 
 void MainWindow::on_actionSave_all_modes_as_PNGs_triggered()
@@ -6587,7 +6597,7 @@ void MainWindow::on_posHorizontalSlider_customContextMenuRequested(const QPoint 
     const qint32 currentPlaybackValue = tbcSource.getFieldViewEnabled() ? currentFieldNumber : currentFrameNumber;
     const qint32 currentFramePoint = qBound<qint32>(1, frameForSliderPosition(currentPlaybackValue), totalFrames);
     const QString currentFramePointTimecode = frameToTimecode(currentFramePoint);
-    const LdDecodeMetaData::VideoParameters currentVideoParameters = tbcSource.getVideoParameters();
+    const TbcMetaData::VideoParameters currentVideoParameters = tbcSource.getVideoParameters();
     QVector<UserNoteMarker> noteMarkers = userNoteMarkersFromVideoParameters(currentVideoParameters, totalFrames);
     const qint32 noteIndexAtFrame = noteMarkerIndexForFrame(noteMarkers, framePoint);
     const bool noteAtFrameSet = noteIndexAtFrame >= 0;
@@ -6630,7 +6640,7 @@ void MainWindow::on_posHorizontalSlider_customContextMenuRequested(const QPoint 
         return;
     }
     auto updateMarkerMetadata = [this](const QVector<UserNoteMarker> &updatedNoteMarkers) {
-        LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+        TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
         if (!applyUserNoteMarkersToVideoParameters(videoParameters, updatedNoteMarkers)) {
             return false;
         }
@@ -7230,7 +7240,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
     noteMarkers = normaliseUserNoteMarkers(noteMarkers, totalFrames);
 
-    LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     if (applyUserNoteMarkersToVideoParameters(videoParameters, noteMarkers)) {
         tbcSource.setVideoParameters(videoParameters);
         ui->actionSave_Metadata->setEnabled(true);
@@ -7449,7 +7459,7 @@ void MainWindow::mouseScanLineSelect(qint32 oX, qint32 oY)
 }
 
 // Handle parameters changed signal from the video parameters dialogue
-void MainWindow::videoParametersChangedSignalHandler(const LdDecodeMetaData::VideoParameters &videoParameters)
+void MainWindow::videoParametersChangedSignalHandler(const TbcMetaData::VideoParameters &videoParameters)
 {
     cancelInFlightAsyncFrameRender();
     // Update the VideoParameters in the source
@@ -7474,7 +7484,7 @@ void MainWindow::videoParametersChangedSignalHandler(const LdDecodeMetaData::Vid
 }
 void MainWindow::videoLevelsChangedSignalHandler(qint32 blackLevel, qint32 whiteLevel)
 {
-    LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     videoParameters.black16bIre = blackLevel;
     videoParameters.white16bIre = whiteLevel;
     videoParametersChangedSignalHandler(videoParameters);
@@ -7495,7 +7505,7 @@ void MainWindow::exportRangeSelectionChangedSignalHandler(int inPoint, int outPo
     const qint32 metadataIn = clearMetadataValues ? -1 : clampedIn;
     const qint32 metadataOut = clearMetadataValues ? -1 : clampedOut;
 
-    LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     if (videoParameters.userEditInSelection == metadataIn
         && videoParameters.userEditOutSelection == metadataOut) {
         return;
@@ -7545,7 +7555,7 @@ void MainWindow::chromaDecoderConfigChangedSignalHandler()
     // Set the new configuration
     tbcSource.setChromaConfiguration(palConfig, ntscConfig);
 
-    LdDecodeMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     videoParameters.chromaGain = palConfig.chromaGain;
     videoParameters.chromaPhase = palConfig.chromaPhase;
     videoParameters.lumaNR = (tbcSource.getSystem() == NTSC) ? ntscConfig.yNRLevel : palConfig.yNRLevel;

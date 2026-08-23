@@ -31,7 +31,7 @@
 #include <cmath>
 #include <vector>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 // Limits, zero points and scaling factors (from 0-1) for Y'CbCr colour representations
 // [Poynton ch25 p305] [BT.601-7 sec 2.5.3]
@@ -67,7 +67,7 @@ public:
     // This only sets the member variables it takes as parameters; subclasses
     // must initialise the VideoParameters, compute the active region and
     // resize inputFrame.
-    Encoder(QFile &inputFile, QFile &tbcFile, QFile &chromaFile, LdDecodeMetaData &metaData,
+    Encoder(QFile &inputFile, QFile &tbcFile, QFile &chromaFile, TbcMetaData &metaData,
             int fieldOffset, bool isComponent);
 
     // Encode input RGB/YCbCr stream to TBC.
@@ -79,7 +79,7 @@ protected:
     bool encodeField(qint32 fieldNo);
 
     // Fill in the metadata for a generated field
-    virtual void getFieldMetadata(qint32 fieldNo, LdDecodeMetaData::Field &fieldData) = 0;
+    virtual void getFieldMetadata(qint32 fieldNo, TbcMetaData::Field &fieldData) = 0;
 
     // Encode one line of a field into composite video.
     // outputC includes the chroma signal and burst.
@@ -94,11 +94,11 @@ protected:
     QFile &inputFile;
     QFile &tbcFile;
     QFile &chromaFile;
-    LdDecodeMetaData &metaData;
+    TbcMetaData &metaData;
     int fieldOffset;
     bool isComponent;
 
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::VideoParameters videoParameters;
     qint32 activeWidth;
     qint32 activeHeight;
     qint32 activeLeft;

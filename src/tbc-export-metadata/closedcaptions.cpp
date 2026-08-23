@@ -99,7 +99,7 @@ qint32 sanityCheckData(qint32 dataByte)
 
 // Extract any available CC data and output it in Scenarist Closed Caption format (SCC) V1.0
 // Protocol description:  http://www.theneitherworld.com/mcpoodle/SCC_TOOLS/DOCS/SCC_FORMAT.HTML
-bool writeClosedCaptions(LdDecodeMetaData &metaData, const QString &fileName)
+bool writeClosedCaptions(TbcMetaData &metaData, const QString &fileName)
 {
     const auto videoParameters = metaData.getVideoParameters();
 

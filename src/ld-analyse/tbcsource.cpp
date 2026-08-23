@@ -38,7 +38,7 @@ struct YuvCodeValues {
     double v = 128.0;
 };
 
-YuvRangeScale makeYuvRangeScale(const LdDecodeMetaData::VideoParameters &videoParameters)
+YuvRangeScale makeYuvRangeScale(const TbcMetaData::VideoParameters &videoParameters)
 {
     static constexpr double oneMinusKb = 1.0 - 0.114;
     static constexpr double oneMinusKr = 1.0 - 0.299;
@@ -98,7 +98,7 @@ QString backupFilenameWithTimestampFallback(const QString &inputMetadataFilename
     }
     return backupFilename;
 }
-void applyFullFrameDecodeBounds(LdDecodeMetaData::VideoParameters &videoParameters)
+void applyFullFrameDecodeBounds(TbcMetaData::VideoParameters &videoParameters)
 {
     const qint32 frameHeight = (videoParameters.fieldHeight * 2) - 1;
     constexpr qint32 horizontalMargin = 16;
@@ -121,7 +121,7 @@ void applyFullFrameDecodeBounds(LdDecodeMetaData::VideoParameters &videoParamete
 QImage renderRgbParadeScopeImage(const QVector<QRgb> &rgbData,
                                  qint32 frameWidth,
                                  qint32 frameHeight,
-                                 const LdDecodeMetaData::VideoParameters &videoParameters,
+                                 const TbcMetaData::VideoParameters &videoParameters,
                                  const QSize &targetSize)
 {
     if (frameWidth <= 0 || frameHeight <= 0 || rgbData.size() < (frameWidth * frameHeight)) {
@@ -341,7 +341,7 @@ QImage renderRgbParadeScopeImage(const QVector<QRgb> &rgbData,
 }
 
 QImage renderYuvRangeScopeImage(const ComponentFrame &componentFrame,
-                                const LdDecodeMetaData::VideoParameters &videoParameters,
+                                const TbcMetaData::VideoParameters &videoParameters,
                                 const QSize &targetSize,
                                 const YuvRangeSettings &settings)
 {
@@ -568,7 +568,7 @@ QImage renderYuvRangeScopeImage(const ComponentFrame &componentFrame,
 }
 
 QImage renderYuvRangeOverlayImage(const ComponentFrame &componentFrame,
-                                  const LdDecodeMetaData::VideoParameters &videoParameters,
+                                  const TbcMetaData::VideoParameters &videoParameters,
                                   const YuvRangeSettings &settings,
                                   TbcSource::ViewMode renderViewMode,
                                   bool stretchField,
@@ -746,7 +746,7 @@ bool TbcSource::writeMetadataSnapshot(const QString &metadataFilename, QString *
         return false;
     }
 
-    if (!ldDecodeMetaData.write(metadataFilename)) {
+    if (!metaData.write(metadataFilename)) {
         if (errorMessage) {
             *errorMessage = QStringLiteral("Could not write temporary metadata snapshot.");
         }
@@ -909,8 +909,8 @@ void TbcSource::setFieldOrder(bool _state)
     invalidateImageCache();
     reverseFoOn = _state;
 
-    if (reverseFoOn) ldDecodeMetaData.setIsFirstFieldFirst(false);
-    else ldDecodeMetaData.setIsFirstFieldFirst(true);
+    if (reverseFoOn) metaData.setIsFirstFieldFirst(false);
+    else metaData.setIsFirstFieldFirst(true);
 }
 
 // Method to set if we combine source
@@ -1001,8 +1001,8 @@ void TbcSource::load(qint32 frameNumber, qint32 fieldNumber)
     invalidateImageCache();
 
     // Get the required field numbers
-    firstFieldNumber = ldDecodeMetaData.getFirstFieldNumber(frameNumber);
-    secondFieldNumber = ldDecodeMetaData.getSecondFieldNumber(frameNumber);
+    firstFieldNumber = metaData.getFirstFieldNumber(frameNumber);
+    secondFieldNumber = metaData.getSecondFieldNumber(frameNumber);
 
     // Make sure we have a valid response from the frame determination
     if (firstFieldNumber == -1 || secondFieldNumber == -1) {
@@ -1012,15 +1012,15 @@ void TbcSource::load(qint32 frameNumber, qint32 fieldNumber)
         if (frameNumber != 1) {
             frameNumber--;
 
-            firstFieldNumber = ldDecodeMetaData.getFirstFieldNumber(frameNumber);
-            secondFieldNumber = ldDecodeMetaData.getSecondFieldNumber(frameNumber);
+            firstFieldNumber = metaData.getFirstFieldNumber(frameNumber);
+            secondFieldNumber = metaData.getSecondFieldNumber(frameNumber);
         }
         tbcDebugStream() << "TbcSource::load(): Jumping back one frame due to error";
     }
 
     // Get the field metadata
-    firstField = ldDecodeMetaData.getField(firstFieldNumber);
-    secondField = ldDecodeMetaData.getField(secondFieldNumber);
+    firstField = metaData.getField(firstFieldNumber);
+    secondField = metaData.getField(secondFieldNumber);
 }
 
 // Method to get a QImage from a field or frame number
@@ -1043,7 +1043,7 @@ QImage TbcSource::getImage()
         QPainter imagePainter(&outputImage);
 
         // Get the metadata for the video parameters
-        LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+        TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
 
         // Calculate the frame height
         const auto frameHeight = (videoParameters.fieldHeight * 2) - 1;
@@ -1152,7 +1152,7 @@ QImage TbcSource::getYuvRangeScopeImage(const QSize &targetSize, const YuvRangeS
     }
 
     const ComponentFrame &componentFrame = getComponentFrame();
-    yuvRangeScopeCache = renderYuvRangeScopeImage(componentFrame, ldDecodeMetaData.getVideoParameters(), normalizedTargetSize, settings);
+    yuvRangeScopeCache = renderYuvRangeScopeImage(componentFrame, metaData.getVideoParameters(), normalizedTargetSize, settings);
     yuvRangeScopeCacheValid = true;
     yuvRangeScopeCacheSize = normalizedTargetSize;
     yuvRangeScopeCacheLumaMin = settings.lumaMin;
@@ -1181,7 +1181,7 @@ QImage TbcSource::getYuvRangeOverlayImage(const YuvRangeSettings &settings)
     }
 
     const ComponentFrame &componentFrame = getComponentFrame();
-    yuvRangeOverlayCache = renderYuvRangeOverlayImage(componentFrame, ldDecodeMetaData.getVideoParameters(), settings, viewMode, stretchFieldOn, loadedFieldNumber);
+    yuvRangeOverlayCache = renderYuvRangeOverlayImage(componentFrame, metaData.getVideoParameters(), settings, viewMode, stretchFieldOn, loadedFieldNumber);
     yuvRangeOverlayCacheValid = true;
     yuvRangeOverlayCacheLumaMin = settings.lumaMin;
     yuvRangeOverlayCacheLumaMax = settings.lumaMax;
@@ -1198,35 +1198,35 @@ QImage TbcSource::getYuvRangeOverlayImage(const YuvRangeSettings &settings)
 qint32 TbcSource::getNumberOfFrames() const
 {
     if (!sourceReady) return 0;
-    return ldDecodeMetaData.getNumberOfFrames();
+    return metaData.getNumberOfFrames();
 }
 
 // Method to get the number of available fields
 qint32 TbcSource::getNumberOfFields() const
 {
     if (!sourceReady) return 0;
-    return ldDecodeMetaData.getNumberOfFields();
+    return metaData.getNumberOfFields();
 }
 
 // Method returns true if the TBC source is anamorphic (false for 4:3)
 bool TbcSource::getIsWidescreen() const
 {
     if (!sourceReady) return false;
-    return ldDecodeMetaData.getVideoParameters().isWidescreen;
+    return metaData.getVideoParameters().isWidescreen;
 }
 
 // Return the source's VideoSystem
 VideoSystem TbcSource::getSystem() const
 {
     if (!sourceReady) return NTSC;
-    return ldDecodeMetaData.getVideoParameters().system;
+    return metaData.getVideoParameters().system;
 }
 
 // Return the source's VideoSystem description
 QString TbcSource::getSystemDescription() const
 {
     if (!sourceReady) return "None";
-    return ldDecodeMetaData.getVideoSystemDescription();
+    return metaData.getVideoSystemDescription();
 }
 
 // Method to get the frame height in scanlines
@@ -1235,7 +1235,7 @@ qint32 TbcSource::getFrameHeight() const
     if (!sourceReady) return 0;
 
     // Get the metadata for the fields
-    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
 
     // Calculate the frame height
     return (videoParameters.fieldHeight * 2) - 1;
@@ -1247,7 +1247,7 @@ qint32 TbcSource::getFrameWidth() const
     if (!sourceReady) return 0;
 
     // Get the metadata for the fields
-    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
 
     // Return the frame width
     return (videoParameters.fieldWidth);
@@ -1306,19 +1306,19 @@ const ComponentFrame &TbcSource::getComponentFrame()
 }
 
 // Get the VideoParameters for the current source
-const LdDecodeMetaData::VideoParameters &TbcSource::getVideoParameters() const
+const TbcMetaData::VideoParameters &TbcSource::getVideoParameters() const
 {
-    return ldDecodeMetaData.getVideoParameters();
+    return metaData.getVideoParameters();
 }
 
 // Update the VideoParameters for the current source
-void TbcSource::setVideoParameters(const LdDecodeMetaData::VideoParameters &videoParameters)
+void TbcSource::setVideoParameters(const TbcMetaData::VideoParameters &videoParameters)
 {
     ntscColour.requestNnTransform3DCancel();
     invalidateImageCache();
 
     // Update the metadata
-    ldDecodeMetaData.setVideoParameters(videoParameters);
+    metaData.setVideoParameters(videoParameters);
 
     // Reconfigure the chroma decoder
     configureChromaDecoder();
@@ -1331,7 +1331,7 @@ TbcSource::ScanLineData TbcSource::getScanLineData(qint32 scanLine)
     if (loadedFrameNumber == -1) return ScanLineData();
 
     ScanLineData scanLineData;
-    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
     auto frameLine = 0;
     bool isFirstField = true;
 
@@ -1393,7 +1393,7 @@ TbcSource::ScanLineData TbcSource::getScanLineData(qint32 scanLine)
     }
 
     // Set the system and line number
-    scanLineData.systemDescription = ldDecodeMetaData.getVideoSystemDescription();
+    scanLineData.systemDescription = metaData.getVideoSystemDescription();
     scanLineData.lineNumber = LineNumber::fromFrame1(scanLine, videoParameters.system);
     const LineNumber &lineNumber = scanLineData.lineNumber;
 
@@ -1503,7 +1503,7 @@ TbcSource::FieldTimingData TbcSource::getFieldTimingData()
         return timingData;
     }
 
-    const LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    const TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
     if (videoParameters.fieldWidth <= 0) {
         return timingData;
     }
@@ -1626,7 +1626,7 @@ VitcDecoder::Vitc TbcSource::getFrameVitc()
 {
     if (loadedFrameNumber == -1) return VitcDecoder::Vitc();
 
-    const VideoSystem system = ldDecodeMetaData.getVideoParameters().system;
+    const VideoSystem system = metaData.getVideoParameters().system;
     if (firstField.vitc.inUse) return vitcDecoder.decode(firstField.vitc.vitcData, system);
     if (secondField.vitc.inUse) return vitcDecoder.decode(secondField.vitc.vitcData, system);
 
@@ -1824,8 +1824,8 @@ void TbcSource::invalidateImageCache()
 void TbcSource::configureChromaDecoder()
 {
     // Configure the chroma decoder
-    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
-    LdDecodeMetaData::VideoParameters decodeVideoParameters = videoParameters;
+    TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
+    TbcMetaData::VideoParameters decodeVideoParameters = videoParameters;
     const bool applyHybridFullFrameBounds = (chromaDecodeMode == HYBRID_CHROMA_MODE);
     if (outputConfiguration.fullFrameDecode || applyHybridFullFrameBounds) {
         applyFullFrameDecodeBounds(decodeVideoParameters);
@@ -1855,7 +1855,7 @@ void TbcSource::configureChromaDecoder()
     outputWriter.updateConfiguration(videoParameters, outputConfiguration);
 }
 
-void TbcSource::applyChromaSettingsFromMetadata(const LdDecodeMetaData::VideoParameters &videoParameters)
+void TbcSource::applyChromaSettingsFromMetadata(const TbcMetaData::VideoParameters &videoParameters)
 {
     if (videoParameters.chromaGain >= 0.0) {
         palConfiguration.chromaGain = videoParameters.chromaGain;
@@ -1947,19 +1947,19 @@ void TbcSource::loadInputFields()
 
     if (sourceMode == CHROMA_SOURCE) {
         // Load chroma directly into inputFields
-        SourceField::loadFields(chromaSourceVideo, ldDecodeMetaData,
+        SourceField::loadFields(chromaSourceVideo, metaData,
                                 loadedFrameNumber, 1, lookBehind, lookAhead,
                                 inputFields, inputStartIndex, inputEndIndex);
     } else {
         // Load the only source, or luma, into inputFields
-        SourceField::loadFields(sourceVideo, ldDecodeMetaData,
+        SourceField::loadFields(sourceVideo, metaData,
                                 loadedFrameNumber, 1, lookBehind, lookAhead,
                                 inputFields, inputStartIndex, inputEndIndex);
     }
 
     if (sourceMode == BOTH_SOURCES) {
         // Load chroma into chromaInputFields
-        SourceField::loadFields(chromaSourceVideo, ldDecodeMetaData,
+        SourceField::loadFields(chromaSourceVideo, metaData,
                                 loadedFrameNumber, 1, lookBehind, lookAhead,
                                 chromaInputFields, inputStartIndex, inputEndIndex);
 		if(combine)
@@ -2017,8 +2017,8 @@ void TbcSource::decodeFrame()
 		
 		for (qint32 fieldIndex = inputStartIndex, frameIndex = 0; fieldIndex < inputEndIndex; fieldIndex += 2, frameIndex++)
 		{
-			//isMono ? cFrames[frameIndex].init(ldDecodeMetaData.getVideoParameters(), false);
-			componentFrames[frameIndex].init(ldDecodeMetaData.getVideoParameters(), false);
+			//isMono ? cFrames[frameIndex].init(metaData.getVideoParameters(), false);
+			componentFrames[frameIndex].init(metaData.getVideoParameters(), false);
 			componentFrames[frameIndex].setY(*yFrames[frameIndex].getY());
 			if(!isMono){	
 				componentFrames[frameIndex].setU(*cFrames[frameIndex].getU());
@@ -2055,7 +2055,7 @@ void TbcSource::decodeFrame()
 QImage TbcSource::generateQImage(ViewMode renderViewMode, const QSize &targetSize)
 {
     // Get the metadata for the video parameters
-    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
 
     // Calculate the frame height
     const qint32 frameHeight = (videoParameters.fieldHeight * 2) - 1;
@@ -2205,17 +2205,17 @@ void TbcSource::generateData()
     blackSnrGraphData.clear();
     whiteSnrGraphData.clear();
 
-    dropoutGraphData.resize(ldDecodeMetaData.getNumberOfFrames());
-    visibleDropoutGraphData.resize(ldDecodeMetaData.getNumberOfFrames());
-    blackSnrGraphData.resize(ldDecodeMetaData.getNumberOfFrames());
-    whiteSnrGraphData.resize(ldDecodeMetaData.getNumberOfFrames());
+    dropoutGraphData.resize(metaData.getNumberOfFrames());
+    visibleDropoutGraphData.resize(metaData.getNumberOfFrames());
+    blackSnrGraphData.resize(metaData.getNumberOfFrames());
+    whiteSnrGraphData.resize(metaData.getNumberOfFrames());
 
     bool ignoreChapters = false;
     qint32 lastChapter = -1;
     qint32 giveUpCounter = 0;
     chapterMap.clear();
 
-    const qint32 numFrames = ldDecodeMetaData.getNumberOfFrames();
+    const qint32 numFrames = metaData.getNumberOfFrames();
     for (qint32 frameNumber = 0; frameNumber < numFrames; frameNumber++) {
         double doLength = 0;
         double visibleDoLength = 0;
@@ -2227,8 +2227,8 @@ void TbcSource::generateData()
         double blackSnrPoints = 0;
         double whiteSnrPoints = 0;
 
-        const LdDecodeMetaData::Field &firstField = ldDecodeMetaData.getField(ldDecodeMetaData.getFirstFieldNumber(frameNumber + 1));
-        const LdDecodeMetaData::Field &secondField = ldDecodeMetaData.getField(ldDecodeMetaData.getSecondFieldNumber(frameNumber + 1));
+        const TbcMetaData::Field &firstField = metaData.getField(metaData.getFirstFieldNumber(frameNumber + 1));
+        const TbcMetaData::Field &secondField = metaData.getField(metaData.getSecondFieldNumber(frameNumber + 1));
 
         // Get the first field DOs
         if (firstField.dropOuts.size() > 0) {
@@ -2247,7 +2247,7 @@ void TbcSource::generateData()
         }
 
         // Get the first field visible DOs
-        const LdDecodeMetaData::VideoParameters &videoParameters = ldDecodeMetaData.getVideoParameters();
+        const TbcMetaData::VideoParameters &videoParameters = metaData.getVideoParameters();
 
         if (firstField.dropOuts.size() > 0) {
             // Calculate the total length of the visible dropouts
@@ -2483,7 +2483,7 @@ bool TbcSource::startBackgroundLoad(QString sourceFilename)
         if (!QFileInfo::exists(candidate)) {
             continue;
         }
-        if (ldDecodeMetaData.read(candidate)) {
+        if (metaData.read(candidate)) {
             metadataFileName = candidate;
             break;
         }
@@ -2504,7 +2504,7 @@ bool TbcSource::startBackgroundLoad(QString sourceFilename)
     }
 
     // Get the video parameters from the metadata
-    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
     applyChromaSettingsFromMetadata(videoParameters);
     metadataOnlyFrame.init(videoParameters);
 
@@ -2575,7 +2575,7 @@ bool TbcSource::startBackgroundLoadMetadata(QString metadataFilename, QString di
     tbcDebugStream() << "TbcSource::startBackgroundLoadMetadata(): Processing metadata...";
     emit busy("Processing metadata...");
 
-    if (!ldDecodeMetaData.read(metadataFilename)) {
+    if (!metaData.read(metadataFilename)) {
         qWarning() << "Open metadata failed for filename" << metadataFilename;
         currentSourceFilename.clear();
         lastIOError = "Could not load metadata file";
@@ -2583,7 +2583,7 @@ bool TbcSource::startBackgroundLoadMetadata(QString metadataFilename, QString di
     }
 
     // Get the video parameters from the metadata
-    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
     applyChromaSettingsFromMetadata(videoParameters);
     metadataOnlyFrame.init(videoParameters);
 
@@ -2618,7 +2618,7 @@ bool TbcSource::startBackgroundSave(QString metadataFilename)
 
     // Write the metadata out to a new temporary file.
     QString newMetadataFilename = metadataFilename + ".new";
-    if (!ldDecodeMetaData.write(newMetadataFilename)) {
+    if (!metaData.write(newMetadataFilename)) {
         // Writing failed
         lastIOError = "Could not write to new metadata file";
         return false;

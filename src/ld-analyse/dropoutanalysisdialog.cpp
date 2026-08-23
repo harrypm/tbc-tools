@@ -13,6 +13,9 @@
 
 #include <QPen>
 #include <QDebug>
+#include <QShortcut>
+#include <QApplication>
+#include <QClipboard>
 #include <QTimer>
 #include <cmath>
 
@@ -36,6 +39,22 @@ DropoutAnalysisDialog::DropoutAnalysisDialog(QWidget *parent) :
     plotMarker = plot->addMarker();
     plotMarker->setStyle(PlotMarker::VLine);
     plotMarker->setPen(QPen(Qt::blue, 2));
+
+    // Enable hover readout: snap a crosshair to the nearest data point and show
+    // its exact value (formatter produces "Frame N: M dots").
+    plot->setHoverEnabled(true);
+    plot->setHoverFormatter([](const QPointF &p, const PlotSeries *) -> QString {
+        return DropoutAnalysisDialog::tr("Frame %1: %2 dots")
+            .arg(qRound(p.x())).arg(qRound(p.y()));
+    });
+
+    // Ctrl+C copies this graph (as a PNG) to the clipboard.
+    auto *copyShortcut = new QShortcut(QKeySequence::Copy, this);
+    connect(copyShortcut, &QShortcut::activated, this, [this]() {
+        if (QClipboard *clipboard = QApplication::clipboard()) {
+            clipboard->setImage(plot->grab().toImage());
+        }
+    });
 
     // Set the maximum Y scale to 0
     maxY = 0;

@@ -26,7 +26,7 @@
 #define WHITEFLAG_H
 
 #include "sourcevideo.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 // Decoder for NTSC LaserDisc white flag lines.
 // Specified in IEC 60587-1986 section 10.2.4.
@@ -34,8 +34,8 @@ class WhiteFlag
 {
 public:
     bool decodeLine(const SourceVideo::Data& lineData,
-                    const LdDecodeMetaData::VideoParameters& videoParameters,
-                    LdDecodeMetaData::Field& fieldMetadata);
+                    const TbcMetaData::VideoParameters& videoParameters,
+                    TbcMetaData::Field& fieldMetadata);
 };
 
 #endif // WHITEFLAG_H

@@ -41,8 +41,8 @@ void DropOutCorrect::run()
     QVector<qint32> secondFieldSeqNo;
     QVector<SourceVideo::Data> firstSourceField;
     QVector<SourceVideo::Data> secondSourceField;
-    QVector<LdDecodeMetaData::Field> firstFieldMetadata;
-    QVector<LdDecodeMetaData::Field> secondFieldMetadata;
+    QVector<TbcMetaData::Field> firstFieldMetadata;
+    QVector<TbcMetaData::Field> secondFieldMetadata;
     bool reverse, intraField, overCorrect;
     QVector<qint32> availableSourcesForFrame;
     QVector<double> sourceFrameQuality;
@@ -156,7 +156,7 @@ void DropOutCorrect::correctField(const QVector<QVector<DropOutLocation>> &thisF
 }
 
 // Populate the dropouts vector
-QVector<DropOutCorrect::DropOutLocation> DropOutCorrect::populateDropoutsVector(LdDecodeMetaData::Field field, bool overCorrect)
+QVector<DropOutCorrect::DropOutLocation> DropOutCorrect::populateDropoutsVector(TbcMetaData::Field field, bool overCorrect)
 {
     QVector<DropOutLocation> fieldDropOuts;
 

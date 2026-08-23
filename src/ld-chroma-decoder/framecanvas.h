@@ -27,7 +27,7 @@
 
 #include <QtGlobal>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include "componentframe.h"
 
@@ -36,7 +36,7 @@ class FrameCanvas {
 public:
     // componentFrame is the frame to draw upon, and videoParameters gives its parameters.
     // (Both parameters are captured by reference, not copied.)
-    FrameCanvas(ComponentFrame &componentFrame, const LdDecodeMetaData::VideoParameters &videoParameters);
+    FrameCanvas(ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters);
 
     // Return the edges of the active area.
     qint32 top();
@@ -68,7 +68,7 @@ private:
     double *yData, *uData, *vData;
     qint32 width, height;
     double ireRange, blackIre;
-    const LdDecodeMetaData::VideoParameters &videoParameters;
+    const TbcMetaData::VideoParameters &videoParameters;
 };
 
 #endif

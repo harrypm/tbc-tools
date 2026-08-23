@@ -28,7 +28,7 @@
 #include <QtGlobal>
 #include <array>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 class VitcDecoder
 {

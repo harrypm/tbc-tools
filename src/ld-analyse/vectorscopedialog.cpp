@@ -183,7 +183,7 @@ void drawTargetBox(QPainter &painter, const QPointF &centerPoint, const QColor &
 }
 
 void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 halfSize, qint32 radius,
-                                 const LdDecodeMetaData::VideoParameters &videoParameters, bool graticule75)
+                                 const TbcMetaData::VideoParameters &videoParameters, bool graticule75)
 {
     scopePainter.save();
     scopePainter.setRenderHint(QPainter::Antialiasing, true);
@@ -287,7 +287,7 @@ VectorscopeDialog::~VectorscopeDialog()
     delete ui;
 }
 
-void VectorscopeDialog::showTraceImage(const ComponentFrame &componentFrame, const LdDecodeMetaData::VideoParameters &videoParameters,
+void VectorscopeDialog::showTraceImage(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters,
                                        const TbcSource::ViewMode& viewMode, const bool isFirstField)
 {
     tbcDebugStream() << "VectorscopeDialog::showTraceImage(): Called";
@@ -462,7 +462,7 @@ bool VectorscopeDialog::isFullAreaModeSelected() const
     return areaModeFullRadioButton->isChecked();
 }
 
-QImage VectorscopeDialog::getTraceImage(const ComponentFrame &componentFrame, const LdDecodeMetaData::VideoParameters &videoParameters)
+QImage VectorscopeDialog::getTraceImage(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters)
 {
     // Scope size and scale
     constexpr qint32 SIZE = 1024;
@@ -748,7 +748,7 @@ void VectorscopeDialog::initialiseAdvancedControls()
     ui->frame->setMinimumWidth(qMax(ui->frame->minimumWidth(), preferredControlsWidth));
 }
 
-void VectorscopeDialog::updateAreaControlState(const ComponentFrame &componentFrame, const LdDecodeMetaData::VideoParameters &videoParameters)
+void VectorscopeDialog::updateAreaControlState(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters)
 {
 
     const qint32 frameWidth = componentFrame.getWidth();

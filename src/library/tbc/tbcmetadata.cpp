@@ -1,5 +1,5 @@
 /******************************************************************************
- * lddecodemetadata.cpp
+ * TbcMetaData.cpp
  * tbc-tools TBC library
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -10,7 +10,7 @@
  * This file is part of tbc-tools.
  ******************************************************************************/
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include "sqliteio.h"
 #include "jsonio.h"
@@ -77,7 +77,7 @@ static constexpr VideoSystemDefaults VIDEO_SYSTEM_DEFAULTS[] = {
 };
 
 // Return appropriate defaults for the selected video system
-static const VideoSystemDefaults &getSystemDefaults(const LdDecodeMetaData::VideoParameters &videoParameters)
+static const VideoSystemDefaults &getSystemDefaults(const TbcMetaData::VideoParameters &videoParameters)
 {
     return VIDEO_SYSTEM_DEFAULTS[videoParameters.system];
 }
@@ -166,7 +166,7 @@ static bool isJsonMetadataFilename(const QString &fileName)
 }
 
 // Read VBI from SQLite
-void LdDecodeMetaData::Vbi::read(SqliteReader &reader, int captureId, int fieldId)
+void TbcMetaData::Vbi::read(SqliteReader &reader, int captureId, int fieldId)
 {
     int vbi0, vbi1, vbi2;
     if (reader.readFieldVbi(captureId, fieldId, vbi0, vbi1, vbi2)) {
@@ -180,7 +180,7 @@ void LdDecodeMetaData::Vbi::read(SqliteReader &reader, int captureId, int fieldI
 }
 
 // Write VBI to SQLite
-void LdDecodeMetaData::Vbi::write(SqliteWriter &writer, int captureId, int fieldId) const
+void TbcMetaData::Vbi::write(SqliteWriter &writer, int captureId, int fieldId) const
 {
     if (inUse) {
         writer.writeFieldVbi(captureId, fieldId, vbiData[0], vbiData[1], vbiData[2]);
@@ -188,19 +188,19 @@ void LdDecodeMetaData::Vbi::write(SqliteWriter &writer, int captureId, int field
 }
 
 // Read VideoParameters from SQLite (handled in main read method)
-void LdDecodeMetaData::VideoParameters::read(SqliteReader &reader, int captureId)
+void TbcMetaData::VideoParameters::read(SqliteReader &reader, int captureId)
 {
-    // This method is no longer used - data is read directly in LdDecodeMetaData::read
+    // This method is no longer used - data is read directly in TbcMetaData::read
 }
 
 // Write VideoParameters to SQLite (handled in main write method)
-void LdDecodeMetaData::VideoParameters::write(SqliteWriter &writer, int captureId) const
+void TbcMetaData::VideoParameters::write(SqliteWriter &writer, int captureId) const
 {
-    // This method is no longer used - data is written directly in LdDecodeMetaData::write
+    // This method is no longer used - data is written directly in TbcMetaData::write
 }
 
 // Read VitsMetrics from SQLite
-void LdDecodeMetaData::VitsMetrics::read(SqliteReader &reader, int captureId, int fieldId)
+void TbcMetaData::VitsMetrics::read(SqliteReader &reader, int captureId, int fieldId)
 {
     double wSnr, bPsnr;
     if (reader.readFieldVitsMetrics(captureId, fieldId, wSnr, bPsnr)) {
@@ -213,7 +213,7 @@ void LdDecodeMetaData::VitsMetrics::read(SqliteReader &reader, int captureId, in
 }
 
 // Write VitsMetrics to SQLite
-void LdDecodeMetaData::VitsMetrics::write(SqliteWriter &writer, int captureId, int fieldId) const
+void TbcMetaData::VitsMetrics::write(SqliteWriter &writer, int captureId, int fieldId) const
 {
     if (inUse) {
         writer.writeFieldVitsMetrics(captureId, fieldId, wSNR, bPSNR);
@@ -221,7 +221,7 @@ void LdDecodeMetaData::VitsMetrics::write(SqliteWriter &writer, int captureId, i
 }
 
 // Read Ntsc from SQLite (data is read from main field record)
-void LdDecodeMetaData::Ntsc::read(SqliteReader &reader, int captureId, int fieldId, ClosedCaption &closedCaption)
+void TbcMetaData::Ntsc::read(SqliteReader &reader, int captureId, int fieldId, ClosedCaption &closedCaption)
 {
     // NTSC data is read directly from the field_record table in readFields
     // Closed caption is read separately
@@ -229,14 +229,14 @@ void LdDecodeMetaData::Ntsc::read(SqliteReader &reader, int captureId, int field
 }
 
 // Write Ntsc to SQLite (data is written to main field record)
-void LdDecodeMetaData::Ntsc::write(SqliteWriter &writer, int captureId, int fieldId) const
+void TbcMetaData::Ntsc::write(SqliteWriter &writer, int captureId, int fieldId) const
 {
     // NTSC data is written directly to the field_record table in Field::write
     // This method is essentially a no-op since the data is handled elsewhere
 }
 
 // Read Vitc from SQLite
-void LdDecodeMetaData::Vitc::read(SqliteReader &reader, int captureId, int fieldId)
+void TbcMetaData::Vitc::read(SqliteReader &reader, int captureId, int fieldId)
 {
     int vitcDataArray[8];
     if (reader.readFieldVitc(captureId, fieldId, vitcDataArray)) {
@@ -250,7 +250,7 @@ void LdDecodeMetaData::Vitc::read(SqliteReader &reader, int captureId, int field
 }
 
 // Write Vitc to SQLite
-void LdDecodeMetaData::Vitc::write(SqliteWriter &writer, int captureId, int fieldId) const
+void TbcMetaData::Vitc::write(SqliteWriter &writer, int captureId, int fieldId) const
 {
     if (inUse) {
         int vitcDataArray[8];
@@ -262,7 +262,7 @@ void LdDecodeMetaData::Vitc::write(SqliteWriter &writer, int captureId, int fiel
 }
 
 // Read ClosedCaption from SQLite
-void LdDecodeMetaData::ClosedCaption::read(SqliteReader &reader, int captureId, int fieldId)
+void TbcMetaData::ClosedCaption::read(SqliteReader &reader, int captureId, int fieldId)
 {
     int data0Val, data1Val;
     if (reader.readFieldClosedCaption(captureId, fieldId, data0Val, data1Val)) {
@@ -275,7 +275,7 @@ void LdDecodeMetaData::ClosedCaption::read(SqliteReader &reader, int captureId, 
 }
 
 // Write ClosedCaption to SQLite
-void LdDecodeMetaData::ClosedCaption::write(SqliteWriter &writer, int captureId, int fieldId) const
+void TbcMetaData::ClosedCaption::write(SqliteWriter &writer, int captureId, int fieldId) const
 {
     if (inUse) {
         writer.writeFieldClosedCaption(captureId, fieldId, data0, data1);
@@ -283,25 +283,25 @@ void LdDecodeMetaData::ClosedCaption::write(SqliteWriter &writer, int captureId,
 }
 
 // Read PcmAudioParameters from SQLite (handled in main read method)
-void LdDecodeMetaData::PcmAudioParameters::read(SqliteReader &reader, int captureId)
+void TbcMetaData::PcmAudioParameters::read(SqliteReader &reader, int captureId)
 {
-    // This method is no longer used - data is read directly in LdDecodeMetaData::read
+    // This method is no longer used - data is read directly in TbcMetaData::read
 }
 
 // Write PcmAudioParameters to SQLite (handled in main write method)
-void LdDecodeMetaData::PcmAudioParameters::write(SqliteWriter &writer, int captureId) const
+void TbcMetaData::PcmAudioParameters::write(SqliteWriter &writer, int captureId) const
 {
-    // This method is no longer used - data is written directly in LdDecodeMetaData::write
+    // This method is no longer used - data is written directly in TbcMetaData::write
 }
 
 // Read Field from SQLite (data is read in readFields)
-void LdDecodeMetaData::Field::read(SqliteReader &reader, int captureId)
+void TbcMetaData::Field::read(SqliteReader &reader, int captureId)
 {
-    // This method is no longer used - data is read directly in LdDecodeMetaData::readFields
+    // This method is no longer used - data is read directly in TbcMetaData::readFields
 }
 
 // Write Field to SQLite
-void LdDecodeMetaData::Field::write(SqliteWriter &writer, int captureId) const
+void TbcMetaData::Field::write(SqliteWriter &writer, int captureId) const
 {
     // Convert seqNo (1-indexed) to fieldId (0-indexed)
     int fieldId = seqNo - 1;
@@ -322,7 +322,7 @@ void LdDecodeMetaData::Field::write(SqliteWriter &writer, int captureId) const
 }
 
 // Read Vbi from JSON
-void LdDecodeMetaData::Vbi::read(JsonReader &reader)
+void TbcMetaData::Vbi::read(JsonReader &reader)
 {
     reader.beginObject();
 
@@ -353,7 +353,7 @@ void LdDecodeMetaData::Vbi::read(JsonReader &reader)
 }
 
 // Write Vbi to JSON
-void LdDecodeMetaData::Vbi::write(JsonWriter &writer) const
+void TbcMetaData::Vbi::write(JsonWriter &writer) const
 {
     assert(inUse);
 
@@ -372,7 +372,7 @@ void LdDecodeMetaData::Vbi::write(JsonWriter &writer) const
 }
 
 // Read VideoParameters from JSON
-void LdDecodeMetaData::VideoParameters::read(JsonReader &reader)
+void TbcMetaData::VideoParameters::read(JsonReader &reader)
 {
     bool isSourcePal = false;
     std::string systemString = "";
@@ -455,7 +455,7 @@ void LdDecodeMetaData::VideoParameters::read(JsonReader &reader)
 }
 
 // Write VideoParameters to JSON
-void LdDecodeMetaData::VideoParameters::write(JsonWriter &writer) const
+void TbcMetaData::VideoParameters::write(JsonWriter &writer) const
 {
     assert(isValid);
 
@@ -539,7 +539,7 @@ void LdDecodeMetaData::VideoParameters::write(JsonWriter &writer) const
 }
 
 // Read VitsMetrics from JSON
-void LdDecodeMetaData::VitsMetrics::read(JsonReader &reader)
+void TbcMetaData::VitsMetrics::read(JsonReader &reader)
 {
     reader.beginObject();
 
@@ -556,7 +556,7 @@ void LdDecodeMetaData::VitsMetrics::read(JsonReader &reader)
 }
 
 // Write VitsMetrics to JSON
-void LdDecodeMetaData::VitsMetrics::write(JsonWriter &writer) const
+void TbcMetaData::VitsMetrics::write(JsonWriter &writer) const
 {
     assert(inUse);
 
@@ -570,7 +570,7 @@ void LdDecodeMetaData::VitsMetrics::write(JsonWriter &writer) const
 }
 
 // Read Ntsc from JSON
-void LdDecodeMetaData::Ntsc::read(JsonReader &reader, ClosedCaption &closedCaption)
+void TbcMetaData::Ntsc::read(JsonReader &reader, ClosedCaption &closedCaption)
 {
     reader.beginObject();
 
@@ -600,7 +600,7 @@ void LdDecodeMetaData::Ntsc::read(JsonReader &reader, ClosedCaption &closedCapti
 }
 
 // Write Ntsc to JSON
-void LdDecodeMetaData::Ntsc::write(JsonWriter &writer) const
+void TbcMetaData::Ntsc::write(JsonWriter &writer) const
 {
     assert(inUse);
 
@@ -618,7 +618,7 @@ void LdDecodeMetaData::Ntsc::write(JsonWriter &writer) const
 }
 
 // Read Vitc from JSON
-void LdDecodeMetaData::Vitc::read(JsonReader &reader)
+void TbcMetaData::Vitc::read(JsonReader &reader)
 {
     reader.beginObject();
 
@@ -649,7 +649,7 @@ void LdDecodeMetaData::Vitc::read(JsonReader &reader)
 }
 
 // Write Vitc to JSON
-void LdDecodeMetaData::Vitc::write(JsonWriter &writer) const
+void TbcMetaData::Vitc::write(JsonWriter &writer) const
 {
     assert(inUse);
 
@@ -668,7 +668,7 @@ void LdDecodeMetaData::Vitc::write(JsonWriter &writer) const
 }
 
 // Read ClosedCaption from JSON
-void LdDecodeMetaData::ClosedCaption::read(JsonReader &reader)
+void TbcMetaData::ClosedCaption::read(JsonReader &reader)
 {
     reader.beginObject();
 
@@ -685,7 +685,7 @@ void LdDecodeMetaData::ClosedCaption::read(JsonReader &reader)
 }
 
 // Write ClosedCaption to JSON
-void LdDecodeMetaData::ClosedCaption::write(JsonWriter &writer) const
+void TbcMetaData::ClosedCaption::write(JsonWriter &writer) const
 {
     assert(inUse);
 
@@ -703,7 +703,7 @@ void LdDecodeMetaData::ClosedCaption::write(JsonWriter &writer) const
 }
 
 // Read PcmAudioParameters from JSON
-void LdDecodeMetaData::PcmAudioParameters::read(JsonReader &reader)
+void TbcMetaData::PcmAudioParameters::read(JsonReader &reader)
 {
     reader.beginObject();
 
@@ -722,7 +722,7 @@ void LdDecodeMetaData::PcmAudioParameters::read(JsonReader &reader)
 }
 
 // Write PcmAudioParameters to JSON
-void LdDecodeMetaData::PcmAudioParameters::write(JsonWriter &writer) const
+void TbcMetaData::PcmAudioParameters::write(JsonWriter &writer) const
 {
     assert(isValid);
 
@@ -738,7 +738,7 @@ void LdDecodeMetaData::PcmAudioParameters::write(JsonWriter &writer) const
 }
 
 // Read Field from JSON
-void LdDecodeMetaData::Field::read(JsonReader &reader)
+void TbcMetaData::Field::read(JsonReader &reader)
 {
     reader.beginObject();
 
@@ -768,7 +768,7 @@ void LdDecodeMetaData::Field::read(JsonReader &reader)
 }
 
 // Write Field to JSON
-void LdDecodeMetaData::Field::write(JsonWriter &writer) const
+void TbcMetaData::Field::write(JsonWriter &writer) const
 {
     writer.beginObject();
 
@@ -824,13 +824,13 @@ void LdDecodeMetaData::Field::write(JsonWriter &writer) const
     writer.endObject();
 }
 
-LdDecodeMetaData::LdDecodeMetaData()
+TbcMetaData::TbcMetaData()
 {
     clear();
 }
 
 // Reset the metadata to the defaults
-void LdDecodeMetaData::clear()
+void TbcMetaData::clear()
 {
     // Default to the standard still-frame field order (of first field first)
     isFirstFieldFirst = true;
@@ -843,7 +843,7 @@ void LdDecodeMetaData::clear()
 }
 
 // Read all metadata from SQLite file
-bool LdDecodeMetaData::read(QString fileName)
+bool TbcMetaData::read(QString fileName)
 {
     if (isJsonMetadataFilename(fileName)) {
         std::ifstream jsonFile(fileName.toStdString());
@@ -1022,7 +1022,7 @@ bool LdDecodeMetaData::read(QString fileName)
 }
 
 // Write all metadata out to an SQLite file
-bool LdDecodeMetaData::write(QString fileName) const
+bool TbcMetaData::write(QString fileName) const
 {
     if (isJsonMetadataFilename(fileName)) {
         std::ofstream jsonFile(fileName.toStdString());
@@ -1217,7 +1217,7 @@ bool LdDecodeMetaData::write(QString fileName) const
 }
 
 // Read array of Fields from SQLite (optimized version)
-void LdDecodeMetaData::readFields(SqliteReader &reader, int captureId)
+void TbcMetaData::readFields(SqliteReader &reader, int captureId)
 {
     QSqlQuery fieldsQuery;
     if (!reader.readFields(captureId, fieldsQuery)) {
@@ -1340,7 +1340,7 @@ void LdDecodeMetaData::readFields(SqliteReader &reader, int captureId)
 }
 
 // Write array of Fields to SQLite
-void LdDecodeMetaData::writeFields(SqliteWriter &writer, int captureId) const
+void TbcMetaData::writeFields(SqliteWriter &writer, int captureId) const
 {
     for (const Field &field : fields) {
         field.write(writer, captureId);
@@ -1348,7 +1348,7 @@ void LdDecodeMetaData::writeFields(SqliteWriter &writer, int captureId) const
 }
 
 // Read array of Fields from JSON
-void LdDecodeMetaData::readFields(JsonReader &reader)
+void TbcMetaData::readFields(JsonReader &reader)
 {
     reader.beginArray();
 
@@ -1362,7 +1362,7 @@ void LdDecodeMetaData::readFields(JsonReader &reader)
 }
 
 // Write array of Fields to JSON
-void LdDecodeMetaData::writeFields(JsonWriter &writer) const
+void TbcMetaData::writeFields(JsonWriter &writer) const
 {
     writer.beginArray();
 
@@ -1375,7 +1375,7 @@ void LdDecodeMetaData::writeFields(JsonWriter &writer) const
 }
 
 // This method returns the videoParameters metadata
-const LdDecodeMetaData::VideoParameters &LdDecodeMetaData::getVideoParameters() const
+const TbcMetaData::VideoParameters &TbcMetaData::getVideoParameters() const
 {
     if (!videoParameters.isValid) {
         throw std::runtime_error("VideoParameters not initialized - metadata file may not have been read successfully");
@@ -1384,14 +1384,14 @@ const LdDecodeMetaData::VideoParameters &LdDecodeMetaData::getVideoParameters() 
 }
 
 // This method sets the videoParameters metadata
-void LdDecodeMetaData::setVideoParameters(const LdDecodeMetaData::VideoParameters &_videoParameters)
+void TbcMetaData::setVideoParameters(const TbcMetaData::VideoParameters &_videoParameters)
 {
     videoParameters = _videoParameters;
     videoParameters.isValid = true;
 }
 
 // This method returns the pcmAudioParameters metadata
-const LdDecodeMetaData::PcmAudioParameters &LdDecodeMetaData::getPcmAudioParameters() const
+const TbcMetaData::PcmAudioParameters &TbcMetaData::getPcmAudioParameters() const
 {
     if (!pcmAudioParameters.isValid) {
         throw std::runtime_error("PcmAudioParameters not initialized - metadata file may not have been read successfully");
@@ -1400,7 +1400,7 @@ const LdDecodeMetaData::PcmAudioParameters &LdDecodeMetaData::getPcmAudioParamet
 }
 
 // This method sets the pcmAudioParameters metadata
-void LdDecodeMetaData::setPcmAudioParameters(const LdDecodeMetaData::PcmAudioParameters &_pcmAudioParameters)
+void TbcMetaData::setPcmAudioParameters(const TbcMetaData::PcmAudioParameters &_pcmAudioParameters)
 {
     pcmAudioParameters = _pcmAudioParameters;
     pcmAudioParameters.isValid = true;
@@ -1408,14 +1408,14 @@ void LdDecodeMetaData::setPcmAudioParameters(const LdDecodeMetaData::PcmAudioPar
 
 // Based on the video system selected, set default values for the members of
 // VideoParameters that aren't obtained from the metadata.
-void LdDecodeMetaData::initialiseVideoSystemParameters()
+void TbcMetaData::initialiseVideoSystemParameters()
 {
     const VideoSystemDefaults &defaults = getSystemDefaults(videoParameters);
     videoParameters.fSC = defaults.fSC;
     // Preserve serialized line parameters when present, otherwise defaults will
     // be applied by processLineParameters().
     // Set default LineParameters
-    LdDecodeMetaData::LineParameters lineParameters;
+    TbcMetaData::LineParameters lineParameters;
     lineParameters.firstActiveFieldLine = videoParameters.firstActiveFieldLine;
     lineParameters.lastActiveFieldLine = videoParameters.lastActiveFieldLine;
     lineParameters.firstActiveFrameLine = videoParameters.firstActiveFrameLine;
@@ -1424,13 +1424,13 @@ void LdDecodeMetaData::initialiseVideoSystemParameters()
 }
 
 // Validate LineParameters and apply them to the VideoParameters
-void LdDecodeMetaData::processLineParameters(LdDecodeMetaData::LineParameters &lineParameters)
+void TbcMetaData::processLineParameters(TbcMetaData::LineParameters &lineParameters)
 {
     lineParameters.applyTo(videoParameters);
 }
 
 // Validate and apply to a set of VideoParameters
-void LdDecodeMetaData::LineParameters::applyTo(LdDecodeMetaData::VideoParameters &videoParameters)
+void TbcMetaData::LineParameters::applyTo(TbcMetaData::VideoParameters &videoParameters)
 {
     const bool firstFieldLineExists = firstActiveFieldLine != -1;
     const bool lastFieldLineExists = lastActiveFieldLine != -1;
@@ -1504,175 +1504,175 @@ void LdDecodeMetaData::LineParameters::applyTo(LdDecodeMetaData::VideoParameters
 }
 
 // This method gets the metadata for the specified sequential field number (indexed from 1 (not 0!))
-const LdDecodeMetaData::Field &LdDecodeMetaData::getField(qint32 sequentialFieldNumber) const
+const TbcMetaData::Field &TbcMetaData::getField(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::getField(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::getField(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     return fields[fieldNumber];
 }
 
 // This method gets the VITS metrics metadata for the specified sequential field number
-const LdDecodeMetaData::VitsMetrics &LdDecodeMetaData::getFieldVitsMetrics(qint32 sequentialFieldNumber) const
+const TbcMetaData::VitsMetrics &TbcMetaData::getFieldVitsMetrics(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::getFieldVitsMetrics(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::getFieldVitsMetrics(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     return fields[fieldNumber].vitsMetrics;
 }
 
 // This method gets the VBI metadata for the specified sequential field number
-const LdDecodeMetaData::Vbi &LdDecodeMetaData::getFieldVbi(qint32 sequentialFieldNumber) const
+const TbcMetaData::Vbi &TbcMetaData::getFieldVbi(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::getFieldVbi(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::getFieldVbi(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     return fields[fieldNumber].vbi;
 }
 
 // This method gets the NTSC metadata for the specified sequential field number
-const LdDecodeMetaData::Ntsc &LdDecodeMetaData::getFieldNtsc(qint32 sequentialFieldNumber) const
+const TbcMetaData::Ntsc &TbcMetaData::getFieldNtsc(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::getFieldNtsc(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::getFieldNtsc(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     return fields[fieldNumber].ntsc;
 }
 
 // This method gets the VITC metadata for the specified sequential field number
-const LdDecodeMetaData::Vitc &LdDecodeMetaData::getFieldVitc(qint32 sequentialFieldNumber) const
+const TbcMetaData::Vitc &TbcMetaData::getFieldVitc(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::getFieldVitc(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::getFieldVitc(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     return fields[fieldNumber].vitc;
 }
 
 // This method gets the Closed Caption metadata for the specified sequential field number
-const LdDecodeMetaData::ClosedCaption &LdDecodeMetaData::getFieldClosedCaption(qint32 sequentialFieldNumber) const
+const TbcMetaData::ClosedCaption &TbcMetaData::getFieldClosedCaption(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::getFieldClosedCaption(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::getFieldClosedCaption(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     return fields[fieldNumber].closedCaption;
 }
 
 // This method gets the drop-out metadata for the specified sequential field number
-const DropOuts &LdDecodeMetaData::getFieldDropOuts(qint32 sequentialFieldNumber) const
+const DropOuts &TbcMetaData::getFieldDropOuts(qint32 sequentialFieldNumber) const
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::getFieldDropOuts(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::getFieldDropOuts(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     return fields[fieldNumber].dropOuts;
 }
 
 // This method sets the field metadata for a field
-void LdDecodeMetaData::updateField(const LdDecodeMetaData::Field &field, qint32 sequentialFieldNumber)
+void TbcMetaData::updateField(const TbcMetaData::Field &field, qint32 sequentialFieldNumber)
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::updateFieldVitsMetrics(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::updateFieldVitsMetrics(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     fields[fieldNumber] = field;
 }
 
 // This method sets the field VBI metadata for a field
-void LdDecodeMetaData::updateFieldVitsMetrics(const LdDecodeMetaData::VitsMetrics &vitsMetrics, qint32 sequentialFieldNumber)
+void TbcMetaData::updateFieldVitsMetrics(const TbcMetaData::VitsMetrics &vitsMetrics, qint32 sequentialFieldNumber)
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::updateFieldVitsMetrics(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::updateFieldVitsMetrics(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     fields[fieldNumber].vitsMetrics = vitsMetrics;
 }
 
 // This method sets the field VBI metadata for a field
-void LdDecodeMetaData::updateFieldVbi(const LdDecodeMetaData::Vbi &vbi, qint32 sequentialFieldNumber)
+void TbcMetaData::updateFieldVbi(const TbcMetaData::Vbi &vbi, qint32 sequentialFieldNumber)
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::updateFieldVbi(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::updateFieldVbi(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     fields[fieldNumber].vbi = vbi;
 }
 
 // This method sets the field NTSC metadata for a field
-void LdDecodeMetaData::updateFieldNtsc(const LdDecodeMetaData::Ntsc &ntsc, qint32 sequentialFieldNumber)
+void TbcMetaData::updateFieldNtsc(const TbcMetaData::Ntsc &ntsc, qint32 sequentialFieldNumber)
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::updateFieldNtsc(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::updateFieldNtsc(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     fields[fieldNumber].ntsc = ntsc;
 }
 
 // This method sets the VITC metadata for a field
-void LdDecodeMetaData::updateFieldVitc(const LdDecodeMetaData::Vitc &vitc, qint32 sequentialFieldNumber)
+void TbcMetaData::updateFieldVitc(const TbcMetaData::Vitc &vitc, qint32 sequentialFieldNumber)
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::updateFieldVitc(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::updateFieldVitc(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     fields[fieldNumber].vitc = vitc;
 }
 
 // This method sets the Closed Caption metadata for a field
-void LdDecodeMetaData::updateFieldClosedCaption(const LdDecodeMetaData::ClosedCaption &closedCaption, qint32 sequentialFieldNumber)
+void TbcMetaData::updateFieldClosedCaption(const TbcMetaData::ClosedCaption &closedCaption, qint32 sequentialFieldNumber)
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::updateFieldClosedCaption(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::updateFieldClosedCaption(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     fields[fieldNumber].closedCaption = closedCaption;
 }
 
 // This method sets the field dropout metadata for a field
-void LdDecodeMetaData::updateFieldDropOuts(const DropOuts &dropOuts, qint32 sequentialFieldNumber)
+void TbcMetaData::updateFieldDropOuts(const DropOuts &dropOuts, qint32 sequentialFieldNumber)
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::updateFieldDropOuts(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::updateFieldDropOuts(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     fields[fieldNumber].dropOuts = dropOuts;
 }
 
 // This method clears the field dropout metadata for a field
-void LdDecodeMetaData::clearFieldDropOuts(qint32 sequentialFieldNumber)
+void TbcMetaData::clearFieldDropOuts(qint32 sequentialFieldNumber)
 {
     qint32 fieldNumber = sequentialFieldNumber - 1;
     if (fieldNumber < 0 || fieldNumber >= getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::clearFieldDropOuts(): Requested field number" << sequentialFieldNumber << "out of bounds!";
+        qCritical() << "TbcMetaData::clearFieldDropOuts(): Requested field number" << sequentialFieldNumber << "out of bounds!";
     }
 
     fields[fieldNumber].dropOuts.clear();
 }
 
 // This method appends a new field to the existing metadata
-void LdDecodeMetaData::appendField(const LdDecodeMetaData::Field &field)
+void TbcMetaData::appendField(const TbcMetaData::Field &field)
 {
     // Ensure sequential numbering stays contiguous when writing out
-    LdDecodeMetaData::Field fieldCopy = field;
+    TbcMetaData::Field fieldCopy = field;
     fieldCopy.seqNo = fields.size() + 1;
     fields.append(fieldCopy);
 
@@ -1680,14 +1680,14 @@ void LdDecodeMetaData::appendField(const LdDecodeMetaData::Field &field)
 }
 
 // Method to get the available number of fields (according to the metadata)
-qint32 LdDecodeMetaData::getNumberOfFields() const
+qint32 TbcMetaData::getNumberOfFields() const
 {
     return fields.size();
 }
 
 // Method to set the available number of fields
 // XXX This is unnecessary given appendField
-void LdDecodeMetaData::setNumberOfFields(qint32 numberOfFields)
+void TbcMetaData::setNumberOfFields(qint32 numberOfFields)
 {
     videoParameters.numberOfSequentialFields = numberOfFields;
 }
@@ -1753,7 +1753,7 @@ void LdDecodeMetaData::setNumberOfFields(qint32 numberOfFields)
 // the shared-library scope.
 
 // Method to get the available number of still-frames
-qint32 LdDecodeMetaData::getNumberOfFrames() const
+qint32 TbcMetaData::getNumberOfFrames() const
 {
     qint32 frameOffset = 0;
 
@@ -1772,7 +1772,7 @@ qint32 LdDecodeMetaData::getNumberOfFrames() const
 
 // Method to get the first and second field numbers based on the frame number
 // If field = 1 return the firstField, otherwise return second field
-qint32 LdDecodeMetaData::getFieldNumber(qint32 frameNumber, qint32 field) const
+qint32 TbcMetaData::getFieldNumber(qint32 frameNumber, qint32 field) const
 {
     qint32 firstFieldNumber = 0;
     qint32 secondFieldNumber = 0;
@@ -1812,53 +1812,53 @@ qint32 LdDecodeMetaData::getFieldNumber(qint32 frameNumber, qint32 field) const
 
     // Range check the first field number
     if (firstFieldNumber > getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::getFieldNumber(): First field number exceed the available number of fields!";
+        qCritical() << "TbcMetaData::getFieldNumber(): First field number exceed the available number of fields!";
         firstFieldNumber = -1;
         secondFieldNumber = -1;
     }
 
     // Range check the second field number
     if (secondFieldNumber > getNumberOfFields()) {
-        qCritical() << "LdDecodeMetaData::getFieldNumber(): Second field number exceed the available number of fields!";
+        qCritical() << "TbcMetaData::getFieldNumber(): Second field number exceed the available number of fields!";
         firstFieldNumber = -1;
         secondFieldNumber = -1;
     }
 
     // Test for a buggy TBC file...
     if (getField(secondFieldNumber).isFirstField) {
-        qCritical() << "LdDecodeMetaData::getFieldNumber(): Both of the determined fields have isFirstField set - the TBC source video is probably broken...";
+        qCritical() << "TbcMetaData::getFieldNumber(): Both of the determined fields have isFirstField set - the TBC source video is probably broken...";
     }
 
     if (field == 1) return firstFieldNumber; else return secondFieldNumber;
 }
 
 // Method to get the first field number based on the frame number
-qint32 LdDecodeMetaData::getFirstFieldNumber(qint32 frameNumber) const
+qint32 TbcMetaData::getFirstFieldNumber(qint32 frameNumber) const
 {
     return getFieldNumber(frameNumber, 1);
 }
 
 // Method to get the second field number based on the frame number
-qint32 LdDecodeMetaData::getSecondFieldNumber(qint32 frameNumber) const
+qint32 TbcMetaData::getSecondFieldNumber(qint32 frameNumber) const
 {
     return getFieldNumber(frameNumber, 2);
 }
 
 // Method to set the isFirstFieldFirst flag
-void LdDecodeMetaData::setIsFirstFieldFirst(bool flag)
+void TbcMetaData::setIsFirstFieldFirst(bool flag)
 {
     isFirstFieldFirst = flag;
 }
 
 // Method to get the isFirstFieldFirst flag
-bool LdDecodeMetaData::getIsFirstFieldFirst() const
+bool TbcMetaData::getIsFirstFieldFirst() const
 {
     return isFirstFieldFirst;
 }
 
 // Method to convert a CLV time code into an equivalent frame number (to make
 // processing the timecodes easier)
-qint32 LdDecodeMetaData::convertClvTimecodeToFrameNumber(LdDecodeMetaData::ClvTimecode clvTimeCode)
+qint32 TbcMetaData::convertClvTimecodeToFrameNumber(TbcMetaData::ClvTimecode clvTimeCode)
 {
     // Calculate the frame number
     qint32 frameNumber = 0;
@@ -1892,7 +1892,7 @@ qint32 LdDecodeMetaData::convertClvTimecodeToFrameNumber(LdDecodeMetaData::ClvTi
 }
 
 // Method to convert a frame number into an equivalent CLV timecode
-LdDecodeMetaData::ClvTimecode LdDecodeMetaData::convertFrameNumberToClvTimecode(qint32 frameNumber)
+TbcMetaData::ClvTimecode TbcMetaData::convertFrameNumberToClvTimecode(qint32 frameNumber)
 {
     ClvTimecode clvTimecode;
 
@@ -1929,7 +1929,7 @@ LdDecodeMetaData::ClvTimecode LdDecodeMetaData::convertFrameNumberToClvTimecode(
 }
 
 // Method to return a description string for the current video format
-QString LdDecodeMetaData::getVideoSystemDescription() const
+QString TbcMetaData::getVideoSystemDescription() const
 {
     return getSystemDefaults(videoParameters).name;
 }
@@ -1937,12 +1937,12 @@ QString LdDecodeMetaData::getVideoSystemDescription() const
 // Private method to generate a map of the PCM audio data (used by the sourceAudio library)
 // Note: That the map unit is "stereo sample pairs"; so each unit represents 2 16-bit samples
 // for a total of 4 bytes per unit.
-void LdDecodeMetaData::generatePcmAudioMap()
+void TbcMetaData::generatePcmAudioMap()
 {
     pcmAudioFieldStartSampleMap.clear();
     pcmAudioFieldLengthMap.clear();
 
-    tbcDebugStream() << "LdDecodeMetaData::generatePcmAudioMap(): Generating PCM audio map...";
+    tbcDebugStream() << "TbcMetaData::generatePcmAudioMap(): Generating PCM audio map...";
 
     // Get the number of fields and resize the maps
     qint32 numberOfFields = getVideoParameters().numberOfSequentialFields;
@@ -1964,7 +1964,7 @@ void LdDecodeMetaData::generatePcmAudioMap()
 }
 
 // Method to get the start sample location of the specified sequential field number
-qint32 LdDecodeMetaData::getFieldPcmAudioStart(qint32 sequentialFieldNumber) const
+qint32 TbcMetaData::getFieldPcmAudioStart(qint32 sequentialFieldNumber) const
 {
     if (pcmAudioFieldStartSampleMap.size() < sequentialFieldNumber) return -1;
     // Field numbers are 1 indexed, but our map is 0 indexed
@@ -1972,7 +1972,7 @@ qint32 LdDecodeMetaData::getFieldPcmAudioStart(qint32 sequentialFieldNumber) con
 }
 
 // Method to get the sample length of the specified sequential field number
-qint32 LdDecodeMetaData::getFieldPcmAudioLength(qint32 sequentialFieldNumber) const
+qint32 TbcMetaData::getFieldPcmAudioLength(qint32 sequentialFieldNumber) const
 {
     if (pcmAudioFieldLengthMap.size() < sequentialFieldNumber) return -1;
     // Field numbers are 1 indexed, but our map is 0 indexed

@@ -54,7 +54,7 @@ bool JsonConverter::processJsonToSqlite()
     }
     
     // Load the JSON metadata using local TBC library
-    LdDecodeMetaData metaData;
+    TbcMetaData metaData;
     if (!metaData.read(m_inputFilename)) {
         qCritical() << "Failed to read JSON file:" << m_inputFilename;
         return false;
@@ -100,8 +100,8 @@ bool JsonConverter::processSqliteToJson()
         return false;
     }
 
-    LdDecodeMetaData metaData;
-    if (!metaData.readSqlite(m_inputFilename)) {
+    TbcMetaData metaData;
+    if (!metaData.read(m_inputFilename)) {
         qCritical() << "Failed to read SQLite file:" << m_inputFilename;
         return false;
     }
@@ -121,7 +121,7 @@ bool JsonConverter::processSqliteToJson()
     return true;
 }
 
-void JsonConverter::reportMetadataContents(LdDecodeMetaData &metaData)
+void JsonConverter::reportMetadataContents(TbcMetaData &metaData)
 {
     qInfo() << "=== Metadata Content Analysis ===";
     
@@ -132,7 +132,7 @@ void JsonConverter::reportMetadataContents(LdDecodeMetaData &metaData)
     qInfo() << "First Field First:" << (metaData.getIsFirstFieldFirst() ? "Yes" : "No");
     
     // Comprehensive Video parameters matching README schema
-    const LdDecodeMetaData::VideoParameters &videoParams = metaData.getVideoParameters();
+    const TbcMetaData::VideoParameters &videoParams = metaData.getVideoParameters();
     qInfo() << "Video Parameters:";
     qInfo() << "  System:" << (videoParams.system == PAL ? "PAL" : 
                                 (videoParams.system == NTSC ? "NTSC" : "PAL_M"));
@@ -189,7 +189,7 @@ void JsonConverter::reportMetadataContents(LdDecodeMetaData &metaData)
     }
     
     // PCM Audio parameters (if present)
-    const LdDecodeMetaData::PcmAudioParameters &audioParams = metaData.getPcmAudioParameters();
+    const TbcMetaData::PcmAudioParameters &audioParams = metaData.getPcmAudioParameters();
     if (audioParams.isValid) {
         qInfo() << "PCM Audio Parameters:";
         qInfo() << "  Sample Rate:" << audioParams.sampleRate << "Hz";
@@ -212,7 +212,7 @@ void JsonConverter::reportMetadataContents(LdDecodeMetaData &metaData)
     
     // Analyze each field for detailed statistics
     for (qint32 fieldNum = 1; fieldNum <= metaData.getNumberOfFields(); fieldNum++) {
-        const LdDecodeMetaData::Field &field = metaData.getField(fieldNum);
+        const TbcMetaData::Field &field = metaData.getField(fieldNum);
         
         // Count padded fields
         if (field.pad) paddedFields++;
@@ -221,23 +221,23 @@ void JsonConverter::reportMetadataContents(LdDecodeMetaData &metaData)
         if (field.audioSamples > 0) fieldsWithAudio++;
         
         // Count VBI data
-        const LdDecodeMetaData::Vbi &vbi = metaData.getFieldVbi(fieldNum);
+        const TbcMetaData::Vbi &vbi = metaData.getFieldVbi(fieldNum);
         if (vbi.inUse) fieldsWithVbi++;
         
         // Count VITC data
-        const LdDecodeMetaData::Vitc &vitc = metaData.getFieldVitc(fieldNum);
+        const TbcMetaData::Vitc &vitc = metaData.getFieldVitc(fieldNum);
         if (vitc.inUse) fieldsWithVitc++;
         
         // Count Closed Caption data
-        const LdDecodeMetaData::ClosedCaption &cc = metaData.getFieldClosedCaption(fieldNum);
+        const TbcMetaData::ClosedCaption &cc = metaData.getFieldClosedCaption(fieldNum);
         if (cc.inUse) fieldsWithClosedCaptions++;
         
         // Count VITS Metrics
-        const LdDecodeMetaData::VitsMetrics &vits = metaData.getFieldVitsMetrics(fieldNum);
+        const TbcMetaData::VitsMetrics &vits = metaData.getFieldVitsMetrics(fieldNum);
         if (vits.inUse) fieldsWithVitsMetrics++;
         
         // Count NTSC data
-        const LdDecodeMetaData::Ntsc &ntsc = metaData.getFieldNtsc(fieldNum);
+        const TbcMetaData::Ntsc &ntsc = metaData.getFieldNtsc(fieldNum);
         if (ntsc.inUse) fieldsWithNtsc++;
         
         // Count dropouts
@@ -508,7 +508,7 @@ bool JsonConverter::createSchema()
     return true;
 }
 
-bool JsonConverter::insertData(LdDecodeMetaData &metaData)
+bool JsonConverter::insertData(TbcMetaData &metaData)
 {
     qInfo() << "Starting data insertion...";
     
@@ -522,7 +522,7 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
     
     try {
         // Insert capture record
-        const LdDecodeMetaData::VideoParameters &videoParams = metaData.getVideoParameters();
+        const TbcMetaData::VideoParameters &videoParams = metaData.getVideoParameters();
         
         // Determine system string
         QString systemStr;
@@ -593,7 +593,7 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
         }
         
         // Insert PCM audio parameters if present
-        const LdDecodeMetaData::PcmAudioParameters &audioParams = metaData.getPcmAudioParameters();
+        const TbcMetaData::PcmAudioParameters &audioParams = metaData.getPcmAudioParameters();
         if (audioParams.isValid) {
             query.prepare(
                 "INSERT INTO pcm_audio_parameters ("
@@ -616,7 +616,7 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
         // Insert field records and related data
         qInfo() << "Inserting field records...";
         for (qint32 fieldNum = 1; fieldNum <= metaData.getNumberOfFields(); fieldNum++) {
-            const LdDecodeMetaData::Field &field = metaData.getField(fieldNum);
+            const TbcMetaData::Field &field = metaData.getField(fieldNum);
             
             // Convert seqNo to zero-indexed field_id (seqNo - 1)
             qint32 fieldId = fieldNum - 1;
@@ -647,7 +647,7 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
             query.bindValue(10, field.syncConf);
             
             // NTSC specific fields
-            const LdDecodeMetaData::Ntsc &ntsc = metaData.getFieldNtsc(fieldNum);
+            const TbcMetaData::Ntsc &ntsc = metaData.getFieldNtsc(fieldNum);
             if (ntsc.inUse) {
                 query.bindValue(11, ntsc.isFmCodeDataValid ? 1 : 0);
                 query.bindValue(12, ntsc.fmCodeData);
@@ -671,7 +671,7 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
             }
             
             // Insert VITS metrics if present
-            const LdDecodeMetaData::VitsMetrics &vits = metaData.getFieldVitsMetrics(fieldNum);
+            const TbcMetaData::VitsMetrics &vits = metaData.getFieldVitsMetrics(fieldNum);
             if (vits.inUse) {
                 query.prepare(
                     "INSERT INTO vits_metrics (capture_id, field_id, b_psnr, w_snr) "
@@ -689,7 +689,7 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
             }
             
             // Insert VBI data if present
-            const LdDecodeMetaData::Vbi &vbi = metaData.getFieldVbi(fieldNum);
+            const TbcMetaData::Vbi &vbi = metaData.getFieldVbi(fieldNum);
             if (vbi.inUse && vbi.vbiData.size() >= 3) {
                 query.prepare(
                     "INSERT INTO vbi (capture_id, field_id, vbi0, vbi1, vbi2) "
@@ -708,7 +708,7 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
             }
             
             // Insert VITC data if present
-            const LdDecodeMetaData::Vitc &vitc = metaData.getFieldVitc(fieldNum);
+            const TbcMetaData::Vitc &vitc = metaData.getFieldVitc(fieldNum);
             if (vitc.inUse && vitc.vitcData.size() >= 8) {
                 query.prepare(
                     "INSERT INTO vitc (capture_id, field_id, vitc0, vitc1, vitc2, vitc3, vitc4, vitc5, vitc6, vitc7) "
@@ -732,7 +732,7 @@ bool JsonConverter::insertData(LdDecodeMetaData &metaData)
             }
             
             // Insert Closed Caption data if present
-            const LdDecodeMetaData::ClosedCaption &cc = metaData.getFieldClosedCaption(fieldNum);
+            const TbcMetaData::ClosedCaption &cc = metaData.getFieldClosedCaption(fieldNum);
             if (cc.inUse) {
                 query.prepare(
                     "INSERT INTO closed_caption (capture_id, field_id, data0, data1) "

@@ -26,14 +26,14 @@
 #define VIDEOID_H
 
 #include "sourcevideo.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 class VideoID
 {
 public:
     bool decodeLine(const SourceVideo::Data& lineData,
-                    const LdDecodeMetaData::VideoParameters& videoParameters,
-                    LdDecodeMetaData::Field& fieldMetadata);
+                    const TbcMetaData::VideoParameters& videoParameters,
+                    TbcMetaData::Field& fieldMetadata);
 };
 
 #endif // VIDEOID_H

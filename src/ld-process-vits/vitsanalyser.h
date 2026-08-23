@@ -32,7 +32,7 @@
 
 #include <cmath>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "sourcevideo.h"
 
 class ProcessingPool;
@@ -52,10 +52,10 @@ private:
     ProcessingPool& processingPool;
 
     // Temporary output buffer
-    LdDecodeMetaData::Field outputData;
+    TbcMetaData::Field outputData;
 
     // Other settings
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::VideoParameters videoParameters;
 
     QVector<double> getFieldLineSlice(const SourceVideo::Data &sourceField, qint32 fieldLine, qint32 startUs, qint32 lengthUs);
     double calculateSnr(QVector<double> &data, bool usePsnr);

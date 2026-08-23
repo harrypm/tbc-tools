@@ -31,7 +31,7 @@
 
 #include "encoder.h"
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 enum ChromaMode {
     WIDEBAND_YUV = 0,   // Y'UV
@@ -42,11 +42,11 @@ enum ChromaMode {
 class NTSCEncoder : public Encoder
 {
 public:
-    NTSCEncoder(QFile &inputFile, QFile &tbcFile, QFile &chromaFile, LdDecodeMetaData &metaData,
+    NTSCEncoder(QFile &inputFile, QFile &tbcFile, QFile &chromaFile, TbcMetaData &metaData,
                 int fieldOffset, bool isComponent, ChromaMode chromaMode, bool addSetup);
 
 protected:
-    virtual void getFieldMetadata(qint32 fieldNo, LdDecodeMetaData::Field &fieldData);
+    virtual void getFieldMetadata(qint32 fieldNo, TbcMetaData::Field &fieldData);
     virtual void encodeLine(qint32 fieldNo, qint32 frameLine, const quint16 *inputData,
                             std::vector<double> &outputC, std::vector<double> &outputVBS);
 

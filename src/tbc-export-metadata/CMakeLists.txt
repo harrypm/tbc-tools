@@ -12,6 +12,6 @@ add_executable(tbc-export-metadata
     metadataexportdialog.ui
     main.cpp
 )
-target_link_libraries(tbc-export-metadata PRIVATE Qt::Core Qt::Gui Qt::Widgets lddecode-library)
+target_link_libraries(tbc-export-metadata PRIVATE Qt::Core Qt::Gui Qt::Widgets tbc-library)
 
 install(TARGETS tbc-export-metadata)

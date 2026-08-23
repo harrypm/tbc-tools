@@ -156,7 +156,7 @@ QVector<UserMarker> parseUserMarkersJson(const QString &userMarkersJson, qint32 
     return normaliseUserMarkers(parsedMarkers, totalFrames);
 }
 
-QVector<UserMarker> userMarkersFromVideoParameters(const LdDecodeMetaData::VideoParameters &videoParameters,
+QVector<UserMarker> userMarkersFromVideoParameters(const TbcMetaData::VideoParameters &videoParameters,
                                                    qint32 totalFrames)
 {
     QVector<UserMarker> combinedMarkers;
@@ -211,12 +211,12 @@ QString escapedCsvField(const QString &unescapedString)
     return '\"' + escaped + '\"';
 }
 
-bool writeVitsCsv(LdDecodeMetaData &metaData, const QString &fileName)
+bool writeVitsCsv(TbcMetaData &metaData, const QString &fileName)
 {
     // Open a file for the CSV output
     QFile csvFile(fileName);
     if (!csvFile.open(QFile::WriteOnly | QFile::Text)) {
-        tbcDebug(QStringLiteral("LdDecodeMetaData::writeVitsCsv(): Could not open CSV file for output!"));
+        tbcDebug(QStringLiteral("TbcMetaData::writeVitsCsv(): Could not open CSV file for output!"));
         return false;
     }
 
@@ -235,7 +235,7 @@ bool writeVitsCsv(LdDecodeMetaData &metaData, const QString &fileName)
     outStream << '\n';
 
     for (qint32 fieldNumber = 1; fieldNumber <= metaData.getNumberOfFields(); fieldNumber++) {
-        const LdDecodeMetaData::Field &field = metaData.getField(fieldNumber);
+        const TbcMetaData::Field &field = metaData.getField(fieldNumber);
         outStream << escapedString(QString::number(field.seqNo)) << ",";
         outStream << escapedString(QString::number(field.isFirstField)) << ",";
         outStream << escapedString(QString::number(field.syncConf)) << ",";
@@ -255,7 +255,7 @@ bool writeVitsCsv(LdDecodeMetaData &metaData, const QString &fileName)
     return true;
 }
 
-bool writeUserMarkersCsv(LdDecodeMetaData &metaData, const QString &fileName)
+bool writeUserMarkersCsv(TbcMetaData &metaData, const QString &fileName)
 {
     QFile csvFile(fileName);
     if (!csvFile.open(QFile::WriteOnly | QFile::Text)) {
@@ -268,7 +268,7 @@ bool writeUserMarkersCsv(LdDecodeMetaData &metaData, const QString &fileName)
     outStream.setCodec("UTF-8");
 #endif
 
-    const LdDecodeMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
+    const TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
     const QVector<UserMarker> markers = userMarkersFromVideoParameters(videoParameters,
                                                                        metaData.getNumberOfFrames());
 
@@ -288,7 +288,7 @@ bool writeUserMarkersCsv(LdDecodeMetaData &metaData, const QString &fileName)
     return true;
 }
 
-bool writeUserMarkersTxt(LdDecodeMetaData &metaData, const QString &fileName)
+bool writeUserMarkersTxt(TbcMetaData &metaData, const QString &fileName)
 {
     QFile textFile(fileName);
     if (!textFile.open(QFile::WriteOnly | QFile::Text)) {
@@ -301,7 +301,7 @@ bool writeUserMarkersTxt(LdDecodeMetaData &metaData, const QString &fileName)
     outStream.setCodec("UTF-8");
 #endif
 
-    const LdDecodeMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
+    const TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
     const QVector<UserMarker> markers = userMarkersFromVideoParameters(videoParameters,
                                                                        metaData.getNumberOfFrames());
 
@@ -320,12 +320,12 @@ bool writeUserMarkersTxt(LdDecodeMetaData &metaData, const QString &fileName)
     return true;
 }
 
-bool writeVbiCsv(LdDecodeMetaData &metaData, const QString &fileName)
+bool writeVbiCsv(TbcMetaData &metaData, const QString &fileName)
 {
     // Open a file for the CSV output
     QFile csvFile(fileName);
     if (!csvFile.open(QFile::WriteOnly | QFile::Text)) {
-        tbcDebug(QStringLiteral("LdDecodeMetaData::writeVbiCsv(): Could not open CSV file for output!"));
+        tbcDebug(QStringLiteral("TbcMetaData::writeVbiCsv(): Could not open CSV file for output!"));
         return false;
     }
 
@@ -347,8 +347,8 @@ bool writeVbiCsv(LdDecodeMetaData &metaData, const QString &fileName)
         qint32 secondFieldNumber = metaData.getSecondFieldNumber(frameNumber);
 
         // Get the field metadata
-        const LdDecodeMetaData::Field &firstField = metaData.getField(firstFieldNumber);
-        const LdDecodeMetaData::Field &secondField = metaData.getField(secondFieldNumber);
+        const TbcMetaData::Field &firstField = metaData.getField(firstFieldNumber);
+        const TbcMetaData::Field &secondField = metaData.getField(secondFieldNumber);
 
         qint32 vbi16_1, vbi17_1, vbi18_1;
         qint32 vbi16_2, vbi17_2, vbi18_2;

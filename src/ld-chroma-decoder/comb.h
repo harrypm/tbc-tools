@@ -37,7 +37,7 @@
 #include <QtMath>
 #include <atomic>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include "componentframe.h"
 #include "decoder.h"
@@ -138,7 +138,7 @@ public:
     };
 
     const Configuration &getConfiguration() const;
-    void updateConfiguration(const LdDecodeMetaData::VideoParameters &videoParameters,
+    void updateConfiguration(const TbcMetaData::VideoParameters &videoParameters,
                              const Configuration &configuration);
 
     // Decode a sequence of fields into a sequence of interlaced frames
@@ -156,13 +156,13 @@ private:
     // Comb-filter configuration parameters
     bool configurationSet;
     Configuration configuration;
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::VideoParameters videoParameters;
     std::atomic<quint64> nnTransform3DCancelEpoch {0};
 
     // An input frame in the process of being decoded
     class FrameBuffer {
     public:
-        FrameBuffer(const LdDecodeMetaData::VideoParameters &videoParameters_, const Configuration &configuration_);
+        FrameBuffer(const TbcMetaData::VideoParameters &videoParameters_, const Configuration &configuration_);
 
         void loadFields(const SourceField &firstField, const SourceField &secondField);
         void copyRawToLuma();
@@ -195,7 +195,7 @@ private:
         void overlayMap(const FrameBuffer &previousFrame, const FrameBuffer &nextFrame);
 
     private:
-        const LdDecodeMetaData::VideoParameters &videoParameters;
+        const TbcMetaData::VideoParameters &videoParameters;
         const Configuration &configuration;
 
         // Calculated frame height

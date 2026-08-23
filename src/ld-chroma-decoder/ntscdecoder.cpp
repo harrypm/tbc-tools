@@ -33,7 +33,7 @@ NtscDecoder::NtscDecoder(const Comb::Configuration &combConfig)
     config.combConfig = combConfig;
 }
 
-bool NtscDecoder::configure(const LdDecodeMetaData::VideoParameters &videoParameters) {
+bool NtscDecoder::configure(const TbcMetaData::VideoParameters &videoParameters) {
     // Ensure the source video is NTSC
     if (videoParameters.system != NTSC) {
         qCritical() << "This decoder is for NTSC video sources only";

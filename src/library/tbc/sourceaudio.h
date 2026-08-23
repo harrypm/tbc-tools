@@ -31,7 +31,7 @@
 #include <QFile>
 
 // TBC library includes
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 class SourceAudio
 {

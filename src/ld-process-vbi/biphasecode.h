@@ -25,7 +25,7 @@
 #ifndef BIPHASECODE_H
 #define BIPHASECODE_H
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "sourcevideo.h"
 
 #include <QVector>
@@ -36,15 +36,15 @@ class BiphaseCode {
 public:
     bool decodeLines(const SourceVideo::Data& line16Data, const SourceVideo::Data& line17Data,
                      const SourceVideo::Data& line18Data,
-                     const LdDecodeMetaData::VideoParameters& videoParameters,
-                     LdDecodeMetaData::Field& fieldMetadata);
+                     const TbcMetaData::VideoParameters& videoParameters,
+                     TbcMetaData::Field& fieldMetadata);
     bool decodeLine(qint32 lineIndex, const SourceVideo::Data& lineData,
-                    const LdDecodeMetaData::VideoParameters& videoParameters,
-                    LdDecodeMetaData::Field& fieldMetadata);
+                    const TbcMetaData::VideoParameters& videoParameters,
+                    TbcMetaData::Field& fieldMetadata);
 
 private:
     qint32 manchesterDecoder(const SourceVideo::Data& lineData, qint32 zcPoint,
-                             LdDecodeMetaData::VideoParameters videoParameters);
+                             TbcMetaData::VideoParameters videoParameters);
 };
 
 #endif // BIPHASECODE_H

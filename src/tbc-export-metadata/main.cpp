@@ -42,7 +42,7 @@
 
 #include "tbc/logging.h"
 #include "tbc/uistyle.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #ifdef Q_OS_WIN
 #include <QSettings>
 #ifndef NOMINMAX
@@ -430,7 +430,7 @@ int main(int argc, char *argv[])
     }
 
     // Load the source video metadata
-    LdDecodeMetaData metaData;
+    TbcMetaData metaData;
     if (!metaData.read(inputFileName)) {
         qInfo() << "Unable to read metadata file";
         return 1;

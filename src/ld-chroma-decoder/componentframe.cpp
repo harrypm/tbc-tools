@@ -29,7 +29,7 @@ ComponentFrame::ComponentFrame()
 {
 }
 
-void ComponentFrame::init(const LdDecodeMetaData::VideoParameters &videoParameters, bool mono)
+void ComponentFrame::init(const TbcMetaData::VideoParameters &videoParameters, bool mono)
 {
     width = videoParameters.fieldWidth;
     height = (videoParameters.fieldHeight * 2) - 1;

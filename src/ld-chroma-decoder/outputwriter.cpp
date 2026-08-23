@@ -52,7 +52,7 @@ static constexpr double kR = 0.87728321993817866838972487283129;
 static constexpr double HYBRID_BLACK_NTSC = 0x0d48;
 static constexpr double HYBRID_BLACK_PAL = 0x0708;
 
-void OutputWriter::updateConfiguration(LdDecodeMetaData::VideoParameters &_videoParameters,
+void OutputWriter::updateConfiguration(TbcMetaData::VideoParameters &_videoParameters,
                                        const OutputWriter::Configuration &_config)
 {
     config = _config;

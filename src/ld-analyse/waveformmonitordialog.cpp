@@ -177,7 +177,7 @@ void WaveformMonitorDialog::setData(
     std::vector<uint16_t> composite_samples, std::vector<uint16_t> y_samples,
     std::vector<uint16_t> c_samples, int first_field_height,
     int second_field_height,
-    const LdDecodeMetaData::VideoParameters &video_params) {
+    const TbcMetaData::VideoParameters &video_params) {
   video_params_ = video_params;
 
   // Resolve the 16-bit blanking once (handles NTSC 7.5 IRE setup derivation)
@@ -232,7 +232,7 @@ void WaveformMonitorDialog::updateWidgetForCurrentChannel() {
   // widget accumulates all samples across each full line including sync and
   // blanking.  Signal levels and system are preserved for Y-axis mV mapping
   // and level markers.
-  LdDecodeMetaData::VideoParameters display_params = video_params_;
+  TbcMetaData::VideoParameters display_params = video_params_;
   if (!clip_to_active) {
     display_params.activeVideoStart = -1;
     display_params.activeVideoEnd = -1;

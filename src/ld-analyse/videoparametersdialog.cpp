@@ -127,7 +127,7 @@ void VideoParametersDialog::updateResultingFrameSizeLabel()
     ui->resultingFrameSizeValueLabel->setText(QString("%1 x %2").arg(width).arg(height));
 }
 
-void VideoParametersDialog::setVideoParameters(const LdDecodeMetaData::VideoParameters &_videoParameters)
+void VideoParametersDialog::setVideoParameters(const TbcMetaData::VideoParameters &_videoParameters)
 {
     videoParameters = _videoParameters;
     originalActiveVideoStart = videoParameters.activeVideoStart;

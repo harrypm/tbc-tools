@@ -669,7 +669,7 @@ const Comb::Configuration &Comb::getConfiguration() const {
 }
 
 // Set the comb filter configuration parameters
-void Comb::updateConfiguration(const LdDecodeMetaData::VideoParameters &_videoParameters, const Comb::Configuration &_configuration)
+void Comb::updateConfiguration(const TbcMetaData::VideoParameters &_videoParameters, const Comb::Configuration &_configuration)
 {
     // Copy the configuration parameters
     videoParameters = _videoParameters;
@@ -890,7 +890,7 @@ void Comb::decodeFrames(const QVector<SourceField>& inputFields, qint32 startInd
 }
 // Private methods ----------------------------------------------------------------------------------------------------
 
-Comb::FrameBuffer::FrameBuffer(const LdDecodeMetaData::VideoParameters &videoParameters_,
+Comb::FrameBuffer::FrameBuffer(const TbcMetaData::VideoParameters &videoParameters_,
                                const Configuration &configuration_)
     : videoParameters(videoParameters_), configuration(configuration_)
 {
@@ -1739,7 +1739,7 @@ namespace {
     constexpr double ROTATE_COS = 0.838670567945424;
 
     BurstInfo detectBurst(const quint16* lineData,
-                          const LdDecodeMetaData::VideoParameters& videoParameters)
+                          const TbcMetaData::VideoParameters& videoParameters)
     {
         double bsin = 0, bcos = 0;
 

@@ -27,7 +27,7 @@
 #include "decoderpool.h"
 
 namespace {
-void applyFullFrameDecodeBounds(LdDecodeMetaData::VideoParameters &videoParameters)
+void applyFullFrameDecodeBounds(TbcMetaData::VideoParameters &videoParameters)
 {
     const qint32 frameHeight = (videoParameters.fieldHeight * 2) - 1;
     constexpr qint32 horizontalMargin = 16;
@@ -49,13 +49,13 @@ void applyFullFrameDecodeBounds(LdDecodeMetaData::VideoParameters &videoParamete
 }
 
 DecoderPool::DecoderPool(Decoder &_decoder, QString _inputFileName,
-                         LdDecodeMetaData &_ldDecodeMetaData,
+                         TbcMetaData &_metaData,
                          OutputWriter::Configuration &_outputConfig, QString _outputFileName,
                          qint32 _startFrame, qint32 _length, qint32 _maxThreads)
     : decoder(_decoder), inputFileName(_inputFileName),
       outputConfig(_outputConfig), outputFileName(_outputFileName),
       startFrame(_startFrame), length(_length), maxThreads(_maxThreads),
-      abort(false), ldDecodeMetaData(_ldDecodeMetaData)
+      abort(false), metaData(_metaData)
 {
 }
 
@@ -63,7 +63,7 @@ Decoder& DecoderPool::getDecoder() { return decoder; }
 
 bool DecoderPool::process()
 {
-    LdDecodeMetaData::VideoParameters videoParameters = ldDecodeMetaData.getVideoParameters();
+    TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
     if (outputConfig.fullFrameDecode) {
         applyFullFrameDecodeBounds(videoParameters);
     }
@@ -91,18 +91,18 @@ bool DecoderPool::process()
     // If no startFrame parameter was specified, set the start frame to 1
     if (startFrame == -1) startFrame = 1;
 
-    if (startFrame > ldDecodeMetaData.getNumberOfFrames()) {
-        qInfo() << "Specified start frame is out of bounds, only" << ldDecodeMetaData.getNumberOfFrames() << "frames available";
+    if (startFrame > metaData.getNumberOfFrames()) {
+        qInfo() << "Specified start frame is out of bounds, only" << metaData.getNumberOfFrames() << "frames available";
         return false;
     }
 
     // If no length parameter was specified set the length to the number of available frames
     if (length == -1) {
-        length = ldDecodeMetaData.getNumberOfFrames() - (startFrame - 1);
+        length = metaData.getNumberOfFrames() - (startFrame - 1);
     } else {
-        if (length + (startFrame - 1) > ldDecodeMetaData.getNumberOfFrames()) {
-            qInfo() << "Specified length of" << length << "exceeds the number of available frames, setting to" << ldDecodeMetaData.getNumberOfFrames() - (startFrame - 1);
-            length = ldDecodeMetaData.getNumberOfFrames() - (startFrame - 1);
+        if (length + (startFrame - 1) > metaData.getNumberOfFrames()) {
+            qInfo() << "Specified length of" << length << "exceeds the number of available frames, setting to" << metaData.getNumberOfFrames() - (startFrame - 1);
+            length = metaData.getNumberOfFrames() - (startFrame - 1);
         }
     }
 
@@ -208,7 +208,7 @@ bool DecoderPool::getInputFrames(qint32 &startFrameNumber, QVector<SourceField> 
     inputFrameNumber += batchFrames;
 
     // Load the fields
-    SourceField::loadFields(sourceVideo, ldDecodeMetaData,
+    SourceField::loadFields(sourceVideo, metaData,
                             startFrameNumber, batchFrames, decoderLookBehind, decoderLookAhead,
                             fields, startIndex, endIndex);
 

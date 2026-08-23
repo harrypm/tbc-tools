@@ -29,8 +29,8 @@
 // Public method to read a 40-bit FM coded signal from a field line.
 // Return true if decoding was successful, false otherwise.
 bool FmCode::decodeLine(const SourceVideo::Data &lineData,
-                        const LdDecodeMetaData::VideoParameters& videoParameters,
-                        LdDecodeMetaData::Field& fieldMetadata)
+                        const TbcMetaData::VideoParameters& videoParameters,
+                        TbcMetaData::Field& fieldMetadata)
 {
     // Reset data to invalid
     fieldMetadata.ntsc.isFmCodeDataValid = false;

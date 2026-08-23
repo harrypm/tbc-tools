@@ -74,13 +74,13 @@ QString formatVitcTimecode(const VitcDecoder::Vitc &vitc)
         .arg(vitc.frame, 2, 10, QLatin1Char('0'));
 }
 
-QString firstValidVitcTimecodeInRange(LdDecodeMetaData &metaData,
+QString firstValidVitcTimecodeInRange(TbcMetaData &metaData,
                                       qint32 exportStartField,
                                       qint32 exportEndFieldExclusive)
 {
     const VideoSystem system = metaData.getVideoParameters().system;
     for (qint32 field = exportStartField; field < exportEndFieldExclusive; ++field) {
-        const LdDecodeMetaData::Vitc &fieldVitc = metaData.getFieldVitc(field + 1);
+        const TbcMetaData::Vitc &fieldVitc = metaData.getFieldVitc(field + 1);
         if (!fieldVitc.inUse) {
             continue;
         }
@@ -93,7 +93,7 @@ QString firstValidVitcTimecodeInRange(LdDecodeMetaData &metaData,
     return QString();
 }
 
-bool getFieldRangeForFrames(LdDecodeMetaData &metaData,
+bool getFieldRangeForFrames(TbcMetaData &metaData,
                             qint32 startFrameOneBased,
                             qint32 lengthFrames,
                             qint32 *startField,
@@ -220,7 +220,7 @@ void insertMarkerChapterWithoutOverlap(std::vector<FfmetadataChapter> *chapters,
 
 } // namespace
 
-bool writeFfmetadata(LdDecodeMetaData &metaData,
+bool writeFfmetadata(TbcMetaData &metaData,
                      const QString &fileName,
                      qint32 startFrameOneBased,
                      qint32 lengthFrames,

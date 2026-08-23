@@ -11,7 +11,7 @@ add_executable(ld-process-vbi
     whiteflag.cpp
 )
 
-target_link_libraries(ld-process-vbi PRIVATE Qt::Core lddecode-library)
+target_link_libraries(ld-process-vbi PRIVATE Qt::Core tbc-library)
 set(_teletext_vendor_dir "${CMAKE_CURRENT_SOURCE_DIR}/vendor/vhs-teletext")
 target_compile_definitions(ld-process-vbi PRIVATE
     TELETEXT_VENDOR_DIR="${_teletext_vendor_dir}"

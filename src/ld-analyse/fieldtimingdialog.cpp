@@ -140,7 +140,7 @@ void FieldTimingDialog::setFieldData(const QString &sourceLabel,
                                      const std::vector<uint16_t> &cSamples,
                                      const std::vector<uint16_t> &ySamples2,
                                      const std::vector<uint16_t> &cSamples2,
-                                     const std::optional<LdDecodeMetaData::VideoParameters> &videoParameters,
+                                     const std::optional<TbcMetaData::VideoParameters> &videoParameters,
                                      qint32 firstFieldHeight,
                                      qint32 secondFieldHeight)
 {

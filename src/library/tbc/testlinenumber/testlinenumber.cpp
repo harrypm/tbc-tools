@@ -25,7 +25,7 @@
 #include <cassert>
 #include <cstdio>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "linenumber.h"
 
 void testAllValues(VideoSystem system, qint32 lines) {

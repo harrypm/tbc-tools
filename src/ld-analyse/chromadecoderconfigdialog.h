@@ -38,7 +38,7 @@ public:
                           const MonoDecoder::MonoConfiguration &monoConfiguration,
                           const TbcSource::SourceMode &_mode,
 						  const bool _isInit);
-    void setVideoLevels(const LdDecodeMetaData::VideoParameters &videoParameters);
+    void setVideoLevels(const TbcMetaData::VideoParameters &videoParameters);
     const PalColour::Configuration &getPalConfiguration();
     const Comb::Configuration &getNtscConfiguration();
 

@@ -5,7 +5,7 @@
  *
  * Ported from decode-orc (orc/gui/waveformmonitordialog.{h,cpp}) and adapted
  * to ld-analyse: the dialog is the 16-bit TBC → 10-bit CVBS_U10_4FSC boundary.
- * It receives legacy 16-bit field samples + LdDecodeMetaData::VideoParameters
+ * It receives legacy 16-bit field samples + TbcMetaData::VideoParameters
  * from TbcSource, converts samples via tbc::cvbs::tbc_to_cvbs, performs channel
  * selection (Y+C / Y-only) and active-video line slicing, then hands 10-bit
  * samples to WaveformMonitorWidget.
@@ -17,7 +17,7 @@
 #define WAVEFORMMONITORDIALOG_H
 
 #include "amplitude_conversion.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include <QDialog>
 #include <cstdint>
@@ -46,7 +46,7 @@ class WaveformMonitorDialog : public QDialog {
                std::vector<uint16_t> y_samples,
                std::vector<uint16_t> c_samples, int first_field_height,
                int second_field_height,
-               const LdDecodeMetaData::VideoParameters &video_params);
+               const TbcMetaData::VideoParameters &video_params);
 
   WaveformMonitorWidget *monitorWidget() const { return monitor_widget_; }
 
@@ -86,7 +86,7 @@ class WaveformMonitorDialog : public QDialog {
   std::vector<int16_t> c_cvbs_;
   int first_field_height_ = 0;
   int second_field_height_ = 0;
-  LdDecodeMetaData::VideoParameters video_params_{};
+  TbcMetaData::VideoParameters video_params_{};
 };
 
 #endif  // WAVEFORMMONITORDIALOG_H

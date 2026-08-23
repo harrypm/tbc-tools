@@ -7,7 +7,7 @@
 #include <optional>
 #include <vector>
 
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 class QColor;
 class QPainter;
@@ -31,7 +31,7 @@ public:
                       const std::vector<uint16_t> &cSamples = {},
                       const std::vector<uint16_t> &ySamples2 = {},
                       const std::vector<uint16_t> &cSamples2 = {},
-                      const std::optional<LdDecodeMetaData::VideoParameters> &videoParameters = std::nullopt);
+                      const std::optional<TbcMetaData::VideoParameters> &videoParameters = std::nullopt);
     void setChannelMode(ChannelMode mode);
 
     void scrollToLine(int lineNumber);
@@ -64,7 +64,7 @@ private:
     QScrollBar *scrollBar_;
     int scrollOffset_;
 
-    std::optional<LdDecodeMetaData::VideoParameters> videoParameters_;
+    std::optional<TbcMetaData::VideoParameters> videoParameters_;
     ChannelMode channelMode_ = ChannelMode::YPlusC;
 
     static constexpr int MARGIN = 40;

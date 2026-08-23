@@ -45,8 +45,8 @@ void VbiLineDecoder::run()
 
     // Input data buffers
     SourceVideo::Data sourceFieldData;
-    LdDecodeMetaData::Field fieldMetadata;
-    LdDecodeMetaData::VideoParameters videoParameters;
+    TbcMetaData::Field fieldMetadata;
+    TbcMetaData::VideoParameters videoParameters;
 
     while (!abort) {
         // Get the next field to process from the input file
@@ -111,7 +111,7 @@ void VbiLineDecoder::run()
 
 // Private method to get a single scanline of greyscale data
 SourceVideo::Data VbiLineDecoder::getFieldLine(const SourceVideo::Data &sourceField, qint32 fieldLine,
-                                               const LdDecodeMetaData::VideoParameters& videoParameters)
+                                               const TbcMetaData::VideoParameters& videoParameters)
 {
     // Range-check the field line
     if (fieldLine < startFieldLine || fieldLine > endFieldLine) {

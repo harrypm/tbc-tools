@@ -39,7 +39,7 @@
 #include <array>
 #include <cmath>
 
-PALEncoder::PALEncoder(QFile &_inputFile, QFile &_tbcFile, QFile &_chromaFile, LdDecodeMetaData &_metaData,
+PALEncoder::PALEncoder(QFile &_inputFile, QFile &_tbcFile, QFile &_chromaFile, TbcMetaData &_metaData,
                        int _fieldOffset, bool _isComponent, bool _scLocked)
     : Encoder(_inputFile, _tbcFile, _chromaFile, _metaData, _fieldOffset, _isComponent), scLocked(_scLocked)
 {
@@ -125,7 +125,7 @@ PALEncoder::PALEncoder(QFile &_inputFile, QFile &_tbcFile, QFile &_chromaFile, L
     V.resize(videoParameters.fieldWidth);
 }
 
-void PALEncoder::getFieldMetadata(qint32 fieldNo, LdDecodeMetaData::Field &fieldData)
+void PALEncoder::getFieldMetadata(qint32 fieldNo, TbcMetaData::Field &fieldData)
 {
     fieldData.seqNo = fieldNo + 1;  // Convert 0-indexed fieldNo to 1-indexed seqNo
     fieldData.isFirstField = (fieldNo % 2) == 0;

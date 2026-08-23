@@ -24,7 +24,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
 )
 
 # Link the Qt libraries
-target_link_libraries(${TARGET_NAME} PRIVATE Qt::Core lddecode-library efm)
+target_link_libraries(${TARGET_NAME} PRIVATE Qt::Core tbc-library efm)
 
 # Add the library directory for the EFM library
 target_link_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/../../libs/efm/lib)

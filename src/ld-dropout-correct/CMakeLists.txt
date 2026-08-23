@@ -4,6 +4,6 @@ add_executable(ld-dropout-correct
     dropoutcorrect.cpp
 )
 
-target_link_libraries(ld-dropout-correct PRIVATE Qt::Core lddecode-library)
+target_link_libraries(ld-dropout-correct PRIVATE Qt::Core tbc-library)
 
 install(TARGETS ld-dropout-correct)

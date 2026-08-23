@@ -24,7 +24,7 @@
 
 #include "framecanvas.h"
 
-FrameCanvas::FrameCanvas(ComponentFrame &_componentFrame, const LdDecodeMetaData::VideoParameters &_videoParameters)
+FrameCanvas::FrameCanvas(ComponentFrame &_componentFrame, const TbcMetaData::VideoParameters &_videoParameters)
     : yData(_componentFrame.y(0)), uData(_componentFrame.u(0)), vData(_componentFrame.v(0)),
       width(_componentFrame.getWidth()), height(_componentFrame.getHeight()),
       ireRange(_videoParameters.white16bIre - _videoParameters.black16bIre), blackIre(_videoParameters.black16bIre),

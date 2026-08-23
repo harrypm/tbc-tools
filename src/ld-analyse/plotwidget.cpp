@@ -13,6 +13,10 @@
 #include <QDebug>
 #include <QtMath>
 #include <QApplication>
+#include <QPainter>
+#include <QGestureEvent>
+#include <QPinchGesture>
+#include <algorithm>
 #include <cmath>
 namespace {
 QFont plotUiFont(const QWidget *widget, int pointDelta)
@@ -93,6 +97,8 @@ void PlotWidget::setupView()
     
     // Install event filter to capture mouse events
     m_view->viewport()->installEventFilter(this);
+    // Accept touchpad/touchscreen pinch gestures for zoom (in addition to the wheel).
+    m_view->viewport()->grabGesture(Qt::PinchGesture);
     
     m_mainLayout->addWidget(m_view);
     
@@ -108,6 +114,18 @@ void PlotWidget::setupView()
     m_axisLabels = new PlotAxisLabels(this);
     m_scene->addItem(m_axisLabels);
     
+    // Create hover readout (crosshair + label); hidden until the cursor enters
+    m_hoverMarker = new PlotMarker(this);
+    m_hoverMarker->setStyle(PlotMarker::Cross);
+    m_hoverMarker->setPen(QPen(theme_tokens::mutedText(QApplication::palette()), 1, Qt::DashLine));
+    m_hoverMarker->setVisible(false);
+    m_scene->addItem(m_hoverMarker);
+
+    m_hoverLabel = new QGraphicsTextItem;
+    m_hoverLabel->setZValue(4); // above curve, grid, axis labels
+    m_hoverLabel->setVisible(false);
+    m_scene->addItem(m_hoverLabel);
+
     // Detect and apply theme
     updateTheme();
     
@@ -335,6 +353,19 @@ void PlotWidget::setPanEnabled(bool enabled)
     m_panEnabled = enabled;
 }
 
+void PlotWidget::setHoverEnabled(bool enabled)
+{
+    m_hoverEnabled = enabled;
+    if (!enabled) {
+        hideHoverReadout();
+    }
+}
+
+void PlotWidget::setHoverFormatter(std::function<QString(const QPointF &, const PlotSeries *)> formatter)
+{
+    m_hoverFormatter = std::move(formatter);
+}
+
 void PlotWidget::resetZoom()
 {
     m_xMin = m_xBoundMin;
@@ -420,6 +451,11 @@ void PlotWidget::replot()
     for (PlotMarker *marker : m_markers) {
         marker->updateMarker(m_plotRect, m_dataRect);
     }
+
+    // Keep the hover crosshair geometry in sync with the new plot rect.
+    if (m_hoverMarker) {
+        m_hoverMarker->updateMarker(m_plotRect, m_dataRect);
+    }
     
     // Update legend
     if (m_legend) {
@@ -458,7 +494,10 @@ void PlotWidget::mousePressEvent(QMouseEvent *event)
         
         // Check if click is within plot area
         if (m_plotRect.contains(scenePos)) {
+            // Left-drag pans the view (in addition to right-drag pan).
             m_isDragging = true;
+            m_lastPanScenePos = scenePos;
+            hideHoverReadout();
             // Convert to data coordinates
             QPointF dataPoint = mapToData(scenePos);
             emit plotClicked(dataPoint);
@@ -471,16 +510,12 @@ void PlotWidget::mousePressEvent(QMouseEvent *event)
 void PlotWidget::mouseMoveEvent(QMouseEvent *event)
 {
     if (m_isDragging) {
-        // Map position to scene coordinates
+        // Left-drag pans the view (in addition to right-drag pan).
         QPoint viewPos = m_view->mapFromParent(event->pos());
         QPointF scenePos = m_view->mapToScene(viewPos);
-        
-        // Check if still within plot area
-        if (m_plotRect.contains(scenePos)) {
-            // Convert to data coordinates
-            QPointF dataPoint = mapToData(scenePos);
-            emit plotDragged(dataPoint);
-        }
+        const QPointF sceneDelta = scenePos - m_lastPanScenePos;
+        m_lastPanScenePos = scenePos;
+        panBySceneDelta(sceneDelta);
     }
     
     QWidget::mouseMoveEvent(event);
@@ -498,6 +533,31 @@ void PlotWidget::mouseReleaseEvent(QMouseEvent *event)
 bool PlotWidget::eventFilter(QObject *obj, QEvent *event)
 {
     if (obj == m_view->viewport()) {
+        if (event->type() == QEvent::Leave) {
+            hideHoverReadout();
+            return false;
+        }
+        if (event->type() == QEvent::Gesture) {
+            // Pinch-to-zoom (touchpad/touch). Pinch scaleFactor > 1 = fingers
+            // apart = zoom in; zoomAt uses the opposite convention (< 1 zooms
+            // in), so invert. Zoom around the pinch centre, mapped to scene coords.
+            if (QGestureEvent *ge = static_cast<QGestureEvent*>(event)) {
+                if (QPinchGesture *pinch = static_cast<QPinchGesture*>(ge->gesture(Qt::PinchGesture))) {
+                    if (m_zoomEnabled) {
+                        const double sf = pinch->scaleFactor();
+                        if (sf > 0.0 && qAbs(sf - 1.0) > 1e-3) {
+                            const QPointF scenePos = m_view->mapToScene(
+                                m_view->mapFromGlobal(pinch->centerPoint().toPoint()));
+                            if (m_plotRect.contains(scenePos)) {
+                                zoomAt(scenePos, 1.0 / sf);
+                                ge->accept(pinch);
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if (event->type() == QEvent::MouseButtonDblClick) {
             QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
             if (mouseEvent->button() == Qt::LeftButton) {
@@ -547,7 +607,10 @@ bool PlotWidget::eventFilter(QObject *obj, QEvent *event)
                 
                 // Check if click is within plot area
                 if (m_plotRect.contains(scenePos)) {
+                    // Left-drag pans the view (in addition to right-drag pan).
                     m_isDragging = true;
+                    m_lastPanScenePos = scenePos;
+                    hideHoverReadout();
                     // Convert to data coordinates
                     QPointF dataPoint = mapToData(scenePos);
                     emit plotClicked(dataPoint);
@@ -564,16 +627,28 @@ bool PlotWidget::eventFilter(QObject *obj, QEvent *event)
                 return true;
             }
             if (m_isDragging) {
-                // Map to scene coordinates
-                QPointF scenePos = m_view->mapToScene(mouseEvent->pos());
-                
-                // Check if still within plot area
-                if (m_plotRect.contains(scenePos)) {
-                    // Convert to data coordinates
-                    QPointF dataPoint = mapToData(scenePos);
-                    emit plotDragged(dataPoint);
-                }
+                // Left-drag pans the view (in addition to right-drag pan).
+                const QPointF scenePos = m_view->mapToScene(mouseEvent->pos());
+                const QPointF sceneDelta = scenePos - m_lastPanScenePos;
+                m_lastPanScenePos = scenePos;
+                panBySceneDelta(sceneDelta);
                 return true;  // Event handled
+            }
+            // No button held: hover readout (snap crosshair to nearest point).
+            if (m_hoverEnabled) {
+                const QPointF scenePos = m_view->mapToScene(mouseEvent->pos());
+                if (m_plotRect.contains(scenePos)) {
+                    QPointF nearestPoint;
+                    const PlotSeries *nearestSeries = nullptr;
+                    if (findNearestDataPoint(scenePos, nearestPoint, nearestSeries)) {
+                        showHoverReadout(nearestPoint, nearestSeries);
+                        emit plotHovered(nearestPoint, nearestSeries);
+                    } else {
+                        hideHoverReadout();
+                    }
+                } else {
+                    hideHoverReadout();
+                }
             }
         } else if (event->type() == QEvent::MouseButtonRelease) {
             QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
@@ -701,6 +776,94 @@ void PlotWidget::panBySceneDelta(const QPointF &sceneDelta)
     emit plotAreaChanged(m_plotRect);
 }
 
+bool PlotWidget::findNearestDataPoint(const QPointF &scenePos, QPointF &outPoint, const PlotSeries *&outSeries) const
+{
+    if (m_series.isEmpty() || m_plotRect.width() <= 0.0 || m_plotRect.height() <= 0.0) {
+        return false;
+    }
+    const QPointF cursorData = mapToData(scenePos);
+    bool found = false;
+    double bestDist = 0.0;
+    for (PlotSeries *series : m_series) {
+        if (!series->isVisible()) continue;
+        const QVector<QPointF> &data = series->data();
+        if (data.isEmpty()) continue;
+        // Data is sorted by x (frameNumber). Binary-search for the closest x,
+        // then pick the closer of the two neighbours by Euclidean distance.
+        auto it = std::lower_bound(data.constBegin(), data.constEnd(), cursorData.x(),
+            [](const QPointF &p, double x) { return p.x() < x; });
+        const int idx = int(it - data.constBegin());
+        int bestIdx = -1;
+        double bestLocal = 0.0;
+        for (int cand : {idx - 1, idx}) {
+            if (cand < 0 || cand >= data.size()) continue;
+            const QPointF sp = mapFromData(data.at(cand));
+            const double dx = sp.x() - scenePos.x();
+            const double dy = sp.y() - scenePos.y();
+            const double dist = dx * dx + dy * dy;
+            if (bestIdx < 0 || dist < bestLocal) {
+                bestLocal = dist;
+                bestIdx = cand;
+            }
+        }
+        if (bestIdx < 0) continue;
+        if (!found || bestLocal < bestDist) {
+            bestDist = bestLocal;
+            outPoint = data.at(bestIdx);
+            outSeries = series;
+            found = true;
+        }
+    }
+    return found;
+}
+
+void PlotWidget::showHoverReadout(const QPointF &dataPoint, const PlotSeries *series)
+{
+    if (!m_hoverMarker || !m_hoverLabel) return;
+    m_hoverMarker->setPosition(dataPoint);
+    m_hoverMarker->setVisible(true);
+
+    QString text;
+    if (m_hoverFormatter) {
+        text = m_hoverFormatter(dataPoint, series);
+    } else {
+        text = QStringLiteral("x: %1  y: %2")
+                   .arg(QString::number(dataPoint.x(), 'f', 1),
+                        QString::number(dataPoint.y(), 'f', 1));
+    }
+
+    const QColor bg = QApplication::palette().color(QPalette::Window);
+    const QColor fg = QApplication::palette().color(QPalette::WindowText);
+    m_hoverLabel->setFont(plotUiFont(this, 0));
+    m_hoverLabel->setHtml(QStringLiteral(
+        "<span style=\"background-color: rgba(%1,%2,%3,220); "
+        "color: rgb(%4,%5,%6);\">&nbsp;%7&nbsp;</span>")
+        .arg(bg.red()).arg(bg.green()).arg(bg.blue())
+        .arg(fg.red()).arg(fg.green()).arg(fg.blue())
+        .arg(text.toHtmlEscaped()));
+
+    // Place the label just above-right of the point; flip/shift to keep it in view.
+    const QPointF scenePos = mapFromData(dataPoint);
+    const qreal w = m_hoverLabel->boundingRect().width();
+    const qreal h = m_hoverLabel->boundingRect().height();
+    QPointF labelPos = scenePos + QPointF(8, -h - 4);
+    const qreal inset = 2.0;
+    if (labelPos.x() + w > m_plotRect.right() - inset) {
+        labelPos.setX(scenePos.x() - w - 8);
+    }
+    if (labelPos.y() < m_plotRect.top() + inset) {
+        labelPos.setY(scenePos.y() + 4);
+    }
+    m_hoverLabel->setPos(labelPos);
+    m_hoverLabel->setVisible(true);
+}
+
+void PlotWidget::hideHoverReadout()
+{
+    if (m_hoverMarker) m_hoverMarker->setVisible(false);
+    if (m_hoverLabel) m_hoverLabel->setVisible(false);
+}
+
 void PlotWidget::updatePlotArea()
 {
     QSize viewSize = m_view->size();
@@ -821,6 +984,7 @@ void PlotSeries::setVisible(bool visible)
 void PlotSeries::updatePath(const QRectF &plotRect, const QRectF &dataRect)
 {
     if (m_data.isEmpty() || !m_plotWidget) return;
+    m_plotRect = plotRect;  // cached for clipping in paint()
     
     QPainterPath path;
     
@@ -851,6 +1015,16 @@ void PlotSeries::updatePath(const QRectF &plotRect, const QRectF &dataRect)
     }
     
     setPath(path);
+}
+
+void PlotSeries::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
+{
+    // Clip the curve/bars to the plot rectangle so the pen never draws into
+    // the axis margins (keeps the line inside the H/V scale frame).
+    painter->save();
+    painter->setClipRect(m_plotRect);
+    QGraphicsPathItem::paint(painter, option, widget);
+    painter->restore();
 }
 
 // PlotGrid implementation

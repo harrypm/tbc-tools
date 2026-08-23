@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
     }
 
     // Open the source video metadata
-    LdDecodeMetaData metaData;
+    TbcMetaData metaData;
     qInfo().nospace().noquote() << "Reading metadata from " << inputMetadataFilename;
     if (!metaData.read(inputMetadataFilename)) {
         qCritical() << "Unable to open TBC metadata file";

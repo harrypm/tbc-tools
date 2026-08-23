@@ -256,8 +256,8 @@ CandidateDecode decodeAtStartBit(const QVector<double> &normalizedLine,
 // Public method to read CEA-608 Closed Captioning data.
 // Return true if CC data was decoded successfully, false otherwise.
 bool ClosedCaption::decodeLine(const SourceVideo::Data& lineData,
-                               const LdDecodeMetaData::VideoParameters& videoParameters,
-                               LdDecodeMetaData::Field& fieldMetadata)
+                               const TbcMetaData::VideoParameters& videoParameters,
+                               TbcMetaData::Field& fieldMetadata)
 {
     // Reset data to invalid
     fieldMetadata.closedCaption.inUse = false;

@@ -33,7 +33,7 @@
 #include <QThread>
 
 #include "sourcevideo.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 #include "dropoutcorrect.h"
 
 class CorrectorPool : public QObject
@@ -41,16 +41,16 @@ class CorrectorPool : public QObject
     Q_OBJECT
 public:
     explicit CorrectorPool(QString _outputFilename, QString _outputJsonFilename,
-                           qint32 _maxThreads, QVector<LdDecodeMetaData *> &_ldDecodeMetaData, QVector<SourceVideo *> &_sourceVideos,
+                           qint32 _maxThreads, QVector<TbcMetaData *> &_metaData, QVector<SourceVideo *> &_sourceVideos,
                            bool _reverse, bool _intraField, bool _overCorrect, QObject *parent = nullptr);
 
     bool process();
 
     // Member functions used by worker threads
     bool getInputFrame(qint32& frameNumber,
-                       QVector<qint32> &firstFieldNumber, QVector<SourceVideo::Data> &firstFieldVideoData, QVector<LdDecodeMetaData::Field> &firstFieldMetadata,
-                       QVector<qint32> &secondFieldNumber, QVector<SourceVideo::Data> &secondFieldVideoData, QVector<LdDecodeMetaData::Field> &secondFieldMetadata,
-                       QVector<LdDecodeMetaData::VideoParameters> &videoParameters,
+                       QVector<qint32> &firstFieldNumber, QVector<SourceVideo::Data> &firstFieldVideoData, QVector<TbcMetaData::Field> &firstFieldMetadata,
+                       QVector<qint32> &secondFieldNumber, QVector<SourceVideo::Data> &secondFieldVideoData, QVector<TbcMetaData::Field> &secondFieldMetadata,
+                       QVector<TbcMetaData::VideoParameters> &videoParameters,
                        bool& _reverse, bool& _intraField, bool& _overCorrect, QVector<qint32> &availableSourcesForFrame, QVector<double> &sourceFrameQuality);
 
     bool setOutputFrame(qint32 frameNumber,
@@ -80,7 +80,7 @@ private:
     QMutex inputMutex;
     qint32 inputFrameNumber;
     qint32 lastFrameNumber;
-    QVector<LdDecodeMetaData *> &ldDecodeMetaData;
+    QVector<TbcMetaData *> &metaData;
     QVector<SourceVideo *> &sourceVideos;
 
     // Output stream information (all guarded by outputMutex while threads are running)

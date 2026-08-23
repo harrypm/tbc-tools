@@ -6,7 +6,7 @@
  * Ported from decode-orc (orc/gui/waveformmonitorwidget.{h,cpp}) and adapted
  * to ld-analyse: samples arrive already in the 10-bit CVBS_U10_4FSC domain
  * (the dialog converts legacy 16-bit TBC samples via tbc::cvbs::tbc_to_cvbs),
- * and level/geometry data comes from LdDecodeMetaData::VideoParameters.
+ * and level/geometry data comes from TbcMetaData::VideoParameters.
  * Amplitude maths use tbc::amp (samples10_to_mv / samples10_to_ire), so the
  * Y-axis and markers match decode-orc's spec-referenced conversions exactly.
  *
@@ -18,7 +18,7 @@
 
 #include "amplitude_conversion.h"
 #include "cvbs_signal_constants.h"
-#include "lddecodemetadata.h"
+#include "tbcmetadata.h"
 
 #include <QImage>
 #include <QWidget>
@@ -41,7 +41,7 @@ class WaveformMonitorWidget : public QWidget {
   // 16-bit black level (converted to 10-bit for the Black marker).
   void setData(const std::vector<int16_t> &composite_samples,
                int first_field_height, int second_field_height,
-               const LdDecodeMetaData::VideoParameters &video_params);
+               const TbcMetaData::VideoParameters &video_params);
 
   void setGain(double gain);
   double gain() const { return gain_; }
