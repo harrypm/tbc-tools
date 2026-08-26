@@ -19,14 +19,6 @@
 #include <QDir>
 #include <QFileInfo>
 
-#ifdef Q_OS_WIN
-#include <QSettings>
-#elif defined(Q_OS_MACOS)
-#include <QProcess>
-#elif defined(Q_OS_LINUX)
-#include <QProcess>
-#endif
-
 #include "tbc/logging.h"
 #include "tbc/uistyle.h"
 namespace {
@@ -145,65 +137,6 @@ void configureBundledQtPluginPaths(int argc, char *argv[])
 }
 } // namespace
 
-// Cross-platform function to detect if system is in dark mode
-bool isDarkModeEnabled() {
-#ifdef Q_OS_WIN
-    QSettings settings("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", QSettings::NativeFormat);
-    return settings.value("AppsUseLightTheme", 1).toInt() == 0;
-#elif defined(Q_OS_MACOS)
-    QProcess process;
-    process.start("defaults", QStringList() << "read" << "-g" << "AppleInterfaceStyle");
-    process.waitForFinished();
-    QString result = process.readAllStandardOutput().trimmed();
-    return result == "Dark";
-#elif defined(Q_OS_LINUX)
-    // Try gsettings for GNOME color-scheme (modern approach)
-    QProcess process;
-    process.start("gsettings", QStringList() << "get" << "org.gnome.desktop.interface" << "color-scheme");
-    process.waitForFinished();
-    QString result = process.readAllStandardOutput().trimmed();
-    result = result.remove('\'').remove('"'); // Remove quotes
-    if (result.contains("dark", Qt::CaseInsensitive)) {
-        return true;
-    }
-    
-    // Fallback: Check GTK theme name
-    process.start("gsettings", QStringList() << "get" << "org.gnome.desktop.interface" << "gtk-theme");
-    process.waitForFinished();
-    result = process.readAllStandardOutput().trimmed();
-    result = result.remove('\'').remove('"');
-    return result.contains("dark", Qt::CaseInsensitive);
-#endif
-    return false;
-}
-
-// Apply a dark theme palette to the application
-void applyDarkTheme(QApplication &app) {
-    QPalette darkPalette;
-    
-    // Define dark theme colors
-    QColor windowColor(53, 53, 53);
-    QColor baseColor(25, 25, 25);
-    QColor alternateColor(64, 64, 64);
-    QColor textColor(255, 255, 255);
-    QColor buttonColor(53, 53, 53);
-    QColor highlightColor(42, 130, 218);
-    QColor highlightTextColor(255, 255, 255);
-    
-    // Set palette colors
-    darkPalette.setColor(QPalette::Window, windowColor);
-    darkPalette.setColor(QPalette::WindowText, textColor);
-    darkPalette.setColor(QPalette::Base, baseColor);
-    darkPalette.setColor(QPalette::AlternateBase, alternateColor);
-    darkPalette.setColor(QPalette::Text, textColor);
-    darkPalette.setColor(QPalette::Button, buttonColor);
-    darkPalette.setColor(QPalette::ButtonText, textColor);
-    darkPalette.setColor(QPalette::Highlight, highlightColor);
-    darkPalette.setColor(QPalette::HighlightedText, highlightTextColor);
-    
-    app.setPalette(darkPalette);
-}
-
 // Custom message handler that filters out harmless Qt system warnings
 void filteredDebugOutputHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
@@ -231,10 +164,9 @@ int main(int argc, char *argv[])
 #endif
     configureBundledQtPluginPaths(argc, argv);
 
-    tbc::ui::normalizeUnsupportedStyleOverrideToFusion();
+    tbc::ui::prepareStockThemeEnvironment();
 
-    QApplication a(argc, argv);
-    tbc::ui::applyFusionStyleIfAvailable(a);
+    tbc::ui::ThemedApplication a(argc, argv);
 
     // Set application name and version
     QCoreApplication::setApplicationName("ld-analyse");
@@ -269,8 +201,12 @@ int main(int argc, char *argv[])
     // Add the standard debug options --debug and --quiet
     addStandardDebugOptions(parser);
 
-    // Add theme override option
-    parser.addOption(QCommandLineOption("force-dark-theme", "Force dark theme regardless of system settings"));
+    // Theme options. Stock default is Fusion + dark (absolute; re-asserted on
+    // macOS appearance switchover by ThemedApplication). --light-theme opts
+    // into the light palette; --force-dark-theme is kept as a back-compat
+    // no-op (dark is now the default).
+    parser.addOption(QCommandLineOption("force-dark-theme", "Force dark theme regardless of system settings (default; no-op)"));
+    parser.addOption(QCommandLineOption("light-theme", "Use the light Fusion theme instead of the stock dark theme"));
     parser.addOption(QCommandLineOption("metadata-only", "Load metadata (.db or .json) without TBC data"));
 
     // Positional argument to specify input video file
@@ -282,25 +218,15 @@ int main(int argc, char *argv[])
     // Standard logging options
     processStandardDebugOptions(parser);
 
-    // Check for theme override
-    bool forceDarkTheme = parser.isSet("force-dark-theme");
-
-    // Determine theme: command line override takes precedence over system detection
-    bool shouldApplyDarkTheme;
-    if (forceDarkTheme) {
-        shouldApplyDarkTheme = true;
-        a.setProperty("isDarkTheme", true);
+    // Apply the stock theme (dark by default, light via --light-theme). This
+    // sets the Fusion palette, the isDarkTheme app property, the Qt 6.8 color
+    // scheme override, and the input-widget contrast guard. ThemedApplication
+    // re-asserts it on any ApplicationPaletteChange (e.g. macOS switchover).
+    if (parser.isSet("light-theme")) {
+        a.applyStockLightTheme();
     } else {
-        // Qt on Linux doesn't automatically pick up GTK themes, so detect manually
-        shouldApplyDarkTheme = isDarkModeEnabled();
-        // Don't set property - let PlotWidget detect from applied palette
+        a.applyStockDarkTheme();
     }
-    
-    // Apply dark theme if needed (Qt doesn't do this automatically on Linux)
-    if (shouldApplyDarkTheme) {
-        applyDarkTheme(a);
-    }
-    tbc::ui::enforceInputWidgetContrast(a);
 
     // Get the arguments from the parser
     QString inputFileName;

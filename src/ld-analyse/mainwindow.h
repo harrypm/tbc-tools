@@ -378,6 +378,7 @@ private:
     void updateFieldTimingDialogue();
     void populateThemesMenu();
     void applyThemeStyle(const QString &styleName);
+    void refreshThemeDependentUi();
     void mouseScanLineSelect(qint32 oX, qint32 oY);
 	void resizeEvent(QResizeEvent *event);
     void requestSourceOpen(const QString &inputFileName);
@@ -409,6 +410,7 @@ private:
     qint32 asyncFrameRenderFrameNumber = -1;
     qint32 asyncFrameRenderFieldNumber = -1;
     QImage asyncFrameImage;
+    bool themeRefreshPending = false;
 };
 
 #endif // MAINWINDOW_H

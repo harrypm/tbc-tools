@@ -17,79 +17,10 @@
 #include <QPalette>
 #include <QStringList>
 #include <QStyleFactory>
-#if defined(Q_OS_WIN)
-#include <QSettings>
-#elif defined(Q_OS_MACOS)
-#include <QProcess>
-#elif defined(Q_OS_LINUX)
-#include <QProcess>
-#endif
 
 #include "efmhandlerdialog.h"
 #include "tbc/logging.h"
 #include "tbc/uistyle.h"
-namespace {
-// Cross-platform function to detect if system is in dark mode
-bool isDarkModeEnabled()
-{
-#ifdef Q_OS_WIN
-    QSettings settings("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", QSettings::NativeFormat);
-    return settings.value("AppsUseLightTheme", 1).toInt() == 0;
-#elif defined(Q_OS_MACOS)
-    QProcess process;
-    process.start("defaults", QStringList() << "read" << "-g" << "AppleInterfaceStyle");
-    process.waitForFinished();
-    QString result = process.readAllStandardOutput().trimmed();
-    return result == "Dark";
-#elif defined(Q_OS_LINUX)
-    // Try gsettings for GNOME color-scheme (modern approach)
-    QProcess process;
-    process.start("gsettings", QStringList() << "get" << "org.gnome.desktop.interface" << "color-scheme");
-    process.waitForFinished();
-    QString result = process.readAllStandardOutput().trimmed();
-    result = result.remove('\'').remove('"'); // Remove quotes
-    if (result.contains("dark", Qt::CaseInsensitive)) {
-        return true;
-    }
-
-    // Fallback: Check GTK theme name
-    process.start("gsettings", QStringList() << "get" << "org.gnome.desktop.interface" << "gtk-theme");
-    process.waitForFinished();
-    result = process.readAllStandardOutput().trimmed();
-    result = result.remove('\'').remove('"');
-    return result.contains("dark", Qt::CaseInsensitive);
-#endif
-    return false;
-}
-
-// Apply a dark theme palette to the application
-void applyDarkTheme(QApplication &app)
-{
-    QPalette darkPalette;
-
-    // Define dark theme colors
-    QColor windowColor(53, 53, 53);
-    QColor baseColor(25, 25, 25);
-    QColor alternateColor(64, 64, 64);
-    QColor textColor(255, 255, 255);
-    QColor buttonColor(53, 53, 53);
-    QColor highlightColor(42, 130, 218);
-    QColor highlightTextColor(255, 255, 255);
-
-    // Set palette colors
-    darkPalette.setColor(QPalette::Window, windowColor);
-    darkPalette.setColor(QPalette::WindowText, textColor);
-    darkPalette.setColor(QPalette::Base, baseColor);
-    darkPalette.setColor(QPalette::AlternateBase, alternateColor);
-    darkPalette.setColor(QPalette::Text, textColor);
-    darkPalette.setColor(QPalette::Button, buttonColor);
-    darkPalette.setColor(QPalette::ButtonText, textColor);
-    darkPalette.setColor(QPalette::Highlight, highlightColor);
-    darkPalette.setColor(QPalette::HighlightedText, highlightTextColor);
-
-    app.setPalette(darkPalette);
-}
-} // namespace
 
 int main(int argc, char *argv[])
 {
@@ -100,10 +31,9 @@ int main(int argc, char *argv[])
     setDebug(true);
     qInstallMessageHandler(debugOutputHandler);
 
-    tbc::ui::normalizeUnsupportedStyleOverrideToFusion();
+    tbc::ui::prepareStockThemeEnvironment();
 
-    QApplication app(argc, argv);
-    tbc::ui::applyFusionStyleIfAvailable(app);
+    tbc::ui::ThemedApplication app(argc, argv);
 
     QCoreApplication::setApplicationName("tbc-efm-handler");
     QCoreApplication::setApplicationVersion(
@@ -144,7 +74,9 @@ int main(int argc, char *argv[])
                                         QCoreApplication::translate("main", "path"));
     parser.addOption(outputBaseOption);
     parser.addOption(QCommandLineOption("force-dark-theme",
-                                        QCoreApplication::translate("main", "Force dark theme regardless of system settings")));
+                                        QCoreApplication::translate("main", "Force dark theme regardless of system settings (default; no-op)")));
+    parser.addOption(QCommandLineOption("light-theme",
+                                        QCoreApplication::translate("main", "Use the light Fusion theme instead of the stock dark theme")));
 
     parser.addPositionalArgument(
         "input",
@@ -154,13 +86,15 @@ int main(int argc, char *argv[])
 
     parser.process(app);
     processStandardDebugOptions(parser);
-    const bool forceDarkTheme = parser.isSet(QStringLiteral("force-dark-theme"));
-    const bool shouldApplyDarkTheme = forceDarkTheme ? true : isDarkModeEnabled();
-    if (shouldApplyDarkTheme) {
-        app.setProperty("isDarkTheme", true);
-        applyDarkTheme(app);
+
+    // Apply the stock theme (dark by default, light via --light-theme). Sets
+    // the Fusion palette, isDarkTheme property, Qt 6.8 color scheme override,
+    // and input-widget contrast guard; re-asserted on macOS switchover.
+    if (parser.isSet(QStringLiteral("light-theme"))) {
+        app.applyStockLightTheme();
+    } else {
+        app.applyStockDarkTheme();
     }
-    tbc::ui::enforceInputWidgetContrast(app);
 
     EfmHandlerDialog dialog;
 

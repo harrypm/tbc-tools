@@ -45,10 +45,8 @@ int main(int argc, char *argv[])
     setDebug(true);
     qInstallMessageHandler(debugOutputHandler);
     if (wantsGui(argc, argv)) {
-        tbc::ui::normalizeUnsupportedStyleOverrideToFusion();
-        QApplication a(argc, argv);
-        tbc::ui::applyFusionStyleIfAvailable(a);
-        tbc::ui::enforceInputWidgetContrast(a);
+        tbc::ui::prepareStockThemeEnvironment();
+        tbc::ui::ThemedApplication a(argc, argv);
 
         QCoreApplication::setApplicationName("tbc-metadata-converter");
         QCoreApplication::setApplicationVersion(QString("tbc-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
@@ -68,6 +66,9 @@ int main(int argc, char *argv[])
         QCommandLineOption guiOption(QStringList() << "g" << "gui",
                                      QCoreApplication::translate("main", "Launch the GUI (default when no arguments are provided)."));
         parser.addOption(guiOption);
+        QCommandLineOption lightThemeOption("light-theme",
+                                            QCoreApplication::translate("main", "Use the light Fusion theme instead of the stock dark theme"));
+        parser.addOption(lightThemeOption);
 
         QCommandLineOption directionOption(QStringList() << "direction",
                                            QCoreApplication::translate("main", "Conversion direction: json-to-sqlite or sqlite-to-json (default json-to-sqlite)"),
@@ -97,6 +98,15 @@ int main(int argc, char *argv[])
 
         parser.process(a);
         processStandardDebugOptions(parser);
+
+        // Apply the stock theme (dark by default, light via --light-theme). Sets
+        // the Fusion palette, isDarkTheme property, Qt 6.8 color scheme override,
+        // and input-widget contrast guard; re-asserted on macOS switchover.
+        if (parser.isSet(lightThemeOption)) {
+            a.applyStockLightTheme();
+        } else {
+            a.applyStockDarkTheme();
+        }
 
         QString inputFilename;
         if (parser.isSet(inputJsonOption)) {

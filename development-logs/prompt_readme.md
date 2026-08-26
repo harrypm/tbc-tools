@@ -3424,3 +3424,173 @@ Result: compiled + linked cleanly; bin/ld-analyse produced. uic regenerated ui_c
 Command: date -u +%Y-%m-%dT%H:%M:%SZ
 Output:
 2026-08-01T08:38:54Z
+
+## 2026-08-25T23:01Z
+User input: "git pull" (then) "I want to fix macos night mode trasision from affecting the themes, as users have reported newer versions of macos have at midnight/night mode switchover affecting and breaking themes" (then) "App setting is absolute, ignore disallow system auto change affects as its intended to run on style Fusion dark mode by stock" (then) "Execute this plan." + "light mode should be possible manully"
+Command: git --no-pager pull
+Output: Fast-forward 10823a48..e852a12e on origin/main; 923 files changed, 20894 insertions, 5707 deletions; new tags v3.2.2..v3.2.7; new branches origin/chore/cache-migration-external-repo, origin/fix/aaa-tbc-video-export-self-contained; rename src/library/tbc/lddecodemetadata.{cpp,h} -> tbcmetadata.{cpp,h}.
+
+Research (grep/codebase): confirmed root cause — no QEvent::ApplicationPaletteChange / QStyleHints::colorSchemeChanged handling anywhere in src/; on macOS appearance switchover Qt re-reads system palette and overwrites the startup dark palette, flipping PlotWidget::isDarkTheme() (src/ld-analyse/plotwidget.cpp:388, gui/oscilloscope/plotwidget.cpp:334) via its Window-vs-WindowText lightness heuristic -> plots/grid/axis labels + input-widget contrast break. 6 GUI entrypoints used 3 inconsistent theme patterns. No CI contract governs these files (grep of ci/).
+Web (Qt docs + forum, hard data): QEvent::ApplicationPaletteChange is delivered to QApplication::event() (overrideable); QGuiApplication::paletteChanged deprecated since 6.0; QStyleHints::setColorScheme() (Qt >= 6.8) overrides system color scheme and ignores its changes (honored on macOS); re-applying palette synchronously inside event() can recurse setPalette->ApplicationPaletteChange->setPalette and crash -> must defer with QTimer::singleShot(0,...) after base propagation.
+
+Plan: created plan 47462ee0-01bb-4539-9627-770cb7e4f1c6 "Pin GUI theme to Fusion-dark and ignore macOS appearance switchover". Updated to keep light mode manually via --light-theme (per user).
+
+Edits (7 files):
+- src/library/tbc/uistyle.h: added stockDarkPalette(), stockLightPalette(), prepareStockThemeEnvironment() (setDesktopSettingsAware(false) + normalizeUnsupportedStyleOverrideToFusion, before QApplication construction), and class ThemedApplication : QApplication (event() override re-asserts stock palette on ApplicationPaletteChange via deferred QTimer::singleShot(0) to avoid recursion; applyStockDarkTheme()/applyStockLightTheme() members set Fusion palette + isDarkTheme property + Qt>=6.8 setColorScheme + enforceInputWidgetContrast; m_reasserting guard). Header-only, no Q_OBJECT. Includes added: QGuiApplication, QTimer, QStyleHints.
+- src/ld-analyse/main.cpp: removed isDarkModeEnabled()/applyDarkTheme() + QSettings/QProcess includes; prepareStockThemeEnvironment() + ThemedApplication; added --light-theme; --force-dark-theme kept as back-compat no-op; applyStockDark/LightTheme after CLI parse.
+- src/ld-analyse/efmhandler-main.cpp: same removal/swap; --light-theme added.
+- src/audio-align/main.cpp: same removal/swap; --light-theme added.
+- src/tbc-export-metadata/main.cpp: same removal/swap; lightThemeOption added to ExportCommandLineOptions struct + addToParser; --force-dark-theme no-op; removed QProcess include + QSettings from Q_OS_WIN block (windows.h kept).
+- src/ld-lds-converter/main.cpp: removed enforceFusionStyleEnvironment()/applyUnifiedDarkFusionPalette(); sanitizeGuiStartupEnvironment() now calls prepareStockThemeEnvironment(); ThemedApplication; --light-theme added; theme applied after CLI parse.
+- src/tbc-metadata-converter/main.cpp: prepareStockThemeEnvironment() + ThemedApplication; --light-theme added; theme applied after CLI parse.
+
+Sanity grep: isDarkModeEnabled/applyDarkTheme/applyUnifiedDarkFusionPalette/enforceFusionStyleEnvironment fully removed from src/ (only uistyle.h definitions of normalizeUnsupportedStyleOverrideToFusion/applyFusionStyleIfAvailable remain). All 6 entrypoints reference ThemedApplication/prepareStockThemeEnvironment/applyStock*/light-theme.
+
+Build (Homebrew Qt6 + system cmake 4.2.3, via Nix devShell for ONNXRUNTIME_ROOT/EZPWD_DIR; nix at /nix/var/nix/profiles/default/bin):
+Command: PATH="/nix/var/nix/profiles/default/bin:$PATH" nix develop -c cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+Output: Qt Version (empty string in log), LDCHROMA_ENABLE_CUDA=OFF, Configuring done (2.7s). (First attempt with bare system cmake failed: ONNXRUNTIME not found — reconfigured via nix devShell which sets ONNXRUNTIME_ROOT.)
+Command: PATH="/nix/var/nix/profiles/default/bin:$PATH" nix develop -c ninja -C build
+Output: First pass FAILED on efmhandler-main.cpp: uistyle.h:234 error "member access into incomplete type 'QStyleHints'" — fixed by adding #include <QStyleHints>. Re-ran ninja -> completed; "ninja: no work to do". All 6 GUI binaries rebuilt 26 Aug 00:17: ld-analyse.app/Contents/MacOS/ld-analyse, tbc-efm-handler, tbc-audio-align, tbc-export-metadata, ld-lds-converter, tbc-metadata-converter.
+
+Tests + contracts:
+Command: python3 ci/check_ci_contracts.py -> "CI contract checks passed."
+Command: ctest --test-dir build --output-on-failure -> 18 passed, 8 failed, 1 skipped (aaa-runtime). All 8 failures are teletext-export tests (decode-pretbc-*, ld-process-vbi-teletext-runtime) failing with "Teletext Python dependency check failed: missing:click,tqdm,zmq" — missing Python packages in the Nix devShell, UNRELATED to the theme refactor (ld-process-vbi is a separate CLI tool; none of the failing tests touch uistyle.h or the 6 edited main.cpp files). Unit tests (testmetadata, testvbidecoder, testvitcdecoder, testfilter, testlinenumber, testsourcefield, testmetadataconverterutil, testexportarguments), chroma tests, ld-lds-converter CLI tests, video-export-runtime all PASS.
+
+Status: code complete + builds clean + CI contracts pass + unit tests pass. NOT yet function-validated — per GUI-confirmation rule, asking user to run ld-analyse (and ideally a second tool) and toggle macOS appearance to confirm the theme stays stable through the switchover before marking done. Restore point (log_note_*.md + zip) to be created after user confirms.
+
+## 2026-08-25T23:38Z
+User input: "Add light/dark switch under Themes tab universally" then "Dark is standard, then Light is also a dedicated option in the dropdown"
+Context: only ld-analyse has a Themes dropdown (menu-bar menuThemes; the other 5 GUIs are dialogs with no menu bar). "universally" interpreted as: the switch applies app-wide (all windows/scopes/plots via ThemedApplication), with Dark/Light as dedicated entries in the existing Themes dropdown.
+
+Edits (2 files):
+- src/library/tbc/uistyle.h: added themedApplicationInstance() (dynamic_cast<ThemedApplication*>(QCoreApplication::instance()) — no Q_OBJECT so qobject_cast unavailable; null-safe), and applyStockDarkThemeToApp()/applyStockLightThemeToApp() free functions that delegate to the ThemedApplication preset members (keeps m_reassertDark switchover state tracking the user's choice). No-op if app isn't a ThemedApplication.
+- src/ld-analyse/mainwindow.cpp populateThemesMenu(): added "Dark" and "Light" as checkable, exclusive actions at the TOP of the Themes dropdown (in the existing themesActionGroup), with a separator before the Qt-style list (Fusion/Windows/...). Dark is checked by default (stock). Dark triggered -> tbc::ui::applyStockDarkThemeToApp(); Light triggered -> applyStockLightThemeToApp(). Both set Fusion + stock palette + isDarkTheme property + Qt>=6.8 setColorScheme + contrast guard, and ThemedApplication re-asserts the chosen preset across macOS switchover. The existing style actions remain below the separator as advanced style-only overrides; selecting one unchecks Dark/Light via group exclusivity (applyThemeStyle's check-state loop doesn't match "stock-dark"/"stock-light" data, so presets are correctly unchecked when a raw style is chosen).
+
+Build: PATH="/nix/var/nix/profiles/default/bin:$PATH" nix develop -c ninja -C build ld-analyse -> [20/20] Linking CXX executable bin/ld-analyse.app/Contents/MacOS/ld-analyse; only pre-existing warnings (missing override, dylib macOS-version notices), no errors. Binary rebuilt Aug 26 00:41:49.
+
+Status: code complete + builds. NOT yet function-validated — per GUI-confirmation rule, asking user to run ld-analyse, open the Themes dropdown, confirm Dark is checked (standard), switch to Light and back to Dark, and confirm the whole UI (incl. scopes/plots if open) follows and stays stable through a macOS appearance toggle. Restore point to be updated after confirmation.
+
+## 2026-08-25T23:44Z
+User input: "Light / Dark require dubble selecting to fully reload elements to correct states." (function-test of the Themes dropdown added in the prior session)
+Root cause: PlotWidget caches m_isDarkTheme in updateTheme() (called only at construction + finishUpdate), not on palette change. When the stock theme switch called setPalette(), ApplicationPaletteChange propagated PaletteChange to widgets, but PlotWidget::QWidget::changeEvent (default) updated only the resolved palette + scheduled a plain update — the scene items (grid/axis labels/canvas) still drew with the stale m_isDarkTheme, so the plot stayed half-old-theme until a second event. Custom-painted scope widgets (waveform/fieldtiming/vectorscope) that read PlotWidget::isDarkTheme() inline in paintEvent also needed a repaint nudge.
+
+Fix (3 files):
+- src/ld-analyse/plotwidget.h + gui/oscilloscope/plotwidget.h: added `void changeEvent(QEvent *event) override;` to the protected section.
+- src/ld-analyse/plotwidget.cpp + gui/oscilloscope/plotwidget.cpp: implemented changeEvent -> call base QWidget::changeEvent, then on QEvent::PaletteChange call updateTheme() (refreshes m_isDarkTheme + m_canvasBackground + noData text color, then replots). So the cached theme tracks the new palette in a single pass.
+- src/library/tbc/uistyle.h ThemedApplication::applyStockTheme(): after setPalette + setColorScheme + enforceInputWidgetContrast, iterate QApplication::topLevelWidgets() and call update() on each top-level + all findChildren<QWidget*>() so every custom-painted widget repaints immediately. No-op at startup (no widgets yet).
+
+Build: PATH="/nix/var/nix/profiles/default/bin:$PATH" nix develop -c ninja -C build ld-analyse -> [24/24] Linking; only pre-existing warnings (missing override, dylib macOS-version), no errors. Binary rebuilt Aug 26 00:44.
+
+Status: code complete + builds. Asking user to re-test the Themes dropdown: click Light (should go fully light in one click, incl. open scopes/plots), click Dark (fully dark in one click), and confirm a macOS appearance toggle still leaves the chosen preset stable.
+
+## 2026-08-25T23:49Z
+User input: "see log" + confirmed "Still needs a second click / partial switch (not fixed)" for the Themes dropdown.
+Log read (precmd-...-35): only pre-existing harmless Qt warnings (connectSlotsByName: No matching signal for on_actionSave_all_modes_as_PNGs_triggered / on_actionCopy_current_display_to_clipboard_triggered / on_vectorscopeSelectionPushButton_toggled / on_fieldToggleButton_clicked / on_renderModeButtonGroup_buttonClicked / on_areaModeButtonGroup_buttonClicked) — unrelated UI slot/signal mismatches, no theme error/crash.
+
+Real root cause of double-select (found this session): in ThemedApplication::applyStockTheme() setPalette() was called BEFORE setProperty("isDarkTheme", dark). setPalette() synchronously propagates PaletteChange to every widget; PlotWidget::changeEvent -> updateTheme() -> isDarkTheme() reads the isDarkTheme app property DURING that propagation, but it was still the previous value (set on the line AFTER setPalette). So the plot repainted with the stale theme. On the second click the property was finally correct (from the first click's setProperty), so it worked — exactly the "needs double click" symptom.
+
+Fix (1 file): src/library/tbc/uistyle.h applyStockTheme() — moved setProperty("isDarkTheme", dark) to BEFORE applyFusionStyleIfAvailable/setPalette, so custom-painted widgets read the correct value during the PaletteChange propagation. (The changeEvent->updateTheme() machinery added last session was correct but was reading a stale property; this completes it.)
+
+Build: PATH="/nix/var/nix/profiles/default/bin:$PATH" nix develop -c ninja -C build ld-analyse -> [3/3] Linking; only pre-existing warnings. Binary rebuilt Aug 26 00:50.
+
+Status: code complete + builds. Asking user to re-test the Themes dropdown single-click switch (Light, then Dark, with a scope open).
+
+
+## 2026-08-25T23:53Z
+User input: "No it still requires dubble pressing the button before a theme is fully enabled" (after the property-ordering fix from 23:49).
+Analysis: the property-before-setPalette fix was necessary but not sufficient. The working macOS-switchover path (ThemedApplication::event()) re-asserts the palette via a DEFERRED QTimer::singleShot(0) — i.e. a second setPalette on the next loop tick, after the first propagation has settled. The menu-click path called applyStockTheme() synchronously only; a direct (non-system) setPalette() propagates PaletteChange to top-levels and children, but custom-painted widgets (QGraphicsView/scene-backed PlotWidget, scopes that cache the theme) don't fully resolve on that single synchronous pass — hence "needs a second click" (the second click's setPalette acted as the missing second pass).
+
+Fix (1 file): src/library/tbc/uistyle.h ThemedApplication::applyStockTheme() — after the synchronous setPalette + enforceInputWidgetContrast + force-repaint loop, add a deferred second pass via QTimer::singleShot(0, this, [...]) that re-applies QApplication::setPalette(stockDark/Light) + enforceInputWidgetContrast + force-repaints every top-level and child widget. m_reasserting=true is set before the deferred call (and reset to false inside it) so the event() override doesn't stack another deferred re-assert on the ApplicationPaletteChange this second setPalette emits. Harmless at startup (same palette, no widgets yet). Now the menu click = sync pass + deferred pass = complete in one user-facing click, matching the switchover path.
+
+Build: PATH="/nix/var/nix/profiles/default/bin:$PATH" nix develop -c ninja -C build ld-analyse -> [3/3] Linking; only pre-existing warnings. Binary rebuilt Aug 26 00:54.
+Status: code complete + builds. Asking user to re-test the Themes dropdown single-click switch (Light, then Dark, with a scope open).
+
+## 2026-08-26T00:13:29Z
+User input: continue (single-click Light/Dark switch still not fully applying on first click).
+
+Analysis (code inspection):
+- Traced theme switch path in `src/library/tbc/uistyle.h` and `src/ld-analyse/mainwindow.cpp`.
+- Identified two remaining risk points for first-click partial updates:
+  1) `applyFusionStyleIfAvailable()` reapplied Fusion style unconditionally on each switch, adding extra style-change churn.
+  2) Several scope/dialog visuals are cached and were not being explicitly regenerated on palette/style change from the Themes menu path.
+
+Edits (3 files):
+- `src/library/tbc/uistyle.h`
+  - `applyFusionStyleIfAvailable(QApplication&)` now returns early when Fusion is already active (case-insensitive style-name check), so theme switching no longer forces redundant style resets.
+  - Added `#include <QStyle>` for the style-object check.
+- `src/ld-analyse/mainwindow.h`
+  - Added `void refreshThemeDependentUi();`
+  - Added `bool themeRefreshPending = false;` member.
+- `src/ld-analyse/mainwindow.cpp`
+  - Added `refreshThemeDependentUi()` to re-sync palette-dependent UI in one pass: updates `buttonPalette`, refreshes dropout button palette, redraws main viewer, and refreshes visible scope/dialog windows (`oscilloscope`, `rgb`, `yuv`, `vectorscope`, `waveform`, `field timing`, and visible analysis dialogs).
+  - `applyThemeStyle()` now calls `refreshThemeDependentUi()` after style selection.
+  - `event(QEvent*)` now watches `QEvent::PaletteChange` and `QEvent::StyleChange`, debounces with `themeRefreshPending`, and runs deferred `QTimer::singleShot(0, ...)` refresh for deterministic post-propagation updates.
+
+Commands run:
+- `nix develop -c ninja -C /Users/harry/tbc-tools/build`
+  - Output: `zsh: command not found: nix`
+- `cmake --build /Users/harry/tbc-tools/build --target ld-analyse`
+  - Output: failed due to missing dependency include path in this shell environment:
+    - `fatal error: 'onnxruntime_cxx_api.h' file not found` (from `src/ld-chroma-decoder/comb.h`)
+  - Result: build validation blocked by local environment setup (not by the new theme-refresh code path itself).
+- `git --no-pager -C /Users/harry/tbc-tools status --short`
+  - Confirmed modified files include the above three updated files plus existing pre-session changes in the working tree.
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+  - Output: `2026-08-26T00:13:29Z`
+
+Status: code changes applied; compile verification in this shell is blocked by missing `nix` and missing ONNX Runtime headers in current CMake environment. Functional GUI verification pending user retest.
+
+## 2026-08-26T00:15:05Z
+Follow-up validation update:
+- Re-ran build using explicit Nix path:
+  - `PATH="/nix/var/nix/profiles/default/bin:$PATH" nix develop -c ninja -C /Users/harry/tbc-tools/build ld-analyse`
+  - Output: `ninja: no work to do.` (indicates prior build completed successfully in the Nix shell context).
+- Ran contracts:
+  - `python3 /Users/harry/tbc-tools/ci/check_ci_contracts.py`
+  - Output: `CI contract checks passed.`
+- `date -u +%Y-%m-%dT%H:%M:%SZ` -> `2026-08-26T00:15:05Z`
+
+## 2026-08-26T00:18:00Z
+User input: "build / run for checking"
+
+Commands run:
+- `PATH="/nix/var/nix/profiles/default/bin:$PATH" nix develop -c ninja -C /Users/harry/tbc-tools/build ld-analyse`
+  - Output: `ninja: no work to do.`
+- `open -n /Users/harry/tbc-tools/build/src/ld-analyse/bin/ld-analyse.app`
+  - Output: `The file /Users/harry/tbc-tools/build/src/ld-analyse/bin/ld-analyse.app does not exist.`
+- `ls -la /Users/harry/tbc-tools/build`
+  - Output: build tree listed; confirmed `bin/` exists.
+- `ls -la /Users/harry/tbc-tools/build/bin`
+  - Output: confirmed bundle path `ld-analyse.app` exists under `/Users/harry/tbc-tools/build/bin/ld-analyse.app`.
+- `open -n /Users/harry/tbc-tools/build/bin/ld-analyse.app`
+  - Output: success (no error output; app launch command returned cleanly).
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+  - Output: `2026-08-26T00:18:00Z`
+
+Status: build target is up to date and ld-analyse has been launched from the correct bundle path for user-side visual checking.
+
+## 2026-08-26T00:21:09Z
+User input: \"HARD FAIL\" + \"Just look at the logic of what pressing the button 2 times does\" + \"AS that sets the elemnts fully\"\n
+Analysis:
+- Focused on your exact point: a second manual click fully settles the UI, so one click should execute that same settling sequence automatically.
+- Existing behavior already reapplied palette on a zero-delay timer, but this can still be too early for some cached scope/scene redraw paths.
+
+Edit (1 file):
+- `src/ld-analyse/mainwindow.cpp` in `populateThemesMenu()`:
+  - Updated Dark/Light action handlers to do:
+    1) immediate theme apply (`applyStockDarkThemeToApp()` / `applyStockLightThemeToApp()`)
+    2) immediate `refreshThemeDependentUi()`
+    3) a short delayed second apply (`QTimer::singleShot(24, ...)`) + `refreshThemeDependentUi()`, guarded so it only runs if that same action is still checked.
+  - This directly mirrors the effect of a successful user second click in one user click.
+
+Commands run:
+- `PATH="/nix/var/nix/profiles/default/bin:$PATH" nix develop -c ninja -C /Users/harry/tbc-tools/build ld-analyse`
+  - Output: build completed (warnings only).
+- Re-run same build command
+  - Output: `ninja: no work to do.`
+- `open -n /Users/harry/tbc-tools/build/bin/ld-analyse.app`
+  - Output: success (no error output).
+- `date -u +%Y-%m-%dT%H:%M:%SZ`
+  - Output: `2026-08-26T00:21:09Z`
+
+Status: patched to make one click execute the same full-settle sequence as manual double-click; rebuilt and launched for verification.

@@ -537,6 +537,19 @@ void PlotWidget::resizeEvent(QResizeEvent *event)
     replot();
 }
 
+void PlotWidget::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+    // The stock theme switch (and the macOS appearance switchover) delivers a
+    // PaletteChange to every widget. PlotWidget caches m_isDarkTheme in
+    // updateTheme(); without refreshing it here the grid/axis labels and
+    // canvas background stay on the old theme until a second event, which is
+    // why Light/Dark appeared to need double-selecting.
+    if (event->type() == QEvent::PaletteChange) {
+        updateTheme();
+    }
+}
+
 void PlotWidget::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {

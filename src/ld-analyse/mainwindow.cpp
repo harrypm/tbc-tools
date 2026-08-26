@@ -1757,9 +1757,57 @@ void MainWindow::populateThemesMenu()
     availableThemes.removeDuplicates();
     availableThemes.sort(Qt::CaseInsensitive);
 
+    // Dedicated stock theme presets at the top of the dropdown. Dark is the
+    // standard default; Light is a manual opt-in. Both drive the absolute
+    // Fusion palette via ThemedApplication and are re-asserted across macOS
+    // appearance switches. Exclusive with the Qt-style actions below.
+    QAction *darkAction = ui->menuThemes->addAction(tr("Dark"));
+    darkAction->setCheckable(true);
+    darkAction->setData(QStringLiteral("stock-dark"));
+    themesActionGroup->addAction(darkAction);
+    connect(darkAction, &QAction::triggered, this, [this, darkAction](bool checked) {
+        if (!checked) {
+            return;
+        }
+        tbc::ui::applyStockDarkThemeToApp();
+        refreshThemeDependentUi();
+        // Mirror the user's successful "second press" behavior: re-apply once
+        // on a short delay so late-resolving widgets (cached scope renders,
+        // scene-backed controls) settle fully in one user click.
+        QTimer::singleShot(24, this, [this, darkAction]() {
+            if (!darkAction->isChecked()) {
+                return;
+            }
+            tbc::ui::applyStockDarkThemeToApp();
+            refreshThemeDependentUi();
+        });
+    });
+
+    QAction *lightAction = ui->menuThemes->addAction(tr("Light"));
+    lightAction->setCheckable(true);
+    lightAction->setData(QStringLiteral("stock-light"));
+    themesActionGroup->addAction(lightAction);
+    connect(lightAction, &QAction::triggered, this, [this, lightAction](bool checked) {
+        if (!checked) {
+            return;
+        }
+        tbc::ui::applyStockLightThemeToApp();
+        refreshThemeDependentUi();
+        QTimer::singleShot(24, this, [this, lightAction]() {
+            if (!lightAction->isChecked()) {
+                return;
+            }
+            tbc::ui::applyStockLightThemeToApp();
+            refreshThemeDependentUi();
+        });
+    });
+
+    ui->menuThemes->addSeparator();
+
     if (availableThemes.isEmpty()) {
         QAction *placeholderAction = ui->menuThemes->addAction(tr("No Qt themes available"));
         placeholderAction->setEnabled(false);
+        darkAction->setChecked(true);
         return;
     }
 
@@ -1783,6 +1831,11 @@ void MainWindow::populateThemesMenu()
             applyThemeStyle(themeAction->data().toString());
         });
     }
+
+    // Dark is the stock default; ensure it is checked. This unchecks any Qt
+    // style action the loop above may have auto-checked (the stock preset
+    // owns the active palette; style actions below are advanced overrides).
+    darkAction->setChecked(true);
 }
 
 void MainWindow::applyThemeStyle(const QString &styleName)
@@ -1811,17 +1864,92 @@ void MainWindow::applyThemeStyle(const QString &styleName)
             action->setChecked(action->data().toString().compare(activeStyleName, Qt::CaseInsensitive) == 0);
         }
     }
+    refreshThemeDependentUi();
+}
 
-    if (tbcSource.getIsDropoutPresent()) {
-        QPalette tempPalette = buttonPalette;
-        tempPalette.setColor(QPalette::Button, QColor(Qt::lightGray));
-        ui->dropoutsPushButton->setAutoFillBackground(true);
-        ui->dropoutsPushButton->setPalette(tempPalette);
-    } else {
-        ui->dropoutsPushButton->setAutoFillBackground(true);
-        ui->dropoutsPushButton->setPalette(buttonPalette);
+void MainWindow::refreshThemeDependentUi()
+{
+    buttonPalette = QApplication::palette();
+
+    if (ui && ui->dropoutsPushButton) {
+        if (tbcSource.getIsDropoutPresent()) {
+            QPalette tempPalette = buttonPalette;
+            tempPalette.setColor(QPalette::Button, QColor(Qt::lightGray));
+            ui->dropoutsPushButton->setAutoFillBackground(true);
+            ui->dropoutsPushButton->setPalette(tempPalette);
+        } else {
+            ui->dropoutsPushButton->setAutoFillBackground(true);
+            ui->dropoutsPushButton->setPalette(buttonPalette);
+        }
+        ui->dropoutsPushButton->update();
     }
-    ui->dropoutsPushButton->update();
+
+    if (!tbcSource.getIsSourceLoaded()) {
+        return;
+    }
+
+    updateImageViewer();
+    if (oscilloscopeDialog && oscilloscopeDialog->isVisible()) {
+        updateOscilloscopeDialogue();
+    }
+    if (rgbScopeDialog && rgbScopeDialog->isVisible() && !rgbScopeDialog->isMinimized()) {
+        updateRgbScopeDialogue(true);
+    }
+    if (yuvRangeDialog && yuvRangeDialog->isVisible() && !yuvRangeDialog->isMinimized()) {
+        updateYuvRangeScopeDialogue(true);
+    }
+    if (vectorscopeDialog && vectorscopeDialog->isVisible()) {
+        updateVectorscopeDialogue();
+    }
+    if (waveformMonitorDialog && waveformMonitorDialog->isVisible()) {
+        updateWaveformMonitorDialogue();
+    }
+    if (fieldTimingDialog && fieldTimingDialog->isVisible()) {
+        updateFieldTimingDialogue();
+    }
+    if (blackSnrAnalysisDialog && blackSnrAnalysisDialog->isVisible()) {
+        blackSnrAnalysisDialog->update();
+    }
+    if (whiteSnrAnalysisDialog && whiteSnrAnalysisDialog->isVisible()) {
+        whiteSnrAnalysisDialog->update();
+    }
+    if (dropoutAnalysisDialog && dropoutAnalysisDialog->isVisible()) {
+        dropoutAnalysisDialog->update();
+    }
+    if (visibleDropoutAnalysisDialog && visibleDropoutAnalysisDialog->isVisible()) {
+        visibleDropoutAnalysisDialog->update();
+    }
+}
+
+bool MainWindow::event(QEvent *event)
+{
+    if (event && event->type() == QEvent::FileOpen) {
+        const auto *fileOpenEvent = static_cast<QFileOpenEvent *>(event);
+        QString filePath = fileOpenEvent->file();
+        if (filePath.isEmpty() && fileOpenEvent->url().isLocalFile()) {
+            filePath = fileOpenEvent->url().toLocalFile();
+        }
+
+        if (!filePath.isEmpty() && isSupportedInputExtension(filePath)) {
+            requestSourceOpen(filePath);
+            return true;
+        }
+    }
+
+    const bool baseHandled = QMainWindow::event(event);
+
+    if (event && (event->type() == QEvent::PaletteChange
+                  || event->type() == QEvent::StyleChange)) {
+        if (!themeRefreshPending) {
+            themeRefreshPending = true;
+            QTimer::singleShot(0, this, [this]() {
+                themeRefreshPending = false;
+                refreshThemeDependentUi();
+            });
+        }
+    }
+
+    return baseHandled;
 }
 
 // Update GUI methods for when TBC source files are loaded and unloaded -----------------------------------------------
@@ -1889,23 +2017,6 @@ void MainWindow::setGuiEnabled(bool enabled)
     }
 }
 
-bool MainWindow::event(QEvent *event)
-{
-    if (event && event->type() == QEvent::FileOpen) {
-        const auto *fileOpenEvent = static_cast<QFileOpenEvent *>(event);
-        QString filePath = fileOpenEvent->file();
-        if (filePath.isEmpty() && fileOpenEvent->url().isLocalFile()) {
-            filePath = fileOpenEvent->url().toLocalFile();
-        }
-
-        if (!filePath.isEmpty() && isSupportedInputExtension(filePath)) {
-            requestSourceOpen(filePath);
-            return true;
-        }
-    }
-
-    return QMainWindow::event(event);
-}
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {

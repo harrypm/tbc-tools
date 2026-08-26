@@ -426,6 +426,17 @@ void PlotWidget::resizeEvent(QResizeEvent *event)
     replot();
 }
 
+void PlotWidget::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+    // Refresh the cached theme on a palette change (stock theme switch or
+    // macOS appearance switchover) so grid/axis labels and canvas background
+    // update in a single pass instead of requiring a second select.
+    if (event->type() == QEvent::PaletteChange) {
+        updateTheme();
+    }
+}
+
 void PlotWidget::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {

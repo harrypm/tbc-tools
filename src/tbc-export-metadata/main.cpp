@@ -29,7 +29,6 @@
 #include <QPalette>
 #include <QStyleFactory>
 #include <QWindow>
-#include <QProcess>
 #include <memory>
 
 #include "audacity.h"
@@ -44,7 +43,6 @@
 #include "tbc/uistyle.h"
 #include "tbcmetadata.h"
 #ifdef Q_OS_WIN
-#include <QSettings>
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -54,6 +52,7 @@ namespace {
 struct ExportCommandLineOptions {
     QCommandLineOption guiOption;
     QCommandLineOption forceDarkThemeOption;
+    QCommandLineOption lightThemeOption;
     QCommandLineOption parentWindowIdOption;
     QCommandLineOption inputOption;
     QCommandLineOption exportJsonOption;
@@ -74,7 +73,9 @@ struct ExportCommandLineOptions {
         guiOption(QStringList() << "g" << "gui",
                   QCoreApplication::translate("main", "Launch dedicated metadata export GUI")),
         forceDarkThemeOption("force-dark-theme",
-                             QCoreApplication::translate("main", "Force dark theme regardless of system settings")),
+                             QCoreApplication::translate("main", "Force dark theme regardless of system settings (default; no-op)")),
+        lightThemeOption("light-theme",
+                         QCoreApplication::translate("main", "Use the light Fusion theme instead of the stock dark theme")),
         parentWindowIdOption("parent-window-id",
                              QCoreApplication::translate("main", "Set transient parent window id for GUI integration"),
                              QCoreApplication::translate("main", "id")),
@@ -125,6 +126,7 @@ struct ExportCommandLineOptions {
     {
         parser.addOption(guiOption);
         parser.addOption(forceDarkThemeOption);
+        parser.addOption(lightThemeOption);
         parser.addOption(parentWindowIdOption);
         parser.addOption(inputOption);
         parser.addOption(exportJsonOption);
@@ -155,62 +157,6 @@ bool wantsGui(int argc, char *argv[])
         }
     }
     return false;
-}
-
-bool isDarkModeEnabled()
-{
-#ifdef Q_OS_WIN
-    QSettings settings("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                       QSettings::NativeFormat);
-    return settings.value("AppsUseLightTheme", 1).toInt() == 0;
-#elif defined(Q_OS_MACOS)
-    QProcess process;
-    process.start("defaults", QStringList() << "read" << "-g" << "AppleInterfaceStyle");
-    process.waitForFinished();
-    const QString result = process.readAllStandardOutput().trimmed();
-    return result == QStringLiteral("Dark");
-#elif defined(Q_OS_LINUX)
-    QProcess process;
-    process.start("gsettings", QStringList() << "get" << "org.gnome.desktop.interface" << "color-scheme");
-    process.waitForFinished();
-    QString result = process.readAllStandardOutput().trimmed();
-    result = result.remove('\'').remove('"');
-    if (result.contains("dark", Qt::CaseInsensitive)) {
-        return true;
-    }
-
-    process.start("gsettings", QStringList() << "get" << "org.gnome.desktop.interface" << "gtk-theme");
-    process.waitForFinished();
-    result = process.readAllStandardOutput().trimmed();
-    result = result.remove('\'').remove('"');
-    return result.contains("dark", Qt::CaseInsensitive);
-#endif
-    return false;
-}
-
-void applyDarkTheme(QApplication &application)
-{
-    QPalette darkPalette;
-
-    const QColor windowColor(53, 53, 53);
-    const QColor baseColor(25, 25, 25);
-    const QColor alternateColor(64, 64, 64);
-    const QColor textColor(255, 255, 255);
-    const QColor buttonColor(53, 53, 53);
-    const QColor highlightColor(42, 130, 218);
-    const QColor highlightTextColor(255, 255, 255);
-
-    darkPalette.setColor(QPalette::Window, windowColor);
-    darkPalette.setColor(QPalette::WindowText, textColor);
-    darkPalette.setColor(QPalette::Base, baseColor);
-    darkPalette.setColor(QPalette::AlternateBase, alternateColor);
-    darkPalette.setColor(QPalette::Text, textColor);
-    darkPalette.setColor(QPalette::Button, buttonColor);
-    darkPalette.setColor(QPalette::ButtonText, textColor);
-    darkPalette.setColor(QPalette::Highlight, highlightColor);
-    darkPalette.setColor(QPalette::HighlightedText, highlightTextColor);
-
-    application.setPalette(darkPalette);
 }
 
 void detachConsoleWindowForGui()
@@ -282,9 +228,8 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(debugOutputHandler);
     if (wantsGui(argc, argv)) {
         detachConsoleWindowForGui();
-        tbc::ui::normalizeUnsupportedStyleOverrideToFusion();
-        QApplication a(argc, argv);
-        tbc::ui::applyFusionStyleIfAvailable(a);
+        tbc::ui::prepareStockThemeEnvironment();
+        tbc::ui::ThemedApplication a(argc, argv);
 
         // Set application name and version
         QCoreApplication::setApplicationName("tbc-export-metadata");
@@ -309,11 +254,14 @@ int main(int argc, char *argv[])
         parser.addPositionalArgument("input", QCoreApplication::translate("main", "Specify input metadata file"));
         parser.process(a);
         processStandardDebugOptions(parser);
-        const bool forceDarkTheme = parser.isSet(options.forceDarkThemeOption);
-        if (forceDarkTheme || isDarkModeEnabled()) {
-            applyDarkTheme(a);
+        // Apply the stock theme (dark by default, light via --light-theme). Sets
+        // the Fusion palette, isDarkTheme property, Qt 6.8 color scheme override,
+        // and input-widget contrast guard; re-asserted on macOS switchover.
+        if (parser.isSet(options.lightThemeOption)) {
+            a.applyStockLightTheme();
+        } else {
+            a.applyStockDarkTheme();
         }
-        tbc::ui::enforceInputWidgetContrast(a);
 
         MetadataExportDialog::InitialOptions initialOptions;
         initialOptions.inputFile = resolveInputFilename(parser, options, false);

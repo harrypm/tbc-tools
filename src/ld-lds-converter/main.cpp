@@ -140,43 +140,14 @@ void sanitizeGtkModulesEnvironment()
     qputenv("GTK_MODULES", filteredModules.join(QLatin1Char(':')).toLocal8Bit());
 }
 
-void enforceFusionStyleEnvironment()
-{
-    qputenv("QT_STYLE_OVERRIDE", QByteArrayLiteral("Fusion"));
-}
-
-void applyUnifiedDarkFusionPalette(QApplication &application)
-{
-    application.setStyle(QStringLiteral("Fusion"));
-
-    QPalette palette;
-    palette.setColor(QPalette::Window, QColor(53, 53, 53));
-    palette.setColor(QPalette::WindowText, QColor(255, 255, 255));
-    palette.setColor(QPalette::Base, QColor(25, 25, 25));
-    palette.setColor(QPalette::AlternateBase, QColor(64, 64, 64));
-    palette.setColor(QPalette::ToolTipBase, QColor(53, 53, 53));
-    palette.setColor(QPalette::ToolTipText, QColor(255, 255, 255));
-    palette.setColor(QPalette::Text, QColor(255, 255, 255));
-    palette.setColor(QPalette::Button, QColor(53, 53, 53));
-    palette.setColor(QPalette::ButtonText, QColor(255, 255, 255));
-    palette.setColor(QPalette::BrightText, QColor(0xFF, 0x55, 0x55));
-    palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-    palette.setColor(QPalette::HighlightedText, QColor(255, 255, 255));
-
-    palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor(160, 160, 160));
-    palette.setColor(QPalette::Disabled, QPalette::Text, QColor(160, 160, 160));
-    palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(160, 160, 160));
-    palette.setColor(QPalette::Disabled, QPalette::Highlight, QColor(80, 80, 80));
-    palette.setColor(QPalette::Disabled, QPalette::HighlightedText, QColor(255, 255, 255));
-
-    application.setPalette(palette);
-}
-
 void sanitizeGuiStartupEnvironment()
 {
     ensureUtf8ProcessLocale();
     sanitizeGtkModulesEnvironment();
-    enforceFusionStyleEnvironment();
+    // prepareStockThemeEnvironment() calls setDesktopSettingsAware(false) and
+    // normalizes QT_STYLE_OVERRIDE to Fusion. The stock palette itself is
+    // applied via ThemedApplication after CLI parse (dark default, light opt-in).
+    tbc::ui::prepareStockThemeEnvironment();
 }
 QString normalizePathForCurrentPlatform(const QString &path)
 {
@@ -455,10 +426,7 @@ int main(int argc, char *argv[])
 
     if (wantsGui(argc, argv)) {
         sanitizeGuiStartupEnvironment();
-        QApplication::setDesktopSettingsAware(false);
-        QApplication a(argc, argv);
-        applyUnifiedDarkFusionPalette(a);
-        tbc::ui::enforceInputWidgetContrast(a);
+        tbc::ui::ThemedApplication a(argc, argv);
 
         QCoreApplication::setApplicationName("ld-lds-converter");
         QCoreApplication::setApplicationVersion(QString("tbc-tools - Branch: %1 / Commit: %2").arg(APP_BRANCH, APP_COMMIT));
@@ -478,6 +446,9 @@ int main(int argc, char *argv[])
         QCommandLineOption guiOption(QStringList() << "g" << "gui",
                                      QCoreApplication::translate("main", "Launch the GUI (default when no explicit CLI mode is provided)."));
         parser.addOption(guiOption);
+        QCommandLineOption lightThemeOption("light-theme",
+                                            QCoreApplication::translate("main", "Use the light Fusion theme instead of the stock dark theme"));
+        parser.addOption(lightThemeOption);
 
         QCommandLineOption sourceVideoFileOption(QStringList() << "i" << "input",
                     QCoreApplication::translate("main", "Specify input laserdisc sample file"), QCoreApplication::translate("main", "file"));
@@ -494,6 +465,15 @@ int main(int argc, char *argv[])
 
         parser.process(a);
         processStandardDebugOptions(parser);
+
+        // Apply the stock theme (dark by default, light via --light-theme). Sets
+        // the Fusion palette, isDarkTheme property, Qt 6.8 color scheme override,
+        // and input-widget contrast guard; re-asserted on macOS switchover.
+        if (parser.isSet(lightThemeOption)) {
+            a.applyStockLightTheme();
+        } else {
+            a.applyStockDarkTheme();
+        }
 
         bool outputFormatIsValid = false;
         const DataConverter::OutputFormat outputFormat = parseOutputFormat(parser.value(outputFormatOption), &outputFormatIsValid);
