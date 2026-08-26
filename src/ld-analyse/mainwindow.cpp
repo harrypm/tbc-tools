@@ -1727,6 +1727,11 @@ MainWindow::~MainWindow()
         tbcSource.unloadSource();
     }
     cleanupTempMetadataFile();
+    if (teletextViewerDialog) {
+        teletextViewerDialog->close();
+        delete teletextViewerDialog;
+        teletextViewerDialog = nullptr;
+    }
 
     delete ui;
 }
@@ -2106,7 +2111,7 @@ void MainWindow::dropEvent(QDropEvent *event)
     event->acceptProposedAction();
     if (isTeletextStreamInputExtension(droppedFile)) {
         if (!teletextViewerDialog) {
-            teletextViewerDialog = new TeletextViewerDialog(this);
+            teletextViewerDialog = new TeletextViewerDialog(nullptr);
             teletextViewerDialog->setWindowFlag(Qt::Window, true);
         }
         QString errorMessage;
@@ -4837,7 +4842,7 @@ void MainWindow::on_actionProcess_VBI_triggered()
     });
     if (!autoTeletextDirectory.isEmpty()) {
         if (!teletextViewerDialog) {
-            teletextViewerDialog = new TeletextViewerDialog(this);
+            teletextViewerDialog = new TeletextViewerDialog(nullptr);
             teletextViewerDialog->setWindowFlag(Qt::Window, true);
         }
         if (teletextViewerDialog->directory().compare(autoTeletextDirectory, Qt::CaseInsensitive) != 0) {
@@ -5566,7 +5571,7 @@ void MainWindow::showUpdateAvailableDialog(const QString &latestVersion, const Q
 void MainWindow::on_actionTeletext_Viewer_triggered()
 {
     if (!teletextViewerDialog) {
-        teletextViewerDialog = new TeletextViewerDialog(this);
+        teletextViewerDialog = new TeletextViewerDialog(nullptr);
         teletextViewerDialog->setWindowFlag(Qt::Window, true);
     }
     const QString suggestedDirectory = resolveTeletextHtmlDirectoryFromHints({

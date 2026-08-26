@@ -1,0 +1,12 @@
+Warning: QMetaObject::connectSlotsByName: No matching signal for on_actionSave_all_modes_as_PNGs_triggered()
+Warning: QMetaObject::connectSlotsByName: No matching signal for on_actionCopy_current_display_to_clipboard_triggered()
+Warning: QMetaObject::connectSlotsByName: No matching signal for on_vectorscopeSelectionPushButton_toggled(bool)
+Warning: QMetaObject::connectSlotsByName: No matching signal for on_fieldToggleButton_clicked()
+Warning: QMetaObject::connectSlotsByName: No matching signal for on_renderModeButtonGroup_buttonClicked(QAbstractButton*)
+Warning: QMetaObject::connectSlotsByName: No matching signal for on_areaModeButtonGroup_buttonClicked(QAbstractButton*)
+Critical: This decoder is for PAL-line (SECAM/MESECAM) video only
+Critical: This decoder is for PAL-line (SECAM/MESECAM) video only
+Critical: This decoder is for PAL-line (SECAM/MESECAM) video only
+Critical: This decoder is for PAL-line (SECAM/MESECAM) video only
+Critical: This decoder is for PAL-line (SECAM/MESECAM) video only
+

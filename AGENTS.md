@@ -120,6 +120,7 @@ FIRFilter<double> filter(coefficients);
 - **Multi-threading enabled** by default for performance-critical operations
 - **Hard rule: never touch or target the ld-decode-tools upstream remote** - do not fetch from, pull from, push to, diff against, cherry-pick from, or otherwise reference `https://github.com/simoninns/ld-decode-tools.git` (or a git remote alias pointing to it, e.g. `upstream`) for any task in this project
 - **Hard rule: all build/testing work must pass GitHub Actions workflows** - do not treat build verification as complete unless GitHub Actions succeeds
+- **Hard rule: do not needlessly add helper functions** - prefer reusing existing functions and keeping logic inline unless a new helper is clearly required for readability, correctness, or reuse
 - **Hard rule: GUI input contrast is mandatory** - never ship a GUI binary where text/edit/selection widgets have low-contrast text; all Qt GUI entrypoints must apply the shared `tbc::ui::enforceInputWidgetContrast(...)` guard after palette/theme setup
 - **Hard rule: preserve legacy GUI theme appearance** - do not introduce blue-tinted global backgrounds; keep the established neutral grey/black theme in existing GUIs by preserving each app’s intended `QPalette::Window`/`QPalette::Base` colors
 - **Hard rule: contrast guards must not restyle the full app** - shared contrast enforcement may adjust text readability roles (`Text`, `PlaceholderText`, `HighlightedText`) but must not globally override theme-defining palette roles such as `Base` and `Highlight`

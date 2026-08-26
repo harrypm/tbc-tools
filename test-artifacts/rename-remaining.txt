@@ -1,0 +1,5 @@
+src/library/README.md:54:- **`lddecodemetadata.h/cpp`**: TBC metadata management
+src/library/README.md:72:##### `LdDecodeMetaData`
+src/library/README.md:76:#include "tbc/lddecodemetadata.h"
+src/library/README.md:78:LdDecodeMetaData metadata;
+src/library/README.md:191:LdDecodeMetaData metadata;

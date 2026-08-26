@@ -11,6 +11,18 @@
 
 #include "teletextviewerdialog.h"
 #include "teletextnativeviewwidget.h"
+#ifdef emit
+#undef emit
+#endif
+#include "tbc/vbi/nabts_data_group.h"
+#include "tbc/vbi/nabts_packet.h"
+#include "tbc/vbi/nabts_record.h"
+#include "tbc/vbi/nabts_page.h"
+#include "tbc/vbi/naplps_interpreter.h"
+#include "tbc/vbi/naplps_raster.h"
+#include "tbc/vbi/naplps_render_grid.h"
+#include "tbc/vbi/teletext_decoder.h"
+#include "tbc/vbi/teletext_page.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -36,6 +48,8 @@
 #include <QProcessEnvironment>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QImage>
+#include <QImageReader>
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QStandardPaths>
@@ -48,6 +62,7 @@
 #include <QVBoxLayout>
 #include <QWheelEvent>
 #include <QWindow>
+#include <map>
 namespace {
 const QRegularExpression kTeletextStreamSuffixPattern(
     QStringLiteral("^t\\d\\d$"),
@@ -300,6 +315,7 @@ bool runPythonStep(const QString &pythonExecutable,
         return false;
     }
 
+
     return true;
 }
 
@@ -368,266 +384,6 @@ QString cacheDirectoryForTeletextStream(const QFileInfo &streamInfo)
     );
 }
 
-qint32 bitCount(quint8 value)
-{
-    qint32 count = 0;
-    quint8 bits = value;
-    while (bits != 0) {
-        count += bits & 0x01;
-        bits >>= 1;
-    }
-    return count;
-}
-
-qint32 decodeHamming8Nibble(quint8 value)
-{
-    static const quint8 hamming8Enc[16] = {
-        0x15, 0x02, 0x49, 0x5e, 0x64, 0x73, 0x38, 0x2f,
-        0xd0, 0xc7, 0x8c, 0x9b, 0xa1, 0xb6, 0xfd, 0xea
-    };
-
-    qint32 bestNibble = 0;
-    qint32 bestDistance = 9;
-    for (qint32 nibble = 0; nibble < 16; ++nibble) {
-        const qint32 distance = bitCount(static_cast<quint8>(hamming8Enc[nibble] ^ value));
-        if (distance < bestDistance) {
-            bestDistance = distance;
-            bestNibble = nibble;
-            if (distance == 0) {
-                break;
-            }
-        }
-    }
-    return bestNibble;
-}
-
-qint32 decodeHamming16Value(quint8 lowByte, quint8 highByte)
-{
-    const qint32 lowNibble = decodeHamming8Nibble(lowByte);
-    const qint32 highNibble = decodeHamming8Nibble(highByte);
-    return lowNibble | (highNibble << 4);
-}
-
-QChar teletextDefaultG0Char(quint8 value)
-{
-    switch (value) {
-    case 0x23:
-        return QChar(0x00A3);
-    case 0x5B:
-        return QChar(0x2190);
-    case 0x5C:
-        return QChar(0x00BD);
-    case 0x5D:
-        return QChar(0x2192);
-    case 0x5E:
-        return QChar(0x2191);
-    case 0x5F:
-        return QChar(0x0023);
-    case 0x60:
-        return QChar(0x2014);
-    case 0x7B:
-        return QChar(0x00BC);
-    case 0x7C:
-        return QChar(0x2016);
-    case 0x7D:
-        return QChar(0x00BE);
-    case 0x7E:
-        return QChar(0x00F7);
-    case 0x7F:
-        return QChar(0x25A0);
-    default:
-        return QChar(value);
-    }
-}
-
-struct TeletextRowParseState {
-    quint8 foreground = 7;
-    quint8 background = 0;
-    bool doubleWidth = false;
-    bool doubleHeight = false;
-    bool mosaic = false;
-    bool solidMosaic = true;
-    bool flash = false;
-    bool conceal = false;
-    bool boxed = false;
-    bool rendered = true;
-    QChar heldMosaic = QChar(u' ');
-    bool heldSolidMosaic = true;
-    bool holdMosaic = false;
-    bool escape = false;
-};
-
-QChar teletextCharacterForCode(quint8 value, const TeletextRowParseState &state)
-{
-    if (state.mosaic && (value < 0x40 || value > 0x5F)) {
-        const char32_t codePoint = static_cast<char32_t>(
-            (state.solidMosaic ? 0xEE00 : 0xEDE0) + value
-        );
-        return QChar(static_cast<ushort>(codePoint));
-    }
-    return teletextDefaultG0Char(value);
-}
-
-TeletextNativeViewWidget::Cell makeTeletextCell(QChar character, const TeletextRowParseState &state)
-{
-    TeletextNativeViewWidget::Cell cell;
-    cell.character = character;
-    cell.foreground = state.foreground;
-    cell.background = state.background;
-    cell.doubleHeight = state.doubleHeight;
-    cell.flash = state.flash;
-    cell.conceal = state.conceal;
-    cell.boxed = state.boxed;
-    return cell;
-}
-
-TeletextNativeViewWidget::Row parseTeletextDisplayRow(const QByteArray &rawRowBytes)
-{
-    TeletextNativeViewWidget::Row row;
-    row.reserve(40);
-    TeletextRowParseState state;
-
-    auto emitCharacter = [&](QChar character) {
-        row.append(makeTeletextCell(character, state));
-        if (state.doubleWidth) {
-            state.rendered = !state.rendered;
-        } else {
-            state.rendered = true;
-        }
-    };
-
-    auto emitControlPlaceholder = [&]() {
-        if (state.holdMosaic) {
-            const bool previousSolidState = state.solidMosaic;
-            state.solidMosaic = state.heldSolidMosaic;
-            emitCharacter(state.heldMosaic);
-            state.solidMosaic = previousSolidState;
-        } else {
-            emitCharacter(QChar(u' '));
-        }
-    };
-
-    qint32 previousCode = -1;
-    for (qint32 index = 0; index < rawRowBytes.size(); ++index) {
-        const quint8 code = static_cast<quint8>(rawRowBytes.at(index)) & 0x7F;
-        const quint8 highNibble = code & 0xF0;
-        const quint8 lowNibble = code & 0x0F;
-
-        if (highNibble == 0x00) {
-            if (lowNibble < 0x08) {
-                emitControlPlaceholder();
-                state.foreground = lowNibble;
-                state.mosaic = false;
-                state.conceal = false;
-                state.heldMosaic = QChar(u' ');
-            } else if (lowNibble == 0x08) {
-                emitControlPlaceholder();
-                state.flash = true;
-            } else if (lowNibble == 0x09) {
-                state.flash = false;
-                emitControlPlaceholder();
-            } else if (lowNibble == 0x0A) {
-                if (previousCode == 0x0A) {
-                    state.boxed = false;
-                    emitControlPlaceholder();
-                } else {
-                    emitControlPlaceholder();
-                }
-            } else if (lowNibble == 0x0B) {
-                if (previousCode == 0x0B) {
-                    state.boxed = true;
-                    emitControlPlaceholder();
-                } else {
-                    emitControlPlaceholder();
-                }
-            } else {
-                const bool nextDoubleHeight = (lowNibble & 0x01) != 0;
-                const bool nextDoubleWidth = (lowNibble & 0x02) != 0;
-                if (nextDoubleHeight || nextDoubleWidth) {
-                    emitControlPlaceholder();
-                    state.doubleHeight = nextDoubleHeight;
-                    state.doubleWidth = nextDoubleWidth;
-                    state.heldMosaic = QChar(u' ');
-                } else {
-                    state.doubleHeight = false;
-                    state.doubleWidth = false;
-                    state.heldMosaic = QChar(u' ');
-                    emitControlPlaceholder();
-                }
-            }
-            previousCode = code;
-            continue;
-        }
-
-        if (highNibble == 0x10) {
-            if (lowNibble < 0x08) {
-                emitControlPlaceholder();
-                state.foreground = lowNibble;
-                state.mosaic = true;
-                state.conceal = false;
-            } else if (lowNibble == 0x08) {
-                state.conceal = true;
-                emitControlPlaceholder();
-            } else if (lowNibble == 0x09) {
-                state.solidMosaic = true;
-                emitControlPlaceholder();
-            } else if (lowNibble == 0x0A) {
-                state.solidMosaic = false;
-                emitControlPlaceholder();
-            } else if (lowNibble == 0x0B) {
-                emitControlPlaceholder();
-                state.escape = !state.escape;
-            } else if (lowNibble == 0x0C) {
-                state.background = 0;
-                emitControlPlaceholder();
-            } else if (lowNibble == 0x0D) {
-                state.background = state.foreground;
-                emitControlPlaceholder();
-            } else if (lowNibble == 0x0E) {
-                state.holdMosaic = true;
-                emitControlPlaceholder();
-            } else if (lowNibble == 0x0F) {
-                emitControlPlaceholder();
-                state.holdMosaic = false;
-            }
-            previousCode = code;
-            continue;
-        }
-
-        const QChar teletextCharacter = teletextCharacterForCode(code, state);
-        if (state.mosaic && (code & 0x20) != 0) {
-            state.heldMosaic = teletextCharacter;
-            state.heldSolidMosaic = state.solidMosaic;
-        }
-        emitCharacter(teletextCharacter);
-        previousCode = code;
-    }
-
-    while (row.size() < 40) {
-        row.append(makeTeletextCell(QChar(u' '), state));
-    }
-    if (row.size() > 40) {
-        row.resize(40);
-    }
-    return row;
-}
-
-QString teletextCellCssClass(const TeletextNativeViewWidget::Cell &cell)
-{
-    QString cssClass = QStringLiteral("f%1 b%2").arg(cell.foreground).arg(cell.background);
-    if (cell.doubleHeight) {
-        cssClass += QStringLiteral(" dh");
-    }
-    if (cell.flash) {
-        cssClass += QStringLiteral(" fl");
-    }
-    if (cell.conceal) {
-        cssClass += QStringLiteral(" cn");
-    }
-    cssClass += cell.boxed ? QStringLiteral(" bx") : QStringLiteral(" nx");
-    return cssClass;
-}
-
 QString htmlEscapeTeletextCharacter(const QChar &character)
 {
     if (character == QLatin1Char('&')) {
@@ -642,14 +398,68 @@ QString htmlEscapeTeletextCharacter(const QChar &character)
     return QString(character);
 }
 
-QString teletextRowToHtml(const TeletextNativeViewWidget::Row &row)
+QString teletextPageKey(qint32 magazine, qint32 page)
+{
+    return QStringLiteral("%1%2").arg(magazine).arg(page, 2, 16, QLatin1Char('0'));
+}
+
+QString teletextCodePointToString(char32_t cp)
+{
+    if (cp <= 0xFFFF) {
+        return htmlEscapeTeletextCharacter(QChar(static_cast<ushort>(cp)));
+    }
+    QString text;
+    text.append(QChar(QChar::highSurrogate(cp)));
+    text.append(QChar(QChar::lowSurrogate(cp)));
+    return text;
+}
+
+// One TeletextPageCell as HTML text. Mosaic characters (outside the 0x40-0x5F
+// blast-through range) map to the Private Use Area the vendored teletext.css
+// font renders — 0xEE00 for contiguous, 0xEDE0 for separated — exactly as
+// vhs-teletext's parser.py does. Blast-through capitals and alpha cells map
+// through the G0 set the cell resolved to (with its national option sub-set).
+QString teletextSnapshotCellText(const tbc::vbi::TeletextPageCell &cell)
+{
+    const bool blastThrough = cell.character >= 0x40 && cell.character < 0x60;
+    if (cell.mosaic && !blastThrough) {
+        const char32_t base = cell.separated_mosaic ? 0xEDE0 : 0xEE00;
+        return htmlEscapeTeletextCharacter(QChar(static_cast<ushort>(base + cell.character)));
+    }
+    const char32_t cp = tbc::vbi::teletext_g0_to_unicode(cell.character,
+                                                        cell.g0_set,
+                                                        cell.national_option_subset);
+    return teletextCodePointToString(cp);
+}
+
+// CSS class for one cell, in the f# b# [dh] [fl] [cn] [bx|nx] form the
+// vendored teletext.css expects.
+QString teletextSnapshotCellCssClass(const tbc::vbi::TeletextPageCell &cell)
+{
+    QString cssClass = QStringLiteral("f%1 b%2")
+                           .arg(static_cast<int>(cell.foreground))
+                           .arg(static_cast<int>(cell.background));
+    if (cell.double_height) {
+        cssClass += QStringLiteral(" dh");
+    }
+    if (cell.flash) {
+        cssClass += QStringLiteral(" fl");
+    }
+    if (cell.conceal) {
+        cssClass += QStringLiteral(" cn");
+    }
+    cssClass += cell.boxed ? QStringLiteral(" bx") : QStringLiteral(" nx");
+    return cssClass;
+}
+
+QString teletextSnapshotRowToHtml(
+    const std::array<tbc::vbi::TeletextPageCell, tbc::vbi::TeletextPageSnapshot::kColumns> &row)
 {
     QString html = QStringLiteral("<span class=\"row\">");
     QString activeClass;
     bool spanOpen = false;
-
-    for (const TeletextNativeViewWidget::Cell &cell : row) {
-        const QString cellClass = teletextCellCssClass(cell);
+    for (const tbc::vbi::TeletextPageCell &cell : row) {
+        const QString cellClass = teletextSnapshotCellCssClass(cell);
         if (!spanOpen || cellClass != activeClass) {
             if (spanOpen) {
                 html += QStringLiteral("</span>");
@@ -658,9 +468,8 @@ QString teletextRowToHtml(const TeletextNativeViewWidget::Row &row)
             activeClass = cellClass;
             spanOpen = true;
         }
-        html += htmlEscapeTeletextCharacter(cell.character);
+        html += teletextSnapshotCellText(cell);
     }
-
     if (spanOpen) {
         html += QStringLiteral("</span>");
     }
@@ -668,62 +477,55 @@ QString teletextRowToHtml(const TeletextNativeViewWidget::Row &row)
     return html;
 }
 
-bool rowContainsDoubleHeightControl(const QByteArray &rawRowBytes)
+bool snapshotRowHasDoubleHeight(
+    const std::array<tbc::vbi::TeletextPageCell, tbc::vbi::TeletextPageSnapshot::kColumns> &row)
 {
-    for (qint32 index = 0; index < rawRowBytes.size(); ++index) {
-        if ((static_cast<quint8>(rawRowBytes.at(index)) & 0x7F) == 0x0D) {
+    for (const tbc::vbi::TeletextPageCell &cell : row) {
+        if (cell.double_height) {
             return true;
         }
     }
     return false;
 }
 
-struct DecodedTeletextSubpage {
-    bool hasHeader = false;
-    qint32 magazine = 1;
-    qint32 page = 0x00;
-    qint32 subpage = 0x0000;
-    QByteArray headerDisplay;
-    QMap<qint32, QByteArray> rowPayloads;
-};
-
-QString teletextPageKey(qint32 magazine, qint32 page)
+// A TeletextPageSnapshot as the vhs-teletext-compatible HTML the viewer shows.
+// The header row (row 0) is stamped with the receiver-synthesised page label
+// "P<mag><page>" a real teletext header displays, then the transmitted display
+// the decoder placed at columns 8-39. A row following a double-height row is
+// its lower half and is skipped, as the existing pipeline did.
+QString teletextSnapshotToHtml(const tbc::vbi::TeletextPageSnapshot &snapshot)
 {
-    return QStringLiteral("%1%2").arg(magazine).arg(page, 2, 16, QLatin1Char('0'));
-}
-
-QString buildTeletextHtmlFromSubpage(const DecodedTeletextSubpage &subpage)
-{
-    QByteArray headerRow(40, static_cast<char>(0x20));
-    const QByteArray pageText = QStringLiteral("P%1").arg(teletextPageKey(subpage.magazine, subpage.page)).toLatin1();
-    for (qint32 index = 0; index < pageText.size() && (3 + index) < headerRow.size(); ++index) {
-        headerRow[3 + index] = pageText.at(index);
-    }
-    for (qint32 index = 0; index < subpage.headerDisplay.size() && (8 + index) < headerRow.size(); ++index) {
-        headerRow[8 + index] = subpage.headerDisplay.at(index);
+    std::array<tbc::vbi::TeletextPageCell, tbc::vbi::TeletextPageSnapshot::kColumns> headerRow = snapshot.cells[0];
+    const QByteArray pageLabel =
+        QStringLiteral("P%1").arg(teletextPageKey(snapshot.magazine, snapshot.page_number)).toLatin1();
+    for (int i = 0; i < pageLabel.size() && (3 + i) < static_cast<int>(headerRow.size()); ++i) {
+        headerRow[3 + i].character = static_cast<uint8_t>(pageLabel.at(i));
+        headerRow[3 + i].mosaic = false;
+        headerRow[3 + i].foreground = tbc::vbi::TeletextColour::White;
+        headerRow[3 + i].background = tbc::vbi::TeletextColour::Black;
     }
 
     QString body;
     body += QStringLiteral("<div class=\"subpage\" id=\"%1\">")
-                .arg(subpage.subpage, 4, 16, QLatin1Char('0'));
-    body += teletextRowToHtml(parseTeletextDisplayRow(headerRow));
+                .arg(snapshot.subcode, 4, 16, QLatin1Char('0'));
+    body += teletextSnapshotRowToHtml(headerRow);
 
-    QByteArray previousRowPayload;
-    for (qint32 row = 1; row <= 24; ++row) {
-        const QByteArray rowPayload = subpage.rowPayloads.value(row, QByteArray(40, static_cast<char>(0x20)));
-        if (row > 1 && rowContainsDoubleHeightControl(previousRowPayload)) {
-            previousRowPayload = rowPayload;
+    bool previousDoubleHeight = false;
+    for (int row = 1; row <= 24; ++row) {
+        const bool rowDoubleHeight = snapshotRowHasDoubleHeight(snapshot.cells[row]);
+        if (row > 1 && previousDoubleHeight) {
+            previousDoubleHeight = rowDoubleHeight;
             continue;
         }
-        body += teletextRowToHtml(parseTeletextDisplayRow(rowPayload));
-        previousRowPayload = rowPayload;
+        body += teletextSnapshotRowToHtml(snapshot.cells[row]);
+        previousDoubleHeight = rowDoubleHeight;
     }
     body += QStringLiteral("</div>");
 
     QString html;
     html += QStringLiteral("<html><head>");
     html += QStringLiteral("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">");
-    html += QStringLiteral("<title>Page %1</title>").arg(teletextPageKey(subpage.magazine, subpage.page));
+    html += QStringLiteral("<title>Page %1</title>").arg(teletextPageKey(snapshot.magazine, snapshot.page_number));
     html += QStringLiteral("<link rel=\"stylesheet\" type=\"text/css\" href=\"teletext.css\" title=\"Default Style\"/>");
     html += QStringLiteral("<link rel=\"alternative stylesheet\" type=\"text/css\" href=\"teletext-noscanlines.css\" title=\"No Scanlines\"/>");
     html += QStringLiteral("<script type=\"text/javascript\" src=\"cssswitch.js\"></script>");
@@ -732,6 +534,13 @@ QString buildTeletextHtmlFromSubpage(const DecodedTeletextSubpage &subpage)
     html += QStringLiteral("</body></html>");
     return html;
 }
+
+struct NabtsRenderedPage {
+    QString title;
+    QString imageFileName;
+    QString htmlFileName;
+    QString debugText;
+};
 
 bool writeTeletextHtmlFromT42Native(const QString &streamPath,
                                     const QString &outputDirectoryPath,
@@ -745,81 +554,92 @@ bool writeTeletextHtmlFromT42Native(const QString &streamPath,
         return false;
     }
 
-    QMap<qint32, DecodedTeletextSubpage> activeSubpagesByMagazine;
-    QMap<QString, DecodedTeletextSubpage> selectedSubpagesByPage;
-
-    auto commitSubpage = [&](const DecodedTeletextSubpage &subpage) {
-        if (!subpage.hasHeader) {
-            return;
-        }
-        const QString pageKey = teletextPageKey(subpage.magazine, subpage.page);
-        if (!selectedSubpagesByPage.contains(pageKey)
-            || subpage.subpage < selectedSubpagesByPage.value(pageKey).subpage) {
-            selectedSubpagesByPage.insert(pageKey, subpage);
-        }
-    };
+    // Decode the T42 stream into TeletextPageSnapshot values via the shared
+    // tbc::vbi::TeletextDecoder, which handles MRAG routing, page assembly,
+    // row squashing and Level 1 attribute resolution against the Phase 1
+    // snapshot model. The resulting HTML is the vhs-teletext-compatible output
+    // the viewer already renders.
+    std::vector<tbc::vbi::TeletextPageSnapshot> snapshots;
+    tbc::vbi::TeletextDecoder decoder;
+    decoder.set_page_callback([&snapshots](const tbc::vbi::TeletextPageSnapshot &snapshot) {
+        snapshots.push_back(snapshot);
+    });
 
     while (true) {
-        const QByteArray packet = streamFile.read(42);
-        if (packet.size() == 0) {
+        const QByteArray packet = streamFile.read(static_cast<qint64>(tbc::vbi::kTeletextT42Bytes));
+        if (packet.size() != static_cast<int>(tbc::vbi::kTeletextT42Bytes)) {
             break;
         }
-        if (packet.size() != 42) {
-            break;
-        }
-
-        const quint8 byte0 = static_cast<quint8>(packet.at(0));
-        const quint8 byte1 = static_cast<quint8>(packet.at(1));
-        const qint32 mrag = decodeHamming16Value(byte0, byte1);
-        qint32 magazine = decodeHamming8Nibble(byte0) & 0x07;
-        if (magazine == 0) {
-            magazine = 8;
-        }
-        const qint32 row = mrag >> 3;
-        if (row < 0 || row > 31) {
-            continue;
-        }
-
-        if (row == 0) {
-            if (activeSubpagesByMagazine.contains(magazine)) {
-                commitSubpage(activeSubpagesByMagazine.value(magazine));
-            }
-
-            DecodedTeletextSubpage subpage;
-            subpage.hasHeader = true;
-            subpage.magazine = magazine;
-            subpage.page = decodeHamming16Value(static_cast<quint8>(packet.at(2)),
-                                                static_cast<quint8>(packet.at(3))) & 0xFF;
-            const qint32 subpageLow = decodeHamming16Value(static_cast<quint8>(packet.at(4)),
-                                                           static_cast<quint8>(packet.at(5)));
-            const qint32 subpageHigh = decodeHamming16Value(static_cast<quint8>(packet.at(6)),
-                                                            static_cast<quint8>(packet.at(7)));
-            subpage.subpage = (subpageLow & 0x7F) | ((subpageHigh & 0x3F) << 8);
-            subpage.headerDisplay = packet.mid(10, 32);
-            activeSubpagesByMagazine.insert(magazine, subpage);
-            continue;
-        }
-
-        if (row >= 1 && row <= 24 && activeSubpagesByMagazine.contains(magazine)) {
-            DecodedTeletextSubpage &subpage = activeSubpagesByMagazine[magazine];
-            if (subpage.hasHeader) {
-                subpage.rowPayloads.insert(row, packet.mid(2, 40));
-            }
-        }
+        const auto *packetData = reinterpret_cast<const uint8_t *>(packet.constData());
+        decoder.add_packet(packetData, static_cast<size_t>(packet.size()));
     }
+    decoder.flush();
 
-    for (auto it = activeSubpagesByMagazine.cbegin(); it != activeSubpagesByMagazine.cend(); ++it) {
-        commitSubpage(it.value());
-    }
-
-    if (selectedSubpagesByPage.isEmpty()) {
+    if (snapshots.empty()) {
         if (errorMessage) {
             *errorMessage = QObject::tr("No decodable teletext pages were found in the .tXX stream.");
         }
         return false;
     }
 
-    for (auto it = selectedSubpagesByPage.cbegin(); it != selectedSubpagesByPage.cend(); ++it) {
+    // A carousel transmits a page one row per field, so each header-cycle
+    // snapshot carries only a few rows. Reassemble complete pages by grouping
+    // every recurring snapshot of the same (magazine, page, subpage) and, for
+    // each row, taking the copy the stream repeated most (the highest
+    // row_copies) — the way vhs-teletext's Service accumulates a page over
+    // many fields. One page per (magazine, page) is rendered, using the lowest
+    // subcode, matching the carousel behaviour the existing pipeline exhibited.
+    QMap<QString, QList<int>> groupsBySubpage;
+    for (int i = 0; i < snapshots.size(); ++i) {
+        const tbc::vbi::TeletextPageSnapshot &snapshot = snapshots[i];
+        const QString key = QStringLiteral("%1-%2-%3")
+                                .arg(snapshot.magazine)
+                                .arg(snapshot.page_number, 2, 16, QLatin1Char('0'))
+                                .arg(snapshot.subcode, 4, 16, QLatin1Char('0'));
+        groupsBySubpage[key].append(i);
+    }
+
+    QMap<QString, tbc::vbi::TeletextPageSnapshot> renderedByPage;
+    for (auto it = groupsBySubpage.cbegin(); it != groupsBySubpage.cend(); ++it) {
+        const tbc::vbi::TeletextPageSnapshot &first = snapshots[it.value().first()];
+        const QString pageKey = teletextPageKey(first.magazine, first.page_number);
+        const auto existing = renderedByPage.constFind(pageKey);
+        if (existing != renderedByPage.constEnd() && first.subcode >= existing.value().subcode) {
+            continue;  // a lower subcode for this page has already been rendered
+        }
+
+        tbc::vbi::TeletextPageSnapshot merged = first;
+        for (int row = 0; row < tbc::vbi::TeletextPageSnapshot::kRows; ++row) {
+            int bestCopies = merged.row_copies[row];
+            for (int idx : it.value()) {
+                const tbc::vbi::TeletextPageSnapshot &candidate = snapshots[idx];
+                if (candidate.row_received[row] && candidate.row_copies[row] > bestCopies) {
+                    merged.cells[row] = candidate.cells[row];
+                    merged.row_received[row] = true;
+                    merged.row_copies[row] = candidate.row_copies[row];
+                    bestCopies = candidate.row_copies[row];
+                }
+            }
+        }
+        renderedByPage.insert(pageKey, merged);
+    }
+
+    // Render one HTML page per (magazine, page). A page that never gathered
+    // more than its header row is noise rather than a transmitted page, so it
+    // is dropped — real carousel pages accumulate many rows across a capture
+    // this long.
+    bool wroteAny = false;
+    for (auto it = renderedByPage.cbegin(); it != renderedByPage.cend(); ++it) {
+        int receivedRows = 0;
+        for (int row = 1; row < tbc::vbi::TeletextPageSnapshot::kRows; ++row) {
+            if (it.value().row_received[row]) {
+                ++receivedRows;
+            }
+        }
+        if (receivedRows < 2) {
+            continue;
+        }
+
         const QString pageHtmlPath = QDir(outputDirectoryPath).filePath(it.key() + QStringLiteral(".html"));
         QFile pageFile(pageHtmlPath);
         if (!pageFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
@@ -828,9 +648,421 @@ bool writeTeletextHtmlFromT42Native(const QString &streamPath,
             }
             return false;
         }
-
-        pageFile.write(buildTeletextHtmlFromSubpage(it.value()).toUtf8());
+        pageFile.write(teletextSnapshotToHtml(it.value()).toUtf8());
         pageFile.close();
+        wroteAny = true;
+    }
+
+    if (!wroteAny) {
+        if (errorMessage) {
+            *errorMessage = QObject::tr("No decodable teletext pages were found in the .tXX stream.");
+        }
+        return false;
+    }
+
+    return true;
+}
+
+QColor nabtsColourToQColor(const tbc::vbi::NabtsColour &colour)
+{
+    if (colour.transparent) {
+        return QColor(0, 0, 0, 0);
+    }
+
+    const auto to8Bit = [](quint8 value) {
+        return static_cast<qint32>((static_cast<qint32>(value) * 255 + 3) / 7);
+    };
+    return QColor(to8Bit(colour.red), to8Bit(colour.green), to8Bit(colour.blue), 255);
+}
+
+tbc::vbi::NabtsColour decodeNabtsDirectColourFromIncrementalSpec(quint8 spec)
+{
+    const quint8 sixBits = spec & 0x3F;
+    const quint8 greenBits = static_cast<quint8>((((sixBits >> 5) & 0x01) << 1) | ((sixBits >> 2) & 0x01));
+    const quint8 redBits = static_cast<quint8>((((sixBits >> 4) & 0x01) << 1) | ((sixBits >> 1) & 0x01));
+    const quint8 blueBits = static_cast<quint8>((((sixBits >> 3) & 0x01) << 1) | (sixBits & 0x01));
+    const auto scaleToThreeBits = [](quint8 twoBits) {
+        return static_cast<quint8>((static_cast<qint32>(twoBits) * 7 + 1) / 3);
+    };
+
+    tbc::vbi::NabtsColour colour;
+    colour.green = scaleToThreeBits(greenBits);
+    colour.red = scaleToThreeBits(redBits);
+    colour.blue = scaleToThreeBits(blueBits);
+    colour.transparent = false;
+    return colour;
+}
+
+const tbc::vbi::NabtsTextureMask *nabtsTextureMaskForPattern(
+    tbc::vbi::NabtsTexturePattern pattern,
+    const tbc::vbi::NabtsPageSnapshot &snapshot)
+{
+    using tbc::vbi::NabtsTexturePattern;
+    switch (pattern) {
+    case NabtsTexturePattern::kMaskA:
+        return &snapshot.texture_masks[0];
+    case NabtsTexturePattern::kMaskB:
+        return &snapshot.texture_masks[1];
+    case NabtsTexturePattern::kMaskC:
+        return &snapshot.texture_masks[2];
+    case NabtsTexturePattern::kMaskD:
+        return &snapshot.texture_masks[3];
+    default:
+        return nullptr;
+    }
+}
+
+tbc::vbi::NaplpsInk nabtsHighlightInkForPrimitive(const tbc::vbi::NabtsPrimitive &primitive)
+{
+    using tbc::vbi::NabtsColourMode;
+
+    tbc::vbi::NaplpsInk highlight;
+    if (primitive.colour_mode == NabtsColourMode::kMappedWithBackground
+        && primitive.background_map_address >= 0) {
+        highlight = tbc::vbi::naplps_background_ink_of(primitive);
+    } else {
+        highlight.colour = tbc::vbi::kNabtsNominalBlack;
+    }
+    return highlight;
+}
+
+tbc::vbi::NaplpsInk nabtsIncrementalInkForSpec(quint8 spec,
+                                               const tbc::vbi::NabtsPrimitive &primitive,
+                                               const tbc::vbi::NabtsPageSnapshot &snapshot)
+{
+    using tbc::vbi::NabtsColourMode;
+
+    tbc::vbi::NaplpsInk ink;
+    ink.blinking = primitive.blinking;
+    ink.blink_to = primitive.blink_to;
+    ink.blink_to_map_address = primitive.blink_to_map_address;
+
+    if (primitive.colour_mode == NabtsColourMode::kDirect) {
+        ink.colour = decodeNabtsDirectColourFromIncrementalSpec(spec);
+        ink.colour_map_address = -1;
+        return ink;
+    }
+
+    const qint32 mapAddress = static_cast<qint32>((spec >> 2) & 0x0F);
+    ink.colour_map_address = static_cast<int16_t>(mapAddress);
+    ink.colour = snapshot.colour_map[mapAddress];
+    return ink;
+}
+
+void maybeHighlightFilledPrimitive(const tbc::vbi::NabtsPrimitive &primitive,
+                                  tbc::vbi::NaplpsRasteriser &rasteriser)
+{
+    using tbc::vbi::NabtsPoint;
+    using tbc::vbi::NabtsPrimitiveKind;
+    if (!primitive.highlighted) {
+        return;
+    }
+
+    const tbc::vbi::NaplpsInk highlightInk = nabtsHighlightInkForPrimitive(primitive);
+    switch (primitive.kind) {
+    case NabtsPrimitiveKind::kArc: {
+        const std::vector<NabtsPoint> outline = rasteriser.arc_polyline(primitive.points);
+        rasteriser.highlight_path(outline, primitive.logical_pel, highlightInk, false);
+        break;
+    }
+    case NabtsPrimitiveKind::kPolygon:
+        rasteriser.highlight_path(primitive.points, primitive.logical_pel, highlightInk, true);
+        break;
+    case NabtsPrimitiveKind::kRectangle: {
+        const NabtsPoint origin = primitive.origin;
+        const NabtsPoint far{origin.x + primitive.size.dx, origin.y + primitive.size.dy};
+        const std::vector<NabtsPoint> corners = {
+            origin,
+            NabtsPoint{far.x, origin.y},
+            far,
+            NabtsPoint{origin.x, far.y}
+        };
+        rasteriser.highlight_path(corners, primitive.logical_pel, highlightInk, true);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void rasteriseNabtsPrimitive(const tbc::vbi::NabtsPrimitive &primitive,
+                             const tbc::vbi::NabtsPageSnapshot &snapshot,
+                             tbc::vbi::NaplpsRasteriser &rasteriser)
+{
+    using tbc::vbi::NabtsPoint;
+    using tbc::vbi::NabtsPrimitiveKind;
+
+    const tbc::vbi::NaplpsInk ink = tbc::vbi::naplps_ink_of(primitive);
+    const tbc::vbi::NaplpsInk backgroundInk = tbc::vbi::naplps_background_ink_of(primitive);
+    const tbc::vbi::NaplpsInk *backgroundInkPtr =
+        primitive.colour_mode == tbc::vbi::NabtsColourMode::kMappedWithBackground
+            ? &backgroundInk
+            : nullptr;
+    const tbc::vbi::NabtsTextureMask *textureMask =
+        nabtsTextureMaskForPattern(primitive.texture_pattern, snapshot);
+
+    switch (primitive.kind) {
+    case NabtsPrimitiveKind::kPoint:
+        if (!primitive.points.empty()) {
+            rasteriser.stamp_pel(primitive.points.front(), primitive.logical_pel, ink);
+        }
+        break;
+    case NabtsPrimitiveKind::kCharacter:
+        rasteriser.deposit_character(primitive, snapshot.drcs, ink, backgroundInkPtr);
+        break;
+    case NabtsPrimitiveKind::kLine:
+        rasteriser.stroke_path(primitive.points, primitive.logical_pel, primitive.line_texture, ink);
+        break;
+    case NabtsPrimitiveKind::kArc: {
+        const std::vector<NabtsPoint> outline = rasteriser.arc_polyline(primitive.points);
+        if (primitive.filled) {
+            rasteriser.fill_path(outline, primitive.logical_pel, primitive.texture_pattern,
+                                 primitive.texture_mask_size, textureMask, ink);
+            maybeHighlightFilledPrimitive(primitive, rasteriser);
+        } else {
+            rasteriser.stroke_path(outline, primitive.logical_pel, primitive.line_texture, ink);
+        }
+        break;
+    }
+    case NabtsPrimitiveKind::kPolygon:
+        if (primitive.filled) {
+            rasteriser.fill_path(primitive.points, primitive.logical_pel, primitive.texture_pattern,
+                                 primitive.texture_mask_size, textureMask, ink);
+            maybeHighlightFilledPrimitive(primitive, rasteriser);
+        } else {
+            rasteriser.stroke_path(primitive.points, primitive.logical_pel, primitive.line_texture, ink);
+        }
+        break;
+    case NabtsPrimitiveKind::kRectangle: {
+        const NabtsPoint origin = primitive.origin;
+        const NabtsPoint far{origin.x + primitive.size.dx, origin.y + primitive.size.dy};
+        const std::vector<NabtsPoint> corners = {
+            origin,
+            NabtsPoint{far.x, origin.y},
+            far,
+            NabtsPoint{origin.x, far.y}
+        };
+        if (primitive.filled) {
+            rasteriser.fill_path(corners, primitive.logical_pel, primitive.texture_pattern,
+                                 primitive.texture_mask_size, textureMask, ink);
+            maybeHighlightFilledPrimitive(primitive, rasteriser);
+        } else {
+            rasteriser.stroke_path(corners, primitive.logical_pel, primitive.line_texture, ink, true);
+        }
+        break;
+    }
+    case NabtsPrimitiveKind::kIncrementalPoints: {
+        std::vector<tbc::vbi::NaplpsInk> colours;
+        colours.reserve(primitive.incremental_colours.size());
+        for (quint8 spec : primitive.incremental_colours) {
+            colours.push_back(nabtsIncrementalInkForSpec(spec, primitive, snapshot));
+        }
+        rasteriser.deposit_colour_run(primitive.origin, primitive.size, primitive.logical_pel, colours);
+        break;
+    }
+    }
+}
+
+QImage renderNabtsSnapshotToImage(const tbc::vbi::NabtsPageSnapshot &snapshot,
+                                  tbc::vbi::NaplpsRenderMode renderMode)
+{
+    const tbc::vbi::NaplpsRenderGrid grid = tbc::vbi::naplps_render_grid(renderMode);
+    if (grid.width <= 0 || grid.height <= 0) {
+        return QImage();
+    }
+
+    tbc::vbi::NaplpsCellSurface surface(grid);
+    tbc::vbi::NaplpsRasteriser rasteriser(surface, tbc::vbi::NaplpsGridMapping(grid));
+    for (const tbc::vbi::NabtsPrimitive &primitive : snapshot.primitives) {
+        rasteriseNabtsPrimitive(primitive, snapshot, rasteriser);
+    }
+
+    QImage image(grid.width, grid.height, QImage::Format_ARGB32);
+    image.fill(Qt::black);
+    for (qint32 row = 0; row < surface.height(); ++row) {
+        for (qint32 column = 0; column < surface.width(); ++column) {
+            const tbc::vbi::NaplpsCell &cell = surface.at(column, row);
+            if (!cell.painted) {
+                continue;
+            }
+            const QColor colour = nabtsColourToQColor(cell.colour);
+            image.setPixelColor(column, grid.height - 1 - row,
+                                colour.alpha() == 0 ? QColor(Qt::black) : colour);
+        }
+    }
+    return image;
+}
+
+QString buildNabtsHtmlPage(const QString &title,
+                           const QString &imageFileName,
+                           const QString &debugText,
+                           const QString &previousPageHref,
+                           const QString &nextPageHref)
+{
+    QString html;
+    html += QStringLiteral("<html><head>");
+    html += QStringLiteral("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">");
+    html += QStringLiteral("<meta name=\"teletext-format\" content=\"nabts\">");
+    html += QStringLiteral("<title>%1</title>").arg(title.toHtmlEscaped());
+    html += QStringLiteral("</head><body style=\"background:#000;margin:0;padding:0;display:flex;align-items:flex-start;justify-content:center;\">");
+    html += QStringLiteral("<div id=\"nabts-canvas\" style=\"position:relative;display:inline-block;line-height:0;\">");
+    if (!previousPageHref.trimmed().isEmpty()) {
+        html += QStringLiteral("<a id=\"nabts-prev\" href=\"%1\" title=\"Previous page\" style=\"position:absolute;left:0;top:0;width:50%%;height:100%%;display:block;z-index:5;background:transparent;text-decoration:none;\"></a>")
+                    .arg(previousPageHref.toHtmlEscaped());
+    }
+    if (!nextPageHref.trimmed().isEmpty()) {
+        html += QStringLiteral("<a id=\"nabts-next\" href=\"%1\" title=\"Next page\" style=\"position:absolute;right:0;top:0;width:50%%;height:100%%;display:block;z-index:5;background:transparent;text-decoration:none;\"></a>")
+                    .arg(nextPageHref.toHtmlEscaped());
+    }
+    html += QStringLiteral("<img src=\"%1\" style=\"display:block;image-rendering:pixelated;max-width:100%%;height:auto;background:#000;\"/>")
+                .arg(imageFileName.toHtmlEscaped());
+    html += QStringLiteral("</div>");
+    if (!debugText.trimmed().isEmpty()) {
+        QString escapedDebug = debugText.toHtmlEscaped();
+        escapedDebug.replace(QStringLiteral("\n"), QStringLiteral("<br/>"));
+        html += QStringLiteral("<pre id=\"nabts-debug\" class=\"nabts-debug\" style=\"display:none;color:#ddd;background:#000;margin:12px;font-family:Consolas,monospace;font-size:12px;line-height:1.35;white-space:pre-wrap;\">%1</pre>")
+                    .arg(escapedDebug);
+    }
+    html += QStringLiteral("</body></html>");
+    return html;
+}
+
+bool writeNabtsHtmlFromT33Native(const QString &streamPath,
+                                 const QString &outputDirectoryPath,
+                                 QString *errorMessage)
+{
+    QFile streamFile(streamPath);
+    if (!streamFile.open(QIODevice::ReadOnly)) {
+        if (errorMessage) {
+            *errorMessage = QObject::tr("Could not open NABTS stream file: %1").arg(streamPath);
+        }
+        return false;
+    }
+
+    const QByteArray streamBytes = streamFile.readAll();
+    if (streamBytes.size() < static_cast<qint64>(tbc::vbi::kNabtsPacketBytes)) {
+        if (errorMessage) {
+            *errorMessage = QObject::tr("NABTS stream is too short to contain any packets.");
+        }
+        return false;
+    }
+
+    const tbc::vbi::NaplpsRenderMode renderMode = tbc::vbi::NaplpsRenderMode::kTwice;
+    const tbc::vbi::NaplpsRenderGrid renderGrid = tbc::vbi::naplps_render_grid(renderMode);
+
+    tbc::vbi::NabtsRecordAssembler recordAssembler;
+    tbc::vbi::NabtsGroupAssembler groupAssembler;
+    std::map<uint16_t, tbc::vbi::NaplpsInterpreter> channelInterpreters;
+    std::map<uint16_t, bool> channelHasDisplay;
+    std::vector<NabtsRenderedPage> renderedPages;
+
+    qint32 renderedPageCount = 0;
+    qint32 seenPresentationMessages = 0;
+
+    recordAssembler.set_message_callback([&](const tbc::vbi::NabtsMessage &message) {
+        if (!tbc::vbi::nabts_type_is_presentation(message.type)) {
+            return;
+        }
+        ++seenPresentationMessages;
+
+        auto interpreterIt = channelInterpreters.find(message.channel);
+        if (interpreterIt == channelInterpreters.end()) {
+            interpreterIt = channelInterpreters.emplace(message.channel, tbc::vbi::NaplpsInterpreter(renderGrid)).first;
+            channelHasDisplay[message.channel] = false;
+        }
+
+        tbc::vbi::NaplpsInterpreter &interpreter = interpreterIt->second;
+        if (message.classification.caption) {
+            interpreter.apply_caption_state();
+        }
+
+        const bool keepDisplay = message.classification.more && channelHasDisplay[message.channel];
+        tbc::vbi::NabtsPageSnapshot snapshot = interpreter.run(message.data, keepDisplay);
+        channelHasDisplay[message.channel] = channelHasDisplay[message.channel] || keepDisplay || !snapshot.empty();
+        if (message.classification.support_record || snapshot.empty()) {
+            return;
+        }
+
+        const QImage image = renderNabtsSnapshotToImage(snapshot, renderMode);
+        if (image.isNull()) {
+            return;
+        }
+
+        ++renderedPageCount;
+        const QString channelText = QString::number(message.channel, 16).rightJustified(3, QLatin1Char('0')).toUpper();
+        const QString addressText = QString::fromStdString(message.address.text()).toUpper();
+        const QString pageStem = QStringLiteral("record-%1-ch%2-addr%3-v%4")
+                                     .arg(renderedPageCount, 5, 10, QLatin1Char('0'))
+                                     .arg(channelText)
+                                     .arg(addressText)
+                                     .arg(message.version, 2, 16, QLatin1Char('0'));
+        const QString imageFileName = pageStem + QStringLiteral(".png");
+        const QString htmlFileName = pageStem + QStringLiteral(".html");
+        const QString imagePath = QDir(outputDirectoryPath).filePath(imageFileName);
+        if (!image.save(imagePath)) {
+            return;
+        }
+
+        const QString debugText = QStringLiteral("Channel: 0x%1\nAddress: %2\nVersion: 0x%3\nType: %4\nPrimitives: %5\nText: %6")
+                                      .arg(channelText)
+                                      .arg(addressText)
+                                      .arg(QString::number(message.version, 16).rightJustified(2, QLatin1Char('0')).toUpper())
+                                      .arg(message.type)
+                                      .arg(snapshot.primitives.size())
+                                      .arg(QString::fromStdString(tbc::vbi::nabts_page_text(snapshot)));
+        const QString title = QStringLiteral("NABTS %1").arg(pageStem.toUpper());
+        renderedPages.push_back({title, imageFileName, htmlFileName, debugText});
+    });
+
+    groupAssembler.set_group_callback([&](const tbc::vbi::NabtsDataGroup &group) {
+        recordAssembler.add_group(group);
+    });
+
+    const qint64 packetCount = streamBytes.size() / static_cast<qint64>(tbc::vbi::kNabtsPacketBytes);
+    for (qint64 packetIndex = 0; packetIndex < packetCount; ++packetIndex) {
+        const qint64 offset = packetIndex * static_cast<qint64>(tbc::vbi::kNabtsPacketBytes);
+        const auto *packetData = reinterpret_cast<const uint8_t *>(streamBytes.constData() + offset);
+        const tbc::vbi::NabtsPacket packet =
+            tbc::vbi::nabts_decode_packet(packetData, tbc::vbi::kNabtsPacketBytes, nullptr);
+        groupAssembler.add_packet(packet);
+    }
+
+    groupAssembler.flush();
+    recordAssembler.flush();
+
+    if (renderedPageCount == 0) {
+        if (errorMessage) {
+            if (seenPresentationMessages == 0) {
+                *errorMessage = QObject::tr("No NABTS presentation records were found in the .t33 stream.");
+            } else {
+                *errorMessage = QObject::tr("NABTS records were decoded, but no renderable pages were produced.");
+            }
+        }
+        return false;
+    }
+
+    for (size_t pageIndex = 0; pageIndex < renderedPages.size(); ++pageIndex) {
+        const NabtsRenderedPage &page = renderedPages[pageIndex];
+        const NabtsRenderedPage &previousPage =
+            renderedPages[(pageIndex + renderedPages.size() - 1) % renderedPages.size()];
+        const NabtsRenderedPage &nextPage =
+            renderedPages[(pageIndex + 1) % renderedPages.size()];
+        const QString html = buildNabtsHtmlPage(page.title,
+                                                page.imageFileName,
+                                                page.debugText,
+                                                previousPage.htmlFileName,
+                                                nextPage.htmlFileName);
+
+        QFile htmlFile(QDir(outputDirectoryPath).filePath(page.htmlFileName));
+        if (!htmlFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            if (errorMessage) {
+                *errorMessage = QObject::tr("Could not write NABTS HTML page: %1")
+                                    .arg(QDir(outputDirectoryPath).filePath(page.htmlFileName));
+            }
+            return false;
+        }
+        htmlFile.write(html.toUtf8());
+        htmlFile.close();
     }
 
     return true;
@@ -838,7 +1070,8 @@ bool writeTeletextHtmlFromT42Native(const QString &streamPath,
 
 bool convertTeletextStreamToHtmlDirectory(const QString &streamPath,
                                           QString *outputDirectoryPath,
-                                          QString *errorMessage)
+                                          QString *errorMessage,
+                                          bool forceRegenerateNabtsCache)
 {
     const QFileInfo streamInfo(streamPath);
     if (!isTeletextStreamFile(streamInfo)) {
@@ -848,15 +1081,21 @@ bool convertTeletextStreamToHtmlDirectory(const QString &streamPath,
         return false;
     }
 
-    const QString vendorDirectory = resolveTeletextVendorDirectory();
-    if (vendorDirectory.isEmpty()) {
-        if (errorMessage) {
-            *errorMessage = QObject::tr("Could not locate vendored vhs-teletext runtime directory.");
-        }
-        return false;
-    }
+    const bool isNabtsT33Stream =
+        streamInfo.suffix().compare(QStringLiteral("t33"), Qt::CaseInsensitive) == 0;
 
-    const QString pythonExecutable = resolvePythonExecutable();
+    QString vendorDirectory;
+    QString pythonExecutable;
+    if (!isNabtsT33Stream) {
+        vendorDirectory = resolveTeletextVendorDirectory();
+        if (vendorDirectory.isEmpty()) {
+            if (errorMessage) {
+                *errorMessage = QObject::tr("Could not locate vendored vhs-teletext runtime directory.");
+            }
+            return false;
+        }
+        pythonExecutable = resolvePythonExecutable();
+    }
 
     const QString outputPath = QDir::cleanPath(cacheDirectoryForTeletextStream(streamInfo));
     QDir outputDirectory(outputPath);
@@ -868,23 +1107,50 @@ bool convertTeletextStreamToHtmlDirectory(const QString &streamPath,
     }
     ensureCssSwitchScript(outputPath);
 
-    if (!directoryContainsHtmlPages(outputPath)) {
-        QString pythonConversionError;
-        bool convertedByPython = false;
-
-        if (!pythonExecutable.isEmpty()) {
-            QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
-            const QString existingPythonPath = environment.value(QStringLiteral("PYTHONPATH"));
-            if (existingPythonPath.trimmed().isEmpty()) {
-                environment.insert(QStringLiteral("PYTHONPATH"), vendorDirectory);
-            } else {
-                environment.insert(
-                    QStringLiteral("PYTHONPATH"),
-                    vendorDirectory + QDir::listSeparator() + existingPythonPath
+    if (isNabtsT33Stream) {
+        const bool hasCachedHtml = directoryContainsHtmlPages(outputPath);
+        if (forceRegenerateNabtsCache || !hasCachedHtml) {
+            if (forceRegenerateNabtsCache) {
+                const QStringList generatedArtifacts = outputDirectory.entryList(
+                    QStringList() << QStringLiteral("*.html") << QStringLiteral("*.png"),
+                    QDir::Files,
+                    QDir::Name | QDir::IgnoreCase
                 );
+                for (const QString &artifactFileName : generatedArtifacts) {
+                    outputDirectory.remove(artifactFileName);
+                }
             }
+            if (!writeNabtsHtmlFromT33Native(streamInfo.absoluteFilePath(), outputPath, errorMessage)) {
+                return false;
+            }
+        }
+    } else if (!directoryContainsHtmlPages(outputPath)) {
+        // Decode on-device via the shared tbc::vbi::TeletextDecoder first, so a
+        // WST .t34/.t42 stream needs no Python runtime. The vendored
+        // vhs-teletext remains as a fallback for material the native Level 1
+        // decoder does not yet cover, and is still the source of the CSS/font
+        // assets copied below.
+        QString nativeConversionError;
+        const bool convertedByNative = writeTeletextHtmlFromT42Native(
+            streamInfo.absoluteFilePath(), outputPath, &nativeConversionError);
 
-            const QString htmlExportScript = QStringLiteral(R"PY(
+        if (!convertedByNative) {
+            QString pythonConversionError;
+            bool convertedByPython = false;
+
+            if (!pythonExecutable.isEmpty()) {
+                QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+                const QString existingPythonPath = environment.value(QStringLiteral("PYTHONPATH"));
+                if (existingPythonPath.trimmed().isEmpty()) {
+                    environment.insert(QStringLiteral("PYTHONPATH"), vendorDirectory);
+                } else {
+                    environment.insert(
+                        QStringLiteral("PYTHONPATH"),
+                        vendorDirectory + QDir::listSeparator() + existingPythonPath
+                    );
+                }
+
+                const QString htmlExportScript = QStringLiteral(R"PY(
 import sys
 import types
 
@@ -907,60 +1173,58 @@ with open(stream_path, "rb") as stream_file:
     service = Service.from_packets((packet for packet in packet_stream if not packet.is_padding()))
 service.to_html(output_directory, None, None)
 )PY");
-            const QStringList htmlArguments = {
-                QStringLiteral("-c"),
-                htmlExportScript,
-                streamInfo.absoluteFilePath(),
-                outputPath
-            };
-            convertedByPython = runPythonStep(
-                pythonExecutable,
-                htmlArguments,
-                environment,
-                &pythonConversionError
-            );
-        } else {
-            pythonConversionError = QObject::tr("Python interpreter was not found.");
-        }
+                const QStringList htmlArguments = {
+                    QStringLiteral("-c"),
+                    htmlExportScript,
+                    streamInfo.absoluteFilePath(),
+                    outputPath
+                };
+                convertedByPython = runPythonStep(
+                    pythonExecutable,
+                    htmlArguments,
+                    environment,
+                    &pythonConversionError
+                );
+            } else {
+                pythonConversionError = QObject::tr("Python interpreter was not found.");
+            }
 
-        if (!convertedByPython) {
-            QString nativeConversionError;
-            if (!writeTeletextHtmlFromT42Native(streamInfo.absoluteFilePath(),
-                                                outputPath,
-                                                &nativeConversionError)) {
+            if (!convertedByPython) {
                 if (errorMessage) {
-                    *errorMessage = QObject::tr("Teletext conversion failed. Python path error: %1 | Native fallback error: %2")
-                                        .arg(pythonConversionError.isEmpty()
+                    *errorMessage = QObject::tr("Teletext conversion failed. Native error: %1 | Python fallback error: %2")
+                                        .arg(nativeConversionError.isEmpty()
                                                  ? QObject::tr("unknown error")
-                                                 : pythonConversionError,
-                                             nativeConversionError.isEmpty()
+                                                 : nativeConversionError,
+                                             pythonConversionError.isEmpty()
                                                  ? QObject::tr("unknown error")
-                                                 : nativeConversionError);
+                                                 : pythonConversionError);
                 }
                 return false;
             }
         }
     }
 
-    if (!copyFileReplacing(QDir(vendorDirectory).filePath(QStringLiteral("misc/teletext.css")),
-                           outputDirectory.filePath(QStringLiteral("teletext.css")),
-                           errorMessage)) {
-        return false;
-    }
-    if (!copyFileReplacing(QDir(vendorDirectory).filePath(QStringLiteral("misc/teletext-noscanlines.css")),
-                           outputDirectory.filePath(QStringLiteral("teletext-noscanlines.css")),
-                           errorMessage)) {
-        return false;
-    }
-    if (!copyFileReplacing(QDir(vendorDirectory).filePath(QStringLiteral("misc/teletext2.ttf")),
-                           outputDirectory.filePath(QStringLiteral("teletext2.ttf")),
-                           errorMessage)) {
-        return false;
-    }
-    if (!copyFileReplacing(QDir(vendorDirectory).filePath(QStringLiteral("misc/teletext4.ttf")),
-                           outputDirectory.filePath(QStringLiteral("teletext4.ttf")),
-                           errorMessage)) {
-        return false;
+    if (!isNabtsT33Stream) {
+        if (!copyFileReplacing(QDir(vendorDirectory).filePath(QStringLiteral("misc/teletext.css")),
+                               outputDirectory.filePath(QStringLiteral("teletext.css")),
+                               errorMessage)) {
+            return false;
+        }
+        if (!copyFileReplacing(QDir(vendorDirectory).filePath(QStringLiteral("misc/teletext-noscanlines.css")),
+                               outputDirectory.filePath(QStringLiteral("teletext-noscanlines.css")),
+                               errorMessage)) {
+            return false;
+        }
+        if (!copyFileReplacing(QDir(vendorDirectory).filePath(QStringLiteral("misc/teletext2.ttf")),
+                               outputDirectory.filePath(QStringLiteral("teletext2.ttf")),
+                               errorMessage)) {
+            return false;
+        }
+        if (!copyFileReplacing(QDir(vendorDirectory).filePath(QStringLiteral("misc/teletext4.ttf")),
+                               outputDirectory.filePath(QStringLiteral("teletext4.ttf")),
+                               errorMessage)) {
+            return false;
+        }
     }
 
     if (!directoryContainsHtmlPages(outputPath)) {
@@ -1040,6 +1304,170 @@ QString normalizedTeletextHtmlForQt(QString htmlContent)
     }
     return htmlContent;
 }
+
+QString firstImageSourceFromHtml(const QString &htmlContent)
+{
+    const qint32 imageStart = htmlContent.indexOf(QStringLiteral("<img"), 0, Qt::CaseInsensitive);
+    if (imageStart < 0) {
+        return QString();
+    }
+
+    const qint32 srcMarker = htmlContent.indexOf(QStringLiteral("src="), imageStart, Qt::CaseInsensitive);
+    if (srcMarker < 0) {
+        return QString();
+    }
+
+    qint32 valueStart = srcMarker + 4;
+    while (valueStart < htmlContent.size() && htmlContent.at(valueStart).isSpace()) {
+        ++valueStart;
+    }
+    if (valueStart >= htmlContent.size()) {
+        return QString();
+    }
+
+    const QChar quote = htmlContent.at(valueStart);
+    if (quote == QLatin1Char('"') || quote == QLatin1Char('\'')) {
+        const qint32 valueEnd = htmlContent.indexOf(quote, valueStart + 1);
+        if (valueEnd <= valueStart) {
+            return QString();
+        }
+        return htmlContent.mid(valueStart + 1, valueEnd - valueStart - 1).trimmed();
+    }
+
+    qint32 valueEnd = valueStart;
+    while (valueEnd < htmlContent.size()
+           && !htmlContent.at(valueEnd).isSpace()
+           && htmlContent.at(valueEnd) != QLatin1Char('>')) {
+        ++valueEnd;
+    }
+    if (valueEnd <= valueStart) {
+        return QString();
+    }
+    return htmlContent.mid(valueStart, valueEnd - valueStart).trimmed();
+}
+
+QString nabtsDebugInnerHtmlFromPage(const QString &htmlContent)
+{
+    qint32 markerIndex = htmlContent.indexOf(QStringLiteral("id=\"nabts-debug\""), 0, Qt::CaseInsensitive);
+    if (markerIndex < 0) {
+        markerIndex = htmlContent.indexOf(QStringLiteral("class=\"nabts-debug\""), 0, Qt::CaseInsensitive);
+    }
+    if (markerIndex >= 0) {
+        const qint32 preStart = htmlContent.lastIndexOf(QStringLiteral("<pre"), markerIndex, Qt::CaseInsensitive);
+        if (preStart >= 0) {
+            const qint32 contentStart = htmlContent.indexOf(QLatin1Char('>'), preStart);
+            if (contentStart >= 0) {
+                const qint32 preEnd = htmlContent.indexOf(QStringLiteral("</pre>"), contentStart, Qt::CaseInsensitive);
+                if (preEnd > contentStart) {
+                    return htmlContent.mid(contentStart + 1, preEnd - contentStart - 1).trimmed();
+                }
+            }
+        }
+    }
+
+    const qint32 imageStart = htmlContent.indexOf(QStringLiteral("<img"), 0, Qt::CaseInsensitive);
+    qint32 scanStart = imageStart >= 0 ? imageStart : 0;
+    while (scanStart >= 0 && scanStart < htmlContent.size()) {
+        const qint32 divStart = htmlContent.indexOf(QStringLiteral("<div"), scanStart, Qt::CaseInsensitive);
+        if (divStart < 0) {
+            break;
+        }
+        const qint32 divOpenEnd = htmlContent.indexOf(QLatin1Char('>'), divStart);
+        if (divOpenEnd < 0) {
+            break;
+        }
+        const QString divOpenTag = htmlContent.mid(divStart, divOpenEnd - divStart + 1);
+        const bool looksLikeDebugBlock =
+            divOpenTag.contains(QStringLiteral("Consolas"), Qt::CaseInsensitive)
+            || divOpenTag.contains(QStringLiteral("monospace"), Qt::CaseInsensitive)
+            || divOpenTag.contains(QStringLiteral("nabts-debug"), Qt::CaseInsensitive);
+        if (looksLikeDebugBlock) {
+            const qint32 divEnd = htmlContent.indexOf(QStringLiteral("</div>"), divOpenEnd, Qt::CaseInsensitive);
+            if (divEnd > divOpenEnd) {
+                return htmlContent.mid(divOpenEnd + 1, divEnd - divOpenEnd - 1).trimmed();
+            }
+            break;
+        }
+        scanStart = divOpenEnd + 1;
+    }
+    return QString();
+}
+
+QString nabtsCanvasHtml(const QString &imageSource,
+                        const QString &previousPageHref,
+                        const QString &nextPageHref)
+{
+    QString html = QStringLiteral("<div id=\"nabts-canvas\" style=\"position:relative;display:inline-block;line-height:0;\">");
+    if (!previousPageHref.trimmed().isEmpty()) {
+        html += QStringLiteral("<a id=\"nabts-prev\" href=\"%1\" title=\"Previous page\" style=\"position:absolute;left:0;top:0;width:50%%;height:100%%;display:block;z-index:5;background:transparent;text-decoration:none;\"></a>")
+                    .arg(previousPageHref.toHtmlEscaped());
+    }
+    if (!nextPageHref.trimmed().isEmpty()) {
+        html += QStringLiteral("<a id=\"nabts-next\" href=\"%1\" title=\"Next page\" style=\"position:absolute;right:0;top:0;width:50%%;height:100%%;display:block;z-index:5;background:transparent;text-decoration:none;\"></a>")
+                    .arg(nextPageHref.toHtmlEscaped());
+    }
+    html += QStringLiteral("<img src=\"%1\" style=\"display:block;image-rendering:pixelated;max-width:100%%;height:auto;background:#000;\"/>")
+                .arg(imageSource.toHtmlEscaped());
+    html += QStringLiteral("</div>");
+    return html;
+}
+
+QString buildNabtsViewerHtmlPage(const QString &title,
+                                 const QString &imageSource,
+                                 const QString &previousPageHref,
+                                 const QString &nextPageHref,
+                                 const QString &debugInnerHtml,
+                                 bool showDebug)
+{
+    const QString canvasHtml = nabtsCanvasHtml(imageSource, previousPageHref, nextPageHref);
+    QString bodyHtml;
+    if (showDebug) {
+        bodyHtml += QStringLiteral("<table cellspacing=\"0\" cellpadding=\"0\" style=\"border-collapse:collapse;\"><tr>");
+        bodyHtml += QStringLiteral("<td valign=\"top\" style=\"padding:0;margin:0;\">") + canvasHtml + QStringLiteral("</td>");
+        bodyHtml += QStringLiteral("<td valign=\"top\" style=\"padding-left:12px;width:320px;min-width:320px;max-width:320px;\">");
+        bodyHtml += QStringLiteral("<div style=\"color:#ddd;background:#111;padding:8px;margin:0;font-family:Consolas,monospace;font-size:12px;line-height:1.35;white-space:normal;\">");
+        bodyHtml += debugInnerHtml.isEmpty()
+            ? QStringLiteral("Debug info unavailable for this page.")
+            : debugInnerHtml;
+        bodyHtml += QStringLiteral("</div></td></tr></table>");
+    } else {
+        bodyHtml = canvasHtml;
+    }
+
+    QString html;
+    html += QStringLiteral("<html><head>");
+    html += QStringLiteral("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">");
+    html += QStringLiteral("<meta name=\"teletext-format\" content=\"nabts\">");
+    html += QStringLiteral("<title>%1</title>").arg(title.toHtmlEscaped());
+    html += QStringLiteral("</head><body style=\"background:#000;margin:0;padding:0;\">");
+    html += bodyHtml;
+    html += QStringLiteral("</body></html>");
+    return html;
+}
+
+QSize nabtsImageSizeForPage(const QString &imageSource, const QString &pagePath)
+{
+    if (imageSource.trimmed().isEmpty()) {
+        return QSize();
+    }
+
+    QUrl imageUrl(imageSource);
+    if (imageUrl.isRelative()) {
+        imageUrl = QUrl::fromLocalFile(pagePath).resolved(imageUrl);
+    }
+    if (!imageUrl.isLocalFile()) {
+        return QSize();
+    }
+
+    QImageReader reader(imageUrl.toLocalFile());
+    QSize imageSize = reader.size();
+    if (imageSize.isValid()) {
+        return imageSize;
+    }
+
+    const QImage image(imageUrl.toLocalFile());
+    return image.size();
+}
 } // namespace
 
 TeletextViewerDialog::TeletextViewerDialog(QWidget *parent)
@@ -1048,7 +1476,7 @@ TeletextViewerDialog::TeletextViewerDialog(QWidget *parent)
     setWindowTitle(tr("Teletext Viewer"));
     setModal(false);
     setAttribute(Qt::WA_DeleteOnClose, false);
-    setMinimumSize(640, 520);
+    setMinimumSize(520, 420);
     setAcceptDrops(true);
 
     auto *mainLayout = new QVBoxLayout(this);
@@ -1091,10 +1519,18 @@ TeletextViewerDialog::TeletextViewerDialog(QWidget *parent)
     flashAnimationCheckBox->setChecked(true);
     flashAnimationCheckBox->setEnabled(false);
     optionsLayout->addWidget(flashAnimationCheckBox);
+    debugInfoCheckBox = new QCheckBox(tr("Debug info"), this);
+    debugInfoCheckBox->setChecked(false);
+    debugInfoCheckBox->setEnabled(false);
+    optionsLayout->addWidget(debugInfoCheckBox);
+    rebuildNabtsCacheCheckBox = new QCheckBox(tr("Rebuild .t33 cache"), this);
+    rebuildNabtsCacheCheckBox->setChecked(false);
+    optionsLayout->addWidget(rebuildNabtsCacheCheckBox);
     optionsLayout->addStretch(1);
     mainLayout->addLayout(optionsLayout);
     viewerStack = new QStackedWidget(this);
     pageViewer = new QTextBrowser(viewerStack);
+    pageViewer->document()->setDocumentMargin(0);
     pageViewer->setOpenExternalLinks(false);
     pageViewer->setOpenLinks(false);
     nativePageViewer = new TeletextNativeViewWidget(viewerStack);
@@ -1131,6 +1567,8 @@ TeletextViewerDialog::TeletextViewerDialog(QWidget *parent)
             this, [this](int index) { setNativeRendererEnabled(index == 1); });
     connect(flashAnimationCheckBox, &QCheckBox::toggled,
             this, &TeletextViewerDialog::setFlashAnimationEnabled);
+    connect(debugInfoCheckBox, &QCheckBox::toggled,
+            this, &TeletextViewerDialog::setDebugInfoEnabled);
     auto *previousPageShortcut = new QShortcut(QKeySequence(Qt::Key_PageUp), this);
     previousPageShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(previousPageShortcut, &QShortcut::activated, this, [this]() {
@@ -1328,7 +1766,12 @@ void TeletextViewerDialog::browseForTeletextStream()
 bool TeletextViewerDialog::openTeletextStreamPath(const QString &streamPath, QString *errorMessage)
 {
     QString outputDirectoryPath;
-    if (!convertTeletextStreamToHtmlDirectory(streamPath, &outputDirectoryPath, errorMessage)) {
+    const bool forceRegenerateNabtsCache =
+        rebuildNabtsCacheCheckBox && rebuildNabtsCacheCheckBox->isChecked();
+    if (!convertTeletextStreamToHtmlDirectory(streamPath,
+                                              &outputDirectoryPath,
+                                              errorMessage,
+                                              forceRegenerateNabtsCache)) {
         return false;
     }
     setDirectory(outputDirectoryPath);
@@ -1348,9 +1791,18 @@ void TeletextViewerDialog::refreshPageList()
         if (nativePageViewer) {
             nativePageViewer->clearPage();
         }
+        if (debugInfoCheckBox) {
+            const bool wasBlocked = debugInfoCheckBox->blockSignals(true);
+            debugInfoCheckBox->setChecked(false);
+            debugInfoCheckBox->setEnabled(false);
+            debugInfoCheckBox->blockSignals(wasBlocked);
+        }
         setWindowTitle(tr("Teletext Viewer"));
         lastLoadedPagePath.clear();
         lastLoadedPageModified = QDateTime();
+        lastLoadedPageIsNabts = false;
+        lastLoadedNabtsDebugVisible = false;
+        lastLoadedNabtsImageSize = QSize();
         return;
     }
 
@@ -1403,7 +1855,59 @@ void TeletextViewerDialog::loadSelectedPage()
     }
 
     const QString rawPageHtml = QString::fromUtf8(pageFile.readAll());
-    QString pageHtml = normalizedTeletextHtmlForQt(rawPageHtml);
+    const bool hasNabtsMetaTag = rawPageHtml.contains(
+        QStringLiteral("<meta name=\"teletext-format\" content=\"nabts\">"),
+        Qt::CaseInsensitive
+    );
+    const bool isNabtsRecordFile = pageInfo.fileName().startsWith(QStringLiteral("record-"), Qt::CaseInsensitive);
+    const bool isNabtsHtml = hasNabtsMetaTag || isNabtsRecordFile;
+    const bool debugSupported = isNabtsHtml;
+
+    if (debugInfoCheckBox) {
+        debugInfoCheckBox->setEnabled(debugSupported);
+        if (!debugSupported && debugInfoCheckBox->isChecked()) {
+            const bool wasBlocked = debugInfoCheckBox->blockSignals(true);
+            debugInfoCheckBox->setChecked(false);
+            debugInfoCheckBox->blockSignals(wasBlocked);
+        }
+    }
+
+    QString renderSourceHtml = rawPageHtml;
+    lastLoadedPageIsNabts = isNabtsHtml;
+    lastLoadedNabtsDebugVisible = false;
+    lastLoadedNabtsImageSize = QSize();
+    if (isNabtsHtml) {
+        QString previousPageHref;
+        QString nextPageHref;
+        if (pageComboBox && pageComboBox->count() > 1) {
+            const int pageCount = pageComboBox->count();
+            int currentIndex = pageComboBox->currentIndex();
+            if (currentIndex < 0 || currentIndex >= pageCount) {
+                currentIndex = 0;
+            }
+            const int previousIndex = (currentIndex + pageCount - 1) % pageCount;
+            const int nextIndex = (currentIndex + 1) % pageCount;
+            previousPageHref = pageComboBox->itemText(previousIndex);
+            nextPageHref = pageComboBox->itemText(nextIndex);
+        }
+        const QString imageSource = firstImageSourceFromHtml(rawPageHtml);
+        const QString debugInnerHtml = nabtsDebugInnerHtmlFromPage(rawPageHtml);
+        const bool showDebug = debugSupported
+                               && debugInfoCheckBox
+                               && debugInfoCheckBox->isChecked();
+        if (!imageSource.isEmpty()) {
+            renderSourceHtml = buildNabtsViewerHtmlPage(pageInfo.completeBaseName(),
+                                                        imageSource,
+                                                        previousPageHref,
+                                                        nextPageHref,
+                                                        debugInnerHtml,
+                                                        showDebug);
+            lastLoadedNabtsImageSize = nabtsImageSizeForPage(imageSource, pagePath);
+            lastLoadedNabtsDebugVisible = showDebug;
+        }
+    }
+
+    QString pageHtml = isNabtsHtml ? renderSourceHtml : normalizedTeletextHtmlForQt(renderSourceHtml);
     pageViewer->setSearchPaths(QStringList() << currentDirectoryPath);
     pageViewer->document()->setBaseUrl(QUrl::fromLocalFile(pagePath));
     pageViewer->setHtml(pageHtml);
@@ -1421,7 +1925,7 @@ void TeletextViewerDialog::loadSelectedPage()
     lastLoadedPagePath = pagePath;
     lastLoadedPageModified = pageInfo.lastModified();
     setWindowTitle(tr("Teletext Viewer - %1").arg(pageInfo.fileName()));
-    if (autoWindowSizePending) {
+    if (isNabtsHtml || autoWindowSizePending) {
         autoSizeWindowForCurrentRenderer();
         autoWindowSizePending = false;
     }
@@ -1519,6 +2023,13 @@ void TeletextViewerDialog::setFlashAnimationEnabled(bool enabled)
         return;
     }
     nativePageViewer->setAnimationsEnabled(enabled);
+}
+
+void TeletextViewerDialog::setDebugInfoEnabled(bool enabled)
+{
+    Q_UNUSED(enabled)
+    lastLoadedPageModified = QDateTime();
+    loadSelectedPage();
 }
 
 bool TeletextViewerDialog::cyclePageSelection(int direction)
@@ -1622,15 +2133,40 @@ void TeletextViewerDialog::autoSizeWindowForCurrentRenderer()
 {
     const bool nativeRendererActive = viewerStack
                                       && viewerStack->currentWidget() == nativePageViewer;
-    QSize targetSize = nativeRendererActive
-        ? QSize(981, 916)
-        : QSize(981, 928);
+    QSize targetViewerSize;
+    if (nativeRendererActive && nativePageViewer) {
+        targetViewerSize = nativePageViewer->sizeHint();
+    } else if (lastLoadedPageIsNabts && lastLoadedNabtsImageSize.isValid()) {
+        const int horizontalPadding = 12;
+        const int verticalPadding = 12;
+        const int debugGap = lastLoadedNabtsDebugVisible ? 12 : 0;
+        const int debugWidth = lastLoadedNabtsDebugVisible ? 320 : 0;
+        targetViewerSize = QSize(lastLoadedNabtsImageSize.width() + horizontalPadding + debugGap + debugWidth,
+                                 lastLoadedNabtsImageSize.height() + verticalPadding);
+    } else if (pageViewer && pageViewer->document()) {
+        pageViewer->document()->adjustSize();
+        targetViewerSize = pageViewer->document()->size().toSize();
+    }
+    if (targetViewerSize.width() <= 0 || targetViewerSize.height() <= 0) {
+        targetViewerSize = nativeRendererActive ? QSize(640, 480) : QSize(640, 420);
+    }
+    targetViewerSize += QSize(24, 24);
+
+    QSize targetSize = size();
+    if (viewerStack) {
+        const QSize currentViewerSize = viewerStack->size();
+        targetSize += QSize(targetViewerSize.width() - currentViewerSize.width(),
+                            targetViewerSize.height() - currentViewerSize.height());
+    } else {
+        targetSize = targetViewerSize;
+    }
     targetSize = targetSize.expandedTo(minimumSize());
 
+    QRect availableGeometry;
     if (QScreen *screen = windowHandle() ? windowHandle()->screen() : QGuiApplication::primaryScreen()) {
-        const QRect available = screen->availableGeometry();
-        const QSize maxSize(static_cast<qint32>(available.width() * 0.96),
-                            static_cast<qint32>(available.height() * 0.96));
+        availableGeometry = screen->availableGeometry();
+        const QSize maxSize(static_cast<qint32>(availableGeometry.width() * 0.96),
+                            static_cast<qint32>(availableGeometry.height() * 0.96));
         targetSize.setWidth(qMin(targetSize.width(), maxSize.width()));
         targetSize.setHeight(qMin(targetSize.height(), maxSize.height()));
     }

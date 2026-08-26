@@ -117,3 +117,18 @@ cuda-cache/
 # Windows CUDA runtime DLL working dir (lives in tbc-tools-ci-cache, not here).
 # Created by scripts/windows-cuda-runtime.sh.
 win-cuda-cache/
+
+# Vendored ONNX Runtime binaries (downloaded by build/CI, not tracked).
+# Header files and license docs under external/onnxruntime/ are still tracked.
+external/onnxruntime/**/*.zip
+external/onnxruntime/**/*.pdb
+external/onnxruntime/**/*.dll
+external/onnxruntime/**/*.lib
+external/onnxruntime/**/*.cat
+
+# CUDA plugin installer packages (built by CI, published to tbc-tools-ci-cache,
+# not tracked here).
+test-artifacts/cuda-plugin-local-install/
+
+# Raw video test data (large, not tracked).
+test-artifacts/*.rgb

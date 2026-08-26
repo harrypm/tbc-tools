@@ -14,6 +14,7 @@
 
 #include <QDateTime>
 #include <QDialog>
+#include <QSize>
 
 class QCheckBox;
 class QComboBox;
@@ -58,6 +59,7 @@ private slots:
     void handlePeriodicRefresh();
     void setNativeRendererEnabled(bool enabled);
     void setFlashAnimationEnabled(bool enabled);
+    void setDebugInfoEnabled(bool enabled);
 
 private:
     void autoSizeWindowForCurrentRenderer();
@@ -82,11 +84,16 @@ private:
     QCheckBox *autoRefreshCheckBox = nullptr;
     QComboBox *rendererComboBox = nullptr;
     QCheckBox *flashAnimationCheckBox = nullptr;
+    QCheckBox *debugInfoCheckBox = nullptr;
+    QCheckBox *rebuildNabtsCacheCheckBox = nullptr;
     QStackedWidget *viewerStack = nullptr;
     QTextBrowser *pageViewer = nullptr;
     TeletextNativeViewWidget *nativePageViewer = nullptr;
     QTimer *refreshTimer = nullptr;
     bool autoWindowSizePending = true;
+    bool lastLoadedPageIsNabts = false;
+    bool lastLoadedNabtsDebugVisible = false;
+    QSize lastLoadedNabtsImageSize;
 };
 
 #endif // TELETEXTVIEWERDIALOG_H
