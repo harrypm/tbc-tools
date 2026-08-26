@@ -3570,7 +3570,7 @@ Commands run:
 Status: build target is up to date and ld-analyse has been launched from the correct bundle path for user-side visual checking.
 
 ## 2026-08-26T00:21:09Z
-User input: \"HARD FAIL\" + \"Just look at the logic of what pressing the button 2 times does\" + \"AS that sets the elemnts fully\"\n
+User input: "HARD FAIL" + "Just look at the logic of what pressing the button 2 times does" + "AS that sets the elemnts fully"
 Analysis:
 - Focused on your exact point: a second manual click fully settles the UI, so one click should execute that same settling sequence automatically.
 - Existing behavior already reapplied palette on a zero-delay timer, but this can still be too early for some cached scope/scene redraw paths.
@@ -3594,3 +3594,37 @@ Commands run:
   - Output: `2026-08-26T00:21:09Z`
 
 Status: patched to make one click execute the same full-settle sequence as manual double-click; rebuilt and launched for verification.
+
+## 2026-08-26T00:22:49Z
+User input: "Fixed" then "Commit and make a hard dev note"
+
+Actions:
+- Added hard dev note:
+  - `development-logs/hard_dev_note_theme_toggle_single_click_fix_2026-08-26.md`
+- Created restore-point archive (confirmed-fixed snapshot):
+  - `restore_point_20260826T002218Z_theme_single_click_fix.zip`
+  - includes the full theme-fix file set + prompt/dev notes.
+
+Commit:
+- Staged files:
+  - `development-logs/prompt_readme.md`
+  - `development-logs/hard_dev_note_theme_toggle_single_click_fix_2026-08-26.md`
+  - `src/audio-align/main.cpp`
+  - `src/ld-analyse/efmhandler-main.cpp`
+  - `src/ld-analyse/gui/oscilloscope/plotwidget.cpp`
+  - `src/ld-analyse/gui/oscilloscope/plotwidget.h`
+  - `src/ld-analyse/main.cpp`
+  - `src/ld-analyse/mainwindow.cpp`
+  - `src/ld-analyse/mainwindow.h`
+  - `src/ld-analyse/plotwidget.cpp`
+  - `src/ld-analyse/plotwidget.h`
+  - `src/ld-lds-converter/main.cpp`
+  - `src/library/tbc/uistyle.h`
+  - `src/tbc-export-metadata/main.cpp`
+  - `src/tbc-metadata-converter/main.cpp`
+- Commit command:
+  - `git -C /Users/harry/tbc-tools commit -m "Fix persistent Fusion theme pinning and one-click Dark/Light settle" -m "..."`
+- Commit result:
+  - `c54501d7`
+  - `15 files changed, 664 insertions(+), 382 deletions(-)`
+  - includes `Co-Authored-By: Warp <agent@warp.dev>`
