@@ -24,6 +24,7 @@ AAA_LINUX_PACKAGE_SCRIPT = ROOT / "scripts/package-aaa-appimage.sh"
 LD_ANALYSE_EXPORT_DIALOG = ROOT / "src/ld-analyse/exportdialog.cpp"
 TBC_VIDEO_EXPORT_OPTS_FFMPEG = ROOT / "src/tbc-video-export/src/tbc_video_export/opts/opts_ffmpeg.py"
 TBC_VIDEO_EXPORT_FIELD_ORDER = ROOT / "src/tbc-video-export/src/tbc_video_export/common/field_order.py"
+AGENTS_RULES_FILE = ROOT / "AGENTS.md"
 
 XCB_RUNTIME_LIBS = (
     "libxcb-cursor.so.0",
@@ -164,6 +165,35 @@ WINDOWS_REQUIRED_PACKAGES = (
     "pyinstaller-versionfile",
     "dunamai",
     "pywin32",
+)
+
+# The dedicated Windows cache repo push must neutralize checkout-injected
+# github.com auth headers (github-actions[bot]) or those credentials can
+# override the PAT-in-URL and cause 403 on cross-repo pushes.
+WINDOWS_CACHE_PUSH_AUTH_REQUIRED_SNIPPETS = (
+    "config --local --unset-all http.https://github.com/.extraheader",
+    "config --local credential.helper \"\"",
+    "remote set-url origin \"https://x-access-token:$cacheToken@github.com/${{ env.CACHE_REPOSITORY }}.git\"",
+)
+
+# Linux AAA source builds must stay compatible across both toolchains:
+# Ubuntu arm64 has no apt msbuild package; Oracle Linux 8 uses xbuild 14.0,
+# which requires TargetFrameworkVersion=v4.5 for the vendored AAA project.
+LINUX_AAA_XBUILD_REQUIRED_SNIPPETS = (
+    "MSBUILD_BASENAME=",
+    "MSBUILD_FRAMEWORK_ARGS=()",
+    "[ \"$MSBUILD_BASENAME\" = \"xbuild\" ]",
+    "/p:TargetFrameworkVersion=v4.5",
+    "\"${MSBUILD_FRAMEWORK_ARGS[@]}\"",
+)
+LINUX_AAA_FORBIDDEN_SNIPPETS = (
+    "apt-get install -y --no-install-recommends mono-devel msbuild unzip",
+)
+
+# Keep AGENTS hard rules aligned with CI-enforced guardrails.
+AGENTS_HARD_RULE_REQUIRED_SNIPPETS = (
+    "Hard rule: Windows dedicated cache repo pushes must clear checkout-injected github.com auth headers before pull/push",
+    "Hard rule: Linux AAA source builds must stay xbuild-compatible and must not require apt msbuild on arm64",
 )
 
 # ld-analyse must route all deinterlace/proxy output through tbc-video-export web profiles
@@ -351,6 +381,7 @@ def main() -> int:
         LD_ANALYSE_EXPORT_DIALOG,
         TBC_VIDEO_EXPORT_OPTS_FFMPEG,
         TBC_VIDEO_EXPORT_FIELD_ORDER,
+        AGENTS_RULES_FILE,
         TESTS_WORKFLOW,
         CUDA_CLOSURE_CACHE_SCRIPT,
         WIN_CUDA_RUNTIME_SCRIPT,
@@ -368,9 +399,13 @@ def main() -> int:
 
     for snippet in WINDOWS_REQUIRED_SNIPPETS:
         check_contains(WINDOWS_WORKFLOW, snippet, errors)
+    for snippet in WINDOWS_CACHE_PUSH_AUTH_REQUIRED_SNIPPETS:
+        check_contains(WINDOWS_WORKFLOW, snippet, errors)
 
     for snippet in LINUX_REQUIRED_SNIPPETS:
         check_contains(LINUX_WORKFLOW, snippet, errors)
+    for snippet in LINUX_AAA_FORBIDDEN_SNIPPETS:
+        check_not_contains(LINUX_WORKFLOW, snippet, errors)
     for snippet in MACOS_REQUIRED_SNIPPETS:
         check_contains(MACOS_WORKFLOW, snippet, errors)
     for snippet in MACOS_FORBIDDEN_SNIPPETS:
@@ -486,8 +521,22 @@ def main() -> int:
     # host Mono (the "mono not found on Ubuntu" fix).
     for snippet in AAA_LINUX_BUILD_SCRIPT_REQUIRED_SNIPPETS:
         check_contains(AAA_LINUX_BUILD_SCRIPT, snippet, errors)
+    for snippet in LINUX_AAA_XBUILD_REQUIRED_SNIPPETS:
+        check_contains(AAA_LINUX_BUILD_SCRIPT, snippet, errors)
     for snippet in AAA_LINUX_PACKAGE_SCRIPT_REQUIRED_SNIPPETS:
         check_contains(AAA_LINUX_PACKAGE_SCRIPT, snippet, errors)
+
+    for snippet in AGENTS_HARD_RULE_REQUIRED_SNIPPETS:
+        check_contains(AGENTS_RULES_FILE, snippet, errors)
+
+    win_cache_auth_scrub_count = WINDOWS_WORKFLOW.read_text(encoding="utf-8").count(
+        "config --local --unset-all http.https://github.com/.extraheader"
+    )
+    if win_cache_auth_scrub_count != 1:
+        errors.append(
+            f"{WINDOWS_WORKFLOW}: windows cache auth header scrub must appear exactly once, "
+            f"found {win_cache_auth_scrub_count}"
+        )
     if errors:
         print("CI contract checks failed:")
         for error in errors:

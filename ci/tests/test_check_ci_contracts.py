@@ -329,6 +329,27 @@ class ContractCoverageTests(unittest.TestCase):
             expected.issubset(set(check_ci_contracts.WINDOWS_GAS_PREPROCESSOR_REQUIRED_SNIPPETS))
         )
 
+    def test_windows_cache_push_auth_contract_requires_header_cleanup(self) -> None:
+        expected = {
+            "config --local --unset-all http.https://github.com/.extraheader",
+            "config --local credential.helper \"\"",
+            "remote set-url origin \"https://x-access-token:$cacheToken@github.com/${{ env.CACHE_REPOSITORY }}.git\"",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.WINDOWS_CACHE_PUSH_AUTH_REQUIRED_SNIPPETS))
+        )
+
+    def test_windows_workflow_has_exactly_one_cache_auth_header_cleanup(self) -> None:
+        # actions/checkout injects github.com extraheaders; cache pushes must
+        # clear them exactly once before pull/push so PAT auth is used.
+        content = check_ci_contracts.WINDOWS_WORKFLOW.read_text(encoding="utf-8")
+        count = content.count("config --local --unset-all http.https://github.com/.extraheader")
+        self.assertEqual(
+            count,
+            1,
+            f"expected exactly one windows cache auth header scrub, found {count}",
+        )
+
     def test_windows_workflow_has_exactly_one_gas_preprocessor_step(self) -> None:
         # The gas-preprocessor pre-fetch step is gated to arm64 and must appear
         # exactly once in build_windows_tools.yml.
@@ -383,6 +404,41 @@ class ContractCoverageTests(unittest.TestCase):
         self.assertTrue(
             check_ci_contracts.WIN_CUDA_RUNTIME_SCRIPT.exists(),
             f"required contract file missing: {check_ci_contracts.WIN_CUDA_RUNTIME_SCRIPT}",
+        )
+
+    def test_linux_aaa_contract_requires_xbuild_framework_override(self) -> None:
+        expected = {
+            "MSBUILD_BASENAME=",
+            "MSBUILD_FRAMEWORK_ARGS=()",
+            "[ \"$MSBUILD_BASENAME\" = \"xbuild\" ]",
+            "/p:TargetFrameworkVersion=v4.5",
+            "\"${MSBUILD_FRAMEWORK_ARGS[@]}\"",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.LINUX_AAA_XBUILD_REQUIRED_SNIPPETS))
+        )
+
+    def test_linux_workflow_forbids_arm64_msbuild_apt_install(self) -> None:
+        expected_forbidden = {
+            "apt-get install -y --no-install-recommends mono-devel msbuild unzip",
+        }
+        self.assertTrue(
+            expected_forbidden.issubset(set(check_ci_contracts.LINUX_AAA_FORBIDDEN_SNIPPETS))
+        )
+        content = check_ci_contracts.LINUX_WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotIn(
+            "apt-get install -y --no-install-recommends mono-devel msbuild unzip",
+            content,
+            "Linux workflow must not require apt msbuild in the arm64 AAA step",
+        )
+
+    def test_agents_hard_rules_include_windows_cache_and_linux_aaa_guards(self) -> None:
+        expected = {
+            "Hard rule: Windows dedicated cache repo pushes must clear checkout-injected github.com auth headers before pull/push",
+            "Hard rule: Linux AAA source builds must stay xbuild-compatible and must not require apt msbuild on arm64",
+        }
+        self.assertTrue(
+            expected.issubset(set(check_ci_contracts.AGENTS_HARD_RULE_REQUIRED_SNIPPETS))
         )
 
     def test_windows_teletext_vendor_contract_requires_bundle_step(self) -> None:
