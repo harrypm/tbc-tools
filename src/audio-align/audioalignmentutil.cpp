@@ -154,8 +154,13 @@ QString resolveBundledOrPathTool(const QString &baseName)
 QString resolveAudioAlignExecutablePath()
 {
     QStringList pathCandidates;
-    appendUniqueCandidate(pathCandidates, QStandardPaths::findExecutable(QStringLiteral("VhsDecodeAutoAudioAlign.exe")));
+    // Native names: a PATH-installed native build, or the self-contained
+    // AppImage the Linux CI builds from the vendored source (bundles Mono,
+    // so no host Mono is needed at runtime). The AppImage is searched first
+    // so Linux picks it over the Windows .exe that needs host Mono.
+    appendUniqueCandidate(pathCandidates, QStandardPaths::findExecutable(QStringLiteral("vhs-decode-aaa.AppImage")));
     appendUniqueCandidate(pathCandidates, QStandardPaths::findExecutable(QStringLiteral("vhs-decode-auto-audio-align")));
+    appendUniqueCandidate(pathCandidates, QStandardPaths::findExecutable(QStringLiteral("VhsDecodeAutoAudioAlign.exe")));
     appendUniqueCandidate(pathCandidates, QStandardPaths::findExecutable(QStringLiteral("vhs-decode-auto-audio-align.exe")));
 
     const QString appDir = QCoreApplication::applicationDirPath();
@@ -172,6 +177,10 @@ QString resolveAudioAlignExecutablePath()
 
     for (const QString &directoryPath : candidateDirs) {
         const QDir directory(directoryPath);
+        // Self-contained AppImage (Linux CI build) first — it bundles Mono,
+        // so no host Mono is needed. On macOS/Windows this file is absent
+        // and the search falls through to the .exe below.
+        appendUniqueCandidate(pathCandidates, directory.filePath(QStringLiteral("vhs-decode-aaa.AppImage")));
         appendUniqueCandidate(pathCandidates, directory.filePath(QStringLiteral("VhsDecodeAutoAudioAlign.exe")));
         appendUniqueCandidate(pathCandidates, directory.filePath(QStringLiteral("vhs-decode-auto-audio-align")));
         appendUniqueCandidate(pathCandidates, directory.filePath(QStringLiteral("vhs-decode-auto-audio-align.exe")));
@@ -201,6 +210,31 @@ bool resolveRunner(QString *program,
     launcherPrefixArguments->clear();
     return true;
 #else
+    // A self-contained AppImage (the Linux CI build) bundles the Mono
+    // runtime, so run it directly with APPIMAGE_EXTRACT_AND_RUN=1 — no host
+    // Mono required. The `env` launcher matches the mono-wrapper pattern
+    // below (program + prefix args) without changing runProcess's signature.
+    if (toolPath.endsWith(QStringLiteral(".AppImage"), Qt::CaseInsensitive)) {
+        if (!QFileInfo(toolPath).isExecutable()) {
+            if (errorMessage) {
+                *errorMessage = QObject::tr("VhsDecodeAutoAudioAlign AppImage is not executable: %1").arg(toolPath);
+            }
+            return false;
+        }
+        const QString envPath = QStandardPaths::findExecutable(QStringLiteral("env"));
+        if (envPath.isEmpty()) {
+            if (errorMessage) {
+                *errorMessage = QObject::tr("Could not locate `env` to launch the VhsDecodeAutoAudioAlign AppImage.");
+            }
+            return false;
+        }
+        *program = envPath;
+        launcherPrefixArguments->clear();
+        launcherPrefixArguments->append(QStringLiteral("APPIMAGE_EXTRACT_AND_RUN=1"));
+        launcherPrefixArguments->append(toolPath);
+        return true;
+    }
+
     if (toolPath.endsWith(QStringLiteral(".exe"), Qt::CaseInsensitive)) {
         const QString monoPath = QStandardPaths::findExecutable(QStringLiteral("mono"));
         if (monoPath.isEmpty()) {

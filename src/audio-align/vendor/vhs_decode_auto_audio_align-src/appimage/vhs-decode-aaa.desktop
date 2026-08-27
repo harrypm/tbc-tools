@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=VHS-decode Auto Audio Align
+Exec=vhs-decode-aaa
+Icon=vhs-decode-aaa
+Type=Application
+Categories=Audio;AudioVideo;
+Comment=A project to automatically align (RF) HiFi and linear audio captures to a video RF capture
+MimeType=
+Name[en]=VHS-decode Auto Audio Align
+Terminal=true
+StartupNotify=true
+NoDisplay=false

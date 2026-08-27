@@ -271,6 +271,28 @@ jobs:
           chmod +x AppDir/usr/bin/tbc-video-export
           echo "Bundled self-contained tbc-video-export PyInstaller binary"
 
+      - name: Build and package native AAA AppImage from vendored source
+        # Compile VhsDecodeAutoAudioAlign from the vendored C# source
+        # (src/audio-align/vendor/vhs_decode_auto_audio_align-src) with
+        # mono+msbuild+nuget using the vendored Binah nupkg (no network
+        # fetch), then package it + a bundled Mono runtime into a self-
+        # contained AppImage. This replaces the prebuilt Windows .exe +
+        # Binah.dll in the bundle, so the Linux bundle no longer requires
+        # host Mono at runtime (the "mono not found on Ubuntu" failure).
+        run: |
+          dnf install --assumeyes --enablerepo=epel mono-devel nuget
+          bash scripts/build-aaa-linux.sh --out-dir build-aaa
+          mkdir -p AppDir/usr/bin/vendor/vhs_decode_auto_audio_align
+          bash scripts/package-aaa-appimage.sh \
+            --built-dir build-aaa \
+            --output AppDir/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage
+          chmod +x AppDir/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage
+          # Drop the prebuilt Windows .exe + Binah.dll the CMake install step
+          # placed here; the self-contained AppImage replaces them.
+          rm -f AppDir/usr/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe \
+                AppDir/usr/bin/vendor/vhs_decode_auto_audio_align/Binah.dll
+          echo "Bundled self-contained native AAA AppImage (built from source)"
+
       - name: Download linuxdeploy and build AppImage
         run: |
           curl -LJO ${{ env.APPIMAGE_URL }}
@@ -1024,6 +1046,25 @@ jobs:
           cp -f src/tbc-video-export/dist/tbc-video-export release/bin/tbc-video-export
           chmod +x release/bin/tbc-video-export
           echo "Bundled self-contained tbc-video-export PyInstaller binary"
+
+      - name: Build and package native AAA AppImage from vendored source
+        # Same as the x86_64 job: compile AAA from the vendored C# source
+        # with mono+msbuild+nuget (vendored Binah nupkg, no network fetch),
+        # package it + a bundled Mono runtime into a self-contained AppImage,
+        # and replace the prebuilt Windows .exe + Binah.dll so the arm64
+        # bundle needs no host Mono at runtime.
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends mono-devel msbuild nuget
+          bash scripts/build-aaa-linux.sh --out-dir build-aaa
+          mkdir -p release/bin/vendor/vhs_decode_auto_audio_align
+          bash scripts/package-aaa-appimage.sh \
+            --built-dir build-aaa \
+            --output release/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage
+          chmod +x release/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage
+          rm -f release/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe \
+                release/bin/vendor/vhs_decode_auto_audio_align/Binah.dll
+          echo "Bundled self-contained native AAA AppImage (built from source)"
 
       - name: Validate arm64 release bundle
         run: bash ci/verify_linux_bundle.sh arm64-release release

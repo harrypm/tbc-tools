@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{D39433F2-90C2-404C-A5D2-F8D0BB9BDF00}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>VhsDecodeAutoAudioAlign</RootNamespace>
+    <AssemblyName>VhsDecodeAutoAudioAlign</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\build</OutputPath>
+    <DefineConstants>DEBUG</DefineConstants>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>embedded</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\build</OutputPath>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml" />
+    <Reference Include="Binah">
+      <HintPath>..\packages\Binah.2.0.4\lib\net45\Binah.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TbcJson\TbcJsonReader.cs" />
+    <Compile Include="Log.cs" />
+    <Compile Include="Extensions.cs" />
+    <Compile Include="Interpolation\LinearStreamProjection.cs" />
+    <Compile Include="SignalConfig.cs" />
+    <Compile Include="Interpolation\FieldOffsetCalc.cs" />
+    <Compile Include="Actions\ActionWithTbc.cs" />
+    <Compile Include="Actions\GenerateDriftCsv.cs" />
+    <Compile Include="FractionalUnsignedNumber.cs" />
+    <Compile Include="Consts.cs" />
+    <Compile Include="Interpolation\GapLessSection.cs" />
+    <Compile Include="Interpolation\ProjectionMisc.cs" />
+    <Compile Include="Io\InputStreamCache.cs" />
+    <Compile Include="Actions\StreamAlign.cs" />
+    <Compile Include="BuildInfo.cs" />
+    <Compile Include="Actions\ShowBuildInfo.cs" />
+    <Compile Include="About.cs" />
+    <Compile Include="TbcJson\TbcJsonFixup.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="TbcJson\" />
+    <Folder Include="Interpolation\" />
+    <Folder Include="Actions\" />
+    <Folder Include="Io\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+</Project>

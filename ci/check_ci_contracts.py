@@ -19,6 +19,8 @@ WINDOWS_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-bui
 LINUX_BUILD_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-linux.txt"
 LINUX_PYINSTALLER_SCRIPT = ROOT / "src/tbc-video-export/pyinstaller/build_linux.py"
 BUNDLE_VERIFY_SCRIPT = ROOT / "ci/verify_linux_bundle.sh"
+AAA_LINUX_BUILD_SCRIPT = ROOT / "scripts/build-aaa-linux.sh"
+AAA_LINUX_PACKAGE_SCRIPT = ROOT / "scripts/package-aaa-appimage.sh"
 LD_ANALYSE_EXPORT_DIALOG = ROOT / "src/ld-analyse/exportdialog.cpp"
 TBC_VIDEO_EXPORT_OPTS_FFMPEG = ROOT / "src/tbc-video-export/src/tbc_video_export/opts/opts_ffmpeg.py"
 TBC_VIDEO_EXPORT_FIELD_ORDER = ROOT / "src/tbc-video-export/src/tbc_video_export/common/field_order.py"
@@ -78,6 +80,12 @@ LINUX_REQUIRED_SNIPPETS = (
     "bash ci/verify_linux_bundle.sh arm64-release release",
     "requirements-build-linux.txt",
     "pyinstaller/build_linux.py",
+    # AAA is built from the vendored C# source and packaged into a self-
+    # contained AppImage in both Linux jobs, replacing the prebuilt Windows
+    # .exe so no host Mono is needed at runtime.
+    "Build and package native AAA AppImage from vendored source",
+    "bash scripts/build-aaa-linux.sh",
+    "bash scripts/package-aaa-appimage.sh",
 )
 
 MACOS_REQUIRED_SNIPPETS = (
@@ -132,16 +140,19 @@ BUNDLE_VERIFY_REQUIRED_SNIPPETS = (
     'run_smoke_test "x86-appimage-extract-and-run-tbc-video-export"',
     'run_smoke_test "x86-appimage-apprun-tbc-video-export"',
     'run_smoke_test "arm64-launcher-tbc-video-export"',
+    # AAA is shipped as a self-contained AppImage (built from vendored source
+    # in the Linux jobs) that bundles Mono, so the bundle verifier checks the
+    # AppImage is present, executable, and runs without host mono.
+    'run_smoke_test "x86-appimage-aaa-no-host-mono"',
+    'run_smoke_test "arm64-aaa-no-host-mono"',
+    'require_executable "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"',
+    'require_executable "$TARGET/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"',
     'require_path "$ROOT/usr/bin/tbc-video-export"',
     'require_path "$TARGET/bin/tbc-video-export"',
-    'require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"',
-    'require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"',
     'require_path "$ROOT/usr/bin/vendor/vhs-teletext/teletext/__main__.py"',
     'require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"',
     'require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext2.ttf"',
     'require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext4.ttf"',
-    'require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"',
-    'require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"',
     'require_path "$TARGET/bin/vendor/vhs-teletext/teletext/__main__.py"',
     'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"',
     'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext2.ttf"',
@@ -207,6 +218,20 @@ WIN_CUDA_RUNTIME_SCRIPT_REQUIRED_SNIPPETS = (
     "nvidia-cublas-cu11|11.11.3.6|",
     "nvidia-cufft-cu11|10.9.0.58|",
     "nvidia-cudnn-cu11|8.9.5.29|",
+)
+# The AAA Linux build script must restore the Binah NuGet dep from the vendored
+# local source only (no network fetch) and build only the main project (not the
+# .sln), so the test-only NUnit/NSubstitute deps are never needed. The package
+# script must bundle the distro Mono runtime so the AppImage needs no host Mono.
+AAA_LINUX_BUILD_SCRIPT_REQUIRED_SNIPPETS = (
+    "nuget/Binah.2.0.4.nupkg",
+    "-Source \"$WORK_DIR/nuget\"",
+    "VhsDecodeAutoAudioAlign/VhsDecodeAutoAudioAlign.csproj",
+)
+AAA_LINUX_PACKAGE_SCRIPT_REQUIRED_SNIPPETS = (
+    "APPIMAGE_EXTRACT_AND_RUN=1",
+    "$APPDIR/usr/bin/mono",
+    "show-build-info",
 )
 # The CUDA plugin publish workflow (.github/workflows/publish_cuda_plugin.yml)
 # builds + publishes the opt-in CUDA runtime plugin packages + manifests to
@@ -319,6 +344,8 @@ def main() -> int:
         LINUX_BUILD_REQUIREMENTS,
         LINUX_PYINSTALLER_SCRIPT,
         BUNDLE_VERIFY_SCRIPT,
+        AAA_LINUX_BUILD_SCRIPT,
+        AAA_LINUX_PACKAGE_SCRIPT,
         LD_ANALYSE_EXPORT_DIALOG,
         TBC_VIDEO_EXPORT_OPTS_FFMPEG,
         TBC_VIDEO_EXPORT_FIELD_ORDER,
@@ -355,6 +382,9 @@ def main() -> int:
 
     # PyInstaller build step must appear in both Linux jobs (x86 container + arm64).
     check_count_at_least(LINUX_WORKFLOW, "Build self-contained tbc-video-export (PyInstaller)", 2, errors)
+    # The AAA build-from-source + package-AppImage step must appear in both Linux
+    # jobs (x86 container + arm64) so neither ships the prebuilt Windows .exe.
+    check_count_at_least(LINUX_WORKFLOW, "Build and package native AAA AppImage from vendored source", 2, errors)
 
     requirements_content = WINDOWS_REQUIREMENTS.read_text(encoding="utf-8")
     requirements_lines = {
@@ -448,6 +478,14 @@ def main() -> int:
     # "cannot add path ... because it lacks a signature by a trusted key" and
     # CI silently falls back to cache.nixos.org (no insulation).
     check_contains(CUDA_CLOSURE_CACHE_SCRIPT, "--option require-sigs false", errors)
+    # The AAA Linux build script must restore Binah from the vendored local
+    # nupkg (no network fetch) and build only the main project; the package
+    # script must bundle the distro Mono runtime so the AppImage runs without
+    # host Mono (the "mono not found on Ubuntu" fix).
+    for snippet in AAA_LINUX_BUILD_SCRIPT_REQUIRED_SNIPPETS:
+        check_contains(AAA_LINUX_BUILD_SCRIPT, snippet, errors)
+    for snippet in AAA_LINUX_PACKAGE_SCRIPT_REQUIRED_SNIPPETS:
+        check_contains(AAA_LINUX_PACKAGE_SCRIPT, snippet, errors)
     if errors:
         print("CI contract checks failed:")
         for error in errors:

@@ -15,6 +15,15 @@ require_path() {
   fi
 }
 
+require_executable() {
+  local path="$1"
+  require_path "$path"
+  if [ ! -x "$path" ]; then
+    echo "Required path is not executable: $path" >&2
+    exit 1
+  fi
+}
+
 require_non_nix_interpreter() {
   local elf="$1"
   if [ ! -f "$elf" ]; then
@@ -167,9 +176,13 @@ case "$MODE" in
     require_path "$ROOT/usr/bin/ld-process-vbi"
     require_path "$ROOT/usr/bin/tbc-video-export"
     require_path "$ROOT/usr/bin/qt.conf"
-    # AAA (Auto Audio Align) vendor payload must be bundled at the resolver path.
-    require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"
-    require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"
+    # AAA (Auto Audio Align) is shipped as a self-contained AppImage built
+    # from the vendored C# source; it bundles the Mono runtime, so no host
+    # mono is required at runtime (the previous "mono not found on Ubuntu"
+    # failure). Verify the AppImage is present, executable, and actually runs.
+    require_executable "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"
+    run_smoke_test "x86-appimage-aaa-no-host-mono" "$ROOT/.smoke-x86-aaa.log" \
+      env APPIMAGE_EXTRACT_AND_RUN=1 "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage" show-build-info
     # vhs-teletext vendor payload must be bundled at the resolver path.
     require_path "$ROOT/usr/bin/vendor/vhs-teletext/teletext/__main__.py"
     require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"
@@ -215,9 +228,13 @@ case "$MODE" in
     require_path "$TARGET/bin/ld-process-vbi"
     require_path "$TARGET/bin/tbc-video-export"
     require_path "$TARGET/bin/qt.conf"
-    # AAA (Auto Audio Align) vendor payload must be bundled at the resolver path.
-    require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"
-    require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"
+    # AAA (Auto Audio Align) is shipped as a self-contained AppImage built
+    # from the vendored C# source; it bundles the Mono runtime, so no host
+    # mono is required at runtime. Verify the AppImage is present, executable,
+    # and actually runs.
+    require_executable "$TARGET/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"
+    run_smoke_test "arm64-aaa-no-host-mono" "$TARGET/.smoke-arm64-aaa.log" \
+      env APPIMAGE_EXTRACT_AND_RUN=1 "$TARGET/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage" show-build-info
     # vhs-teletext vendor payload must be bundled at the resolver path.
     require_path "$TARGET/bin/vendor/vhs-teletext/teletext/__main__.py"
     require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"

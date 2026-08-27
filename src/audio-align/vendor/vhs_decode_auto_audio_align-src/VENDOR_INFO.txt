@@ -1,0 +1,60 @@
+Vendored AAA C# source — built from source in Linux CI (no prebuilt .exe/.dll)
+===============================================================================
+
+Upstream project : https://gitlab.com/wolfre/vhs-decode-auto-audio-align
+Vendored version  : v1.0.2
+Upstream commit    : 1790365e9561e6ab9cc8594cc560e76dc8da79a3
+                    ("Merge branch '24-support-arm64-aarch64-appimage-builds' into 'main'")
+Upstream tag date  : 2025-10-06
+Upstream license   : BSD-3-Clause (see LICENSE in this directory)
+
+Why this directory exists
+-------------------------
+The sibling directory ../vhs_decode_auto_audio_align/ ships the upstream
+prebuilt Windows .NET assemblies (VhsDecodeAutoAudioAlign.exe + Binah.dll)
+for the Windows and macOS builds (macOS runs them via host Mono).
+
+This -src/ directory ships the C# SOURCE so the Linux CI build can compile
+AAA from source and package it into a self-contained AppImage that bundles
+the Mono runtime — which means the Linux bundle no longer requires host Mono
+to be installed at runtime (the original "mono not found on Ubuntu" failure).
+
+Build inputs
+-------------
+  - VhsDecodeAutoAudioAlign.sln            -- VS solution (main + test projects)
+  - VhsDecodeAutoAudioAlign/               -- main project (.cs/.csproj/packages.config)
+  - VhsDecodeAutoAudioAlign.Test/          -- NUnit test project (provenance; not built for runtime)
+  - appimage/                               -- AppRun, desktop file, 256px icon (packaging assets)
+  - nuget/Binah.2.0.4.nupkg                -- the single NuGet dependency, vendored so
+                                              `nuget restore` uses a local source (no CI-time
+                                              network fetch). SHA256:
+                                              9D73C0223808ECDA52349E215CEB4584674A9F347AEF0FE48F976E9EC15E6B65
+
+What is NOT here
+-----------------
+  - The upstream documentation images (*.png/*.drawio) and ci-*.sh scripts:
+    not needed to build or package. See the upstream repo for those.
+  - The NUnit / NSubstitute / NUnit.ConsoleRunner nupkgs (test-only deps):
+    the runtime build compiles only VhsDecodeAutoAudioAlign/VhsDecodeAutoAudioAlign.csproj,
+    not the .sln, so the test project's deps are not required. To build/run
+    the tests, fetch those nupkgs separately.
+
+How it is built (Linux CI)
+---------------------------
+scripts/build-aaa-linux.sh restores the Binah nupkg from the local nuget/
+source, generates BuildInfo.cs with the tbc-tools build provenance, and runs
+`msbuild VhsDecodeAutoAudioAlign/VhsDecodeAutoAudioAlign.csproj /p:Configuration=Release`,
+producing build/VhsDecodeAutoAudioAlign.exe + Binah.dll. The Linux workflow
+then packages those plus a bundled Mono runtime into a self-contained
+vhs-decode-aaa.AppImage (replicating upstream's ci-build-appimage.sh approach
+but using the distro Mono runtime) and places it at the vendor resolver path
+expected by audioalignmentutil.cpp.
+
+Updating
+---------
+To bump AAA: re-clone the upstream repo at the new tag, replace this
+directory's contents (keep nuget/Binah.*.nupkg in sync with the version in
+VhsDecodeAutoAudioAlign/packages.config), update this VENDOR_INFO.txt, and
+re-run scripts/build-aaa-linux.sh to verify the build. The resolver,
+bundle verifier, and CI contracts all key off the AppImage path, not the
+version, so no contract changes are needed for a same-path bump.

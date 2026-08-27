@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\NUnit.3.11.0\build\NUnit.props" Condition="Exists('..\packages\NUnit.3.11.0\build\NUnit.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{A141996F-4B5B-4940-8EF7-C76D5060A6CA}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>VhsDecodeAutoAudioAlign.Test</RootNamespace>
+    <AssemblyName>VhsDecodeAutoAudioAlign.Test</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\build</OutputPath>
+    <DefineConstants>DEBUG;</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>false</ConsolePause>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <Optimize>true</Optimize>
+    <OutputPath>..\build</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>false</ConsolePause>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="nunit.framework">
+      <HintPath>..\packages\NUnit.3.11.0\lib\net45\nunit.framework.dll</HintPath>
+    </Reference>
+    <Reference Include="NSubstitute">
+      <HintPath>..\packages\NSubstitute.1.10.0.0\lib\net45\NSubstitute.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="UnitTest\tbcJson\TbcJsonReaderTest.cs" />
+    <Compile Include="TestData\TestDataManager.cs" />
+    <Compile Include="UnitTest\interpolation\FieldOffsetCalcTest.cs" />
+    <Compile Include="UnitTest\interpolation\LinearStreamProjectionTest.cs" />
+    <Compile Include="UnitTest\FractionalUnsignedNumberTest.cs" />
+    <Compile Include="UnitTest\interpolation\ProjectionMiscTest.cs" />
+    <Compile Include="UnitTest\io\InputStreamCacheTest.cs" />
+    <Compile Include="UnitTest\tbcJson\TbcJsonFixupTest.cs" />
+    <Compile Include="IntegrationTest\actions\StreamAlignArgsTest.cs" />
+    <Compile Include="TempDir.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="UnitTest\" />
+    <Folder Include="UnitTest\tbcJson\" />
+    <Folder Include="UnitTest\interpolation\" />
+    <Folder Include="UnitTest\io\" />
+    <Folder Include="IntegrationTest\" />
+    <Folder Include="IntegrationTest\actions\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+    <None Include="TestData\demo.tbc.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VhsDecodeAutoAudioAlign\VhsDecodeAutoAudioAlign.csproj">
+      <Project>{D39433F2-90C2-404C-A5D2-F8D0BB9BDF00}</Project>
+      <Name>VhsDecodeAutoAudioAlign</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+</Project>
