@@ -1050,13 +1050,14 @@ jobs:
 
       - name: Build and package native AAA AppImage from vendored source
         # Same as the x86_64 job: compile AAA from the vendored C# source
-        # with mono+msbuild, extracting the vendored Binah nupkg by hand (no
-        # nuget CLI, no network fetch), package it + a bundled Mono runtime
-        # into a self-contained AppImage, and replace the prebuilt Windows
-        # .exe + Binah.dll so the arm64 bundle needs no host Mono at runtime.
+        # with mono (msbuild/xbuild auto-detected by scripts/build-aaa-linux.sh),
+        # extracting the vendored Binah nupkg by hand (no nuget CLI, no network
+        # fetch), package it + a bundled Mono runtime into a self-contained
+        # AppImage, and replace the prebuilt Windows .exe + Binah.dll so the
+        # arm64 bundle needs no host Mono at runtime.
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends mono-devel msbuild unzip
+          sudo apt-get install -y --no-install-recommends mono-devel unzip
           bash scripts/build-aaa-linux.sh --out-dir build-aaa
           mkdir -p release/bin/vendor/vhs_decode_auto_audio_align
           bash scripts/package-aaa-appimage.sh \

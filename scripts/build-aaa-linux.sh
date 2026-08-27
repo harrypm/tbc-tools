@@ -14,7 +14,7 @@
 #
 # Requires: mono-devel (msbuild/xbuild) + unzip. Install on:
 #   OracleLinux 8 (x86_64 CI): dnf install --enablerepo=epel mono-devel unzip
-#   Ubuntu 24.04 (arm64 CI):   apt install --no-install-recommends mono-devel msbuild unzip
+#   Ubuntu 24.04 (arm64 CI):   apt install --no-install-recommends mono-devel unzip
 #
 # The single NuGet dependency (Binah 2.0.4) is vendored at
 # <src-dir>/nuget/Binah.2.0.4.nupkg and extracted manually to the packages/
@@ -45,6 +45,7 @@ die() { echo "build-aaa-linux.sh: $*" >&2; exit 1; }
 
 command -v msbuild >/dev/null 2>&1 || command -v xbuild >/dev/null 2>&1 || die "msbuild/xbuild not found (install mono-devel)"
 MSBUILD="$(command -v msbuild || command -v xbuild)"
+MSBUILD_BASENAME="$(basename "$MSBUILD")"
 command -v unzip >/dev/null 2>&1 || die "unzip not found (install unzip)"
 
 [ -d "$SRC_DIR" ] || die "src dir not found: $SRC_DIR"
@@ -54,6 +55,16 @@ command -v unzip >/dev/null 2>&1 || die "unzip not found (install unzip)"
 echo "Building AAA $SEMVER from $SRC_DIR"
 echo "  mono:    $(mono --version 2>/dev/null | head -n1 || echo 'mono not on PATH (msbuild may still work)')"
 echo "  msbuild: $MSBUILD"
+
+# Oracle Linux 8's Mono toolchain exposes xbuild 14.0, which does not support
+# TargetFrameworkVersion v4.7.2 from the vendored project and fails with
+# CSC CS0518 ("System.Object not defined or imported"). When xbuild is the
+# active builder, down-target to v4.5 (compatible with the vendored Binah net45
+# dependency) while preserving v4.7.2 on modern msbuild toolchains.
+MSBUILD_FRAMEWORK_ARGS=()
+if [ "$MSBUILD_BASENAME" = "xbuild" ]; then
+    MSBUILD_FRAMEWORK_ARGS=(/p:TargetFrameworkVersion=v4.5)
+fi
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -100,6 +111,7 @@ EOF
 # Build only the main project (not the .sln) to avoid pulling in the NUnit /
 # NSubstitute test NuGet deps that are intentionally not vendored.
 "$MSBUILD" VhsDecodeAutoAudioAlign/VhsDecodeAutoAudioAlign.csproj \
+    "${MSBUILD_FRAMEWORK_ARGS[@]}" \
     /p:Configuration=Release \
     /p:WarningLevel=0 \
     /nologo /verbosity:minimal
