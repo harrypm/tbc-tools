@@ -446,6 +446,14 @@ jobs:
           git -C "$cacheRepoPath" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git -C "$cacheRepoPath" config http.version HTTP/1.1
           git -C "$cacheRepoPath" config http.postBuffer 524288000
+          # actions/checkout injects an Authorization extraheader for github.com
+          # that authenticates as github-actions[bot]. For cross-repo cache
+          # pushes this overrides embedded PAT credentials and causes 403 on
+          # harrypm/tbc-tools-ci-cache despite CI_CACHE_REPO_TOKEN being set.
+          # Remove any repo-local extraheader and disable credential helpers so
+          # git uses the PAT embedded in the remote URL below.
+          git -C "$cacheRepoPath" config --local --unset-all http.https://github.com/.extraheader 2>$null
+          git -C "$cacheRepoPath" config --local credential.helper ""
           git -C "$cacheRepoPath" remote set-url origin "https://x-access-token:$cacheToken@github.com/${{ env.CACHE_REPOSITORY }}.git"
           git -C "$cacheRepoPath" add "vcpkg/${{ matrix.cache_subdir }}"
           git -C "$cacheRepoPath" diff --cached --quiet
