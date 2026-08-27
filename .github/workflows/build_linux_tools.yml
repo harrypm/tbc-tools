@@ -274,13 +274,14 @@ jobs:
       - name: Build and package native AAA AppImage from vendored source
         # Compile VhsDecodeAutoAudioAlign from the vendored C# source
         # (src/audio-align/vendor/vhs_decode_auto_audio_align-src) with
-        # mono+msbuild+nuget using the vendored Binah nupkg (no network
-        # fetch), then package it + a bundled Mono runtime into a self-
-        # contained AppImage. This replaces the prebuilt Windows .exe +
-        # Binah.dll in the bundle, so the Linux bundle no longer requires
-        # host Mono at runtime (the "mono not found on Ubuntu" failure).
+        # mono+msbuild, extracting the vendored Binah nupkg by hand (nuget is
+        # not in EPEL 8, and no network fetch is wanted), then package it + a
+        # bundled Mono runtime into a self-contained AppImage. This replaces
+        # the prebuilt Windows .exe + Binah.dll in the bundle, so the Linux
+        # bundle no longer requires host Mono at runtime (the "mono not found
+        # on Ubuntu" failure).
         run: |
-          dnf install --assumeyes --enablerepo=epel mono-devel nuget
+          dnf install --assumeyes --enablerepo=epel mono-devel unzip
           bash scripts/build-aaa-linux.sh --out-dir build-aaa
           mkdir -p AppDir/usr/bin/vendor/vhs_decode_auto_audio_align
           bash scripts/package-aaa-appimage.sh \
@@ -1049,13 +1050,13 @@ jobs:
 
       - name: Build and package native AAA AppImage from vendored source
         # Same as the x86_64 job: compile AAA from the vendored C# source
-        # with mono+msbuild+nuget (vendored Binah nupkg, no network fetch),
-        # package it + a bundled Mono runtime into a self-contained AppImage,
-        # and replace the prebuilt Windows .exe + Binah.dll so the arm64
-        # bundle needs no host Mono at runtime.
+        # with mono+msbuild, extracting the vendored Binah nupkg by hand (no
+        # nuget CLI, no network fetch), package it + a bundled Mono runtime
+        # into a self-contained AppImage, and replace the prebuilt Windows
+        # .exe + Binah.dll so the arm64 bundle needs no host Mono at runtime.
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends mono-devel msbuild nuget
+          sudo apt-get install -y --no-install-recommends mono-devel msbuild unzip
           bash scripts/build-aaa-linux.sh --out-dir build-aaa
           mkdir -p release/bin/vendor/vhs_decode_auto_audio_align
           bash scripts/package-aaa-appimage.sh \

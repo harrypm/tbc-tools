@@ -224,8 +224,11 @@ WIN_CUDA_RUNTIME_SCRIPT_REQUIRED_SNIPPETS = (
 # .sln), so the test-only NUnit/NSubstitute deps are never needed. The package
 # script must bundle the distro Mono runtime so the AppImage needs no host Mono.
 AAA_LINUX_BUILD_SCRIPT_REQUIRED_SNIPPETS = (
+    # The Binah nupkg must be vendored (no network fetch) and restored without
+    # the nuget CLI (nuget is not in EPEL 8): the script extracts it to the
+    # packages/ path the .csproj HintPath expects, then builds the main project.
     "nuget/Binah.2.0.4.nupkg",
-    "-Source \"$WORK_DIR/nuget\"",
+    "packages/Binah.2.0.4/lib/net45/Binah.dll",
     "VhsDecodeAutoAudioAlign/VhsDecodeAutoAudioAlign.csproj",
 )
 AAA_LINUX_PACKAGE_SCRIPT_REQUIRED_SNIPPETS = (

@@ -12,13 +12,14 @@
 #   --out-dir  where to place the built VhsDecodeAutoAudioAlign.exe + Binah.dll
 #              (default: ./build-aaa)
 #
-# Requires: mono-devel (msbuild/xbuild), nuget. Install on:
-#   OracleLinux 8 (x86_64 CI): dnf install --enablerepo=epel mono-devel nuget
-#   Ubuntu 24.04 (arm64 CI):   apt install --no-install-recommends mono-devel msbuild nuget
+# Requires: mono-devel (msbuild/xbuild) + unzip. Install on:
+#   OracleLinux 8 (x86_64 CI): dnf install --enablerepo=epel mono-devel unzip
+#   Ubuntu 24.04 (arm64 CI):   apt install --no-install-recommends mono-devel msbuild unzip
 #
 # The single NuGet dependency (Binah 2.0.4) is vendored at
-# <src-dir>/nuget/Binah.2.0.4.nupkg so `nuget restore` uses a local source
-# and never touches the network.
+# <src-dir>/nuget/Binah.2.0.4.nupkg and extracted manually to the packages/
+# dir the .csproj HintPath expects — no `nuget` CLI and no network fetch.
+# (nuget is not packaged in EPEL 8, so relying on it would break the OL8 job.)
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Simon Inns
@@ -44,8 +45,7 @@ die() { echo "build-aaa-linux.sh: $*" >&2; exit 1; }
 
 command -v msbuild >/dev/null 2>&1 || command -v xbuild >/dev/null 2>&1 || die "msbuild/xbuild not found (install mono-devel)"
 MSBUILD="$(command -v msbuild || command -v xbuild)"
-command -v nuget >/dev/null 2>&1 || die "nuget not found (install nuget)"
-NUGET="$(command -v nuget)"
+command -v unzip >/dev/null 2>&1 || die "unzip not found (install unzip)"
 
 [ -d "$SRC_DIR" ] || die "src dir not found: $SRC_DIR"
 [ -f "$SRC_DIR/VhsDecodeAutoAudioAlign.sln" ] || die "not an AAA source dir (no .sln): $SRC_DIR"
@@ -54,7 +54,6 @@ NUGET="$(command -v nuget)"
 echo "Building AAA $SEMVER from $SRC_DIR"
 echo "  mono:    $(mono --version 2>/dev/null | head -n1 || echo 'mono not on PATH (msbuild may still work)')"
 echo "  msbuild: $MSBUILD"
-echo "  nuget:   $NUGET"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -64,14 +63,16 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 cp -a "$SRC_DIR/." "$WORK_DIR/"
 cd "$WORK_DIR"
 
-# Point nuget at the vendored local source only, so restore never hits the
-# network. -Source replaces the default gallery, -NonInteractive stops it
-# prompting, and -DisableParallel is harmless for a single package.
-"$NUGET" source Add -Name local -Source "$WORK_DIR/nuget" -NonInteractive
-"$NUGET" restore "VhsDecodeAutoAudioAlign/packages.config" \
-    -PackagesDirectory packages \
-    -Source "$WORK_DIR/nuget" \
-    -NonInteractive -DisableParallel
+# Restore the Binah NuGet dep WITHOUT the nuget CLI: a .nupkg is just a zip,
+# and the .csproj references it via HintPath ..\packages\Binah.2.0.4\lib\net45\Binah.dll.
+# Extract the vendored nupkg to that exact path so msbuild/xbuild resolves the
+# reference. (nuget is not packaged in EPEL 8, so this avoids a hard dep on it
+# and never touches the network.)
+mkdir -p packages/Binah.2.0.4/lib/net45
+unzip -o -q "$WORK_DIR/nuget/Binah.2.0.4.nupkg" "lib/net45/Binah.dll" -d "$WORK_DIR/nuget-extract"
+mv "$WORK_DIR/nuget-extract/lib/net45/Binah.dll" packages/Binah.2.0.4/lib/net45/Binah.dll
+rm -rf "$WORK_DIR/nuget-extract"
+[ -f packages/Binah.2.0.4/lib/net45/Binah.dll ] || die "Binah.dll extraction failed"
 
 # Regenerate BuildInfo.cs with the tbc-tools build provenance. The upstream
 # placeholder (all zeros) is overwritten so show-build-info reports real data.
