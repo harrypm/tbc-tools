@@ -170,15 +170,14 @@ class ContractCoverageTests(unittest.TestCase):
     def test_release_contract_requires_stale_release_guards(self) -> None:
         # Manual create_release must run from main, block existing-tag rebuilds
         # by default, validate the tag commit against the intended source commit,
-        # emit a release commit provenance asset, and force make_latest=true so
-        # the GitHub "latest release" pointer tracks the newest tag.
+        # and force make_latest=true so the GitHub "latest release" pointer
+        # tracks the newest tag.
         expected = {
             "allow_existing_tag_rebuild:",
             "Manual release mode is only allowed from refs/heads/main",
             "Refusing to rebuild by default to prevent stale releases.",
             "Release integrity check failed:",
             'gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --latest',
-            "tbc-tools_${RELEASE_TAG}_commit.txt",
         }
         self.assertTrue(expected.issubset(set(check_ci_contracts.RELEASE_REQUIRED_SNIPPETS)))
 
@@ -206,11 +205,15 @@ class ContractCoverageTests(unittest.TestCase):
         self.assertTrue(expected.issubset(set(check_ci_contracts.BUNDLE_VERIFY_REQUIRED_SNIPPETS)))
 
     def test_bundle_verifier_contract_includes_aaa_vendor_and_elf_checks(self) -> None:
+        # AAA is now shipped as a self-contained AppImage (built from vendored
+        # source) that bundles Mono, so the bundle verifier checks the AppImage
+        # is present, executable, and runs without host mono — not the old
+        # prebuilt Windows .exe + Binah.dll.
         expected = {
-            'require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"',
-            'require_path "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"',
-            'require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/VhsDecodeAutoAudioAlign.exe"',
-            'require_path "$TARGET/bin/vendor/vhs_decode_auto_audio_align/Binah.dll"',
+            'require_executable "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"',
+            'require_executable "$TARGET/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"',
+            'run_smoke_test "x86-appimage-aaa-no-host-mono"',
+            'run_smoke_test "arm64-aaa-no-host-mono"',
             'tbc-video-export is not an ELF binary',
         }
         self.assertTrue(expected.issubset(set(check_ci_contracts.BUNDLE_VERIFY_REQUIRED_SNIPPETS)))

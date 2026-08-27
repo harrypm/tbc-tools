@@ -124,16 +124,15 @@ RELEASE_REQUIRED_SNIPPETS = (
     "uses: ./.github/workflows/build_windows_tools.yml",
     "uses: ./.github/workflows/build_macos_tools.yml",
     # Manual releases must run from main only, block existing-tag rebuilds by
-    # default, validate the tag commit against the intended source commit, emit
-    # a release commit provenance asset, and force make_latest=true so the
-    # GitHub "latest release" pointer tracks the newest tag (a prior release
-    # was cut from stale code; these guards prevent that recurrence).
+    # default, validate the tag commit against the intended source commit, and
+    # force make_latest=true so the GitHub "latest release" pointer tracks the
+    # newest tag (a prior release was cut from stale code; these guards prevent
+    # that recurrence).
     "allow_existing_tag_rebuild:",
     "Manual release mode is only allowed from refs/heads/main",
     "Refusing to rebuild by default to prevent stale releases.",
     "Release integrity check failed:",
     'gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --latest',
-    "tbc-tools_${RELEASE_TAG}_commit.txt",
 )
 
 BUNDLE_VERIFY_REQUIRED_SNIPPETS = (

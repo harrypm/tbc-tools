@@ -44,24 +44,15 @@ jobs:
           gc-max-store-size-linux: 6G
       - name: Build and test full parity flow
         run: bash ci/run_local_ci_parity.sh --build-test-only
-  build-linux-release-style:
-    name: Release-style Linux packaging build
+  # Call the Release workflow in build-only mode (create_release=false) so
+  # the full release pipeline — Linux + Windows + macOS packaging builds —
+  # is tested on every push/PR without publishing to GitHub Releases.
+  # This is a project hard rule: build tests must use the release workflow
+  # to test all platforms but must not publish.
+  release-style-build-all-platforms:
+    name: Release-style build (all platforms, no publish)
     needs: ci-guardrails
-    uses: ./.github/workflows/build_linux_tools.yml
+    uses: ./.github/workflows/release.yml
     with:
-      checkout_ref: ${{ github.sha }}
-    secrets: inherit
-  build-windows-release-style:
-    name: Release-style Windows packaging build
-    needs: ci-guardrails
-    uses: ./.github/workflows/build_windows_tools.yml
-    with:
-      checkout_ref: ${{ github.sha }}
-    secrets: inherit
-  build-macos-release-style:
-    name: Release-style macOS packaging build
-    needs: ci-guardrails
-    uses: ./.github/workflows/build_macos_tools.yml
-    with:
-      checkout_ref: ${{ github.sha }}
+      create_release: false
     secrets: inherit
