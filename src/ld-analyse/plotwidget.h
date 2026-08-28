@@ -41,6 +41,7 @@ class PlotSeries;
 class PlotMarker;
 class PlotLegend;
 class PlotAxisLabels;
+class QTimer;
 
 class PlotWidget : public QWidget
 {
@@ -89,6 +90,12 @@ public:
     void setPanEnabled(bool enabled);
     void resetZoom();
 
+    // Zoom anchor: designate a series (e.g. the red trend line) whose Y value
+    // at the view-centre X is used as the Y zoom anchor, so zoom stays on the
+    // real data band instead of the outlier-inflated geometric centre. Falls
+    // back to view-centre Y when no anchor series is set.
+    void setZoomAnchorSeries(PlotSeries *series);
+
     // Hover readout: when enabled, moving the mouse (no button held) snaps a
     // crosshair to the nearest data point of the nearest visible series and
     // shows a label formatted by m_hoverFormatter (or a default "x/y").
@@ -104,6 +111,11 @@ public:
     
     // Replot
     void replot();
+
+    // Replot suppression: coalesce a batch of state changes (setAxisTitle,
+    // setAxisRange, ...) into a single replot. While suppressed, replot()
+    // calls are deferred; unsuppressing performs one replot if any was pending.
+    void setReplotSuppressed(bool suppressed);
 
 signals:
     void plotAreaChanged(const QRectF &rect);
@@ -121,6 +133,7 @@ protected:
 
 private slots:
     void onSceneSelectionChanged();
+    void onZoomPanReplotTimeout();
 
 private:
     QGraphicsView *m_view;
@@ -179,6 +192,20 @@ private:
     bool m_isDragging;  // Track if mouse is being dragged
     bool m_isPanning;   // Track if right-button panning is active
     QPointF m_lastPanScenePos;
+
+    // Zoom anchor series (null = centre-anchored zoom)
+    PlotSeries *m_zoomAnchorSeries = nullptr;
+
+    // Replot suppression (batch coalescing)
+    bool m_replotSuppressed = false;
+    bool m_pendingReplot = false;
+
+    // Zoom/pan replot throttle: wheel/pinch events can stack faster than the
+    // screen can repaint. The range math is applied immediately (so each notch
+    // compounds), but the expensive replot is deferred and coalesced into one
+    // per ~16ms via m_zoomPanTimer.
+    QTimer *m_zoomPanTimer = nullptr;
+    bool m_zoomPanReplotPending = false;
     
 public:
     // Coordinate mapping methods (needed by plot items)
@@ -193,6 +220,11 @@ private:
     void calculateDataRange();
     void zoomAt(const QPointF &scenePos, double scaleFactor);
     void panBySceneDelta(const QPointF &sceneDelta);
+    // Coalesce a zoom/pan replot into the next ~16ms tick.
+    void scheduleZoomPanReplot();
+    // Interpolate the zoom-anchor series' Y at a data X (qQNaN() if series is
+    // null/empty). Used by zoomAt to anchor Y on the trend line.
+    double anchorSeriesYAtX(const PlotSeries *series, double x) const;
     // Hover: find nearest data point across visible series to scenePos; returns
     // false if none. Sets outPoint/outSeries.
     bool findNearestDataPoint(const QPointF &scenePos, QPointF &outPoint, const PlotSeries *&outSeries) const;
@@ -241,6 +273,25 @@ private:
     PlotStyle m_style;
     PlotWidget *m_plotWidget;
     QRectF m_plotRect;  // cached in updatePath for clipping in paint()
+
+    // Path cache: avoid rebuilding the QPainterPath when nothing that affects
+    // its geometry changed (setAxisTitle/setGridEnabled call replot() but do
+    // not alter the curve). Invalidated by setData() via m_dataGen.
+    struct CacheKey {
+        QRectF plotRect;
+        QRectF dataRect;
+        int dataGen;
+        PlotStyle style;
+        double penWidth;
+        bool operator==(const CacheKey &o) const {
+            return plotRect == o.plotRect && dataRect == o.dataRect
+                   && dataGen == o.dataGen && style == o.style
+                   && penWidth == o.penWidth;
+        }
+    };
+    CacheKey m_cacheKey{};
+    bool m_hasValidCache = false;
+    int m_dataGen = 0;
 };
 
 // Plot grid class for drawing grid lines

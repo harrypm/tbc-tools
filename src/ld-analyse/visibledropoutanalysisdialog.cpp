@@ -108,6 +108,10 @@ void VisibleDropOutAnalysisDialog::addDataPoint(qint32 frameNumber, double doLen
 // Finish the update and render the graph
 void VisibleDropOutAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
 {
+    // Suppress intermediate replots while we set up axes/data; unsuppress at
+    // the end performs one combined replot instead of one per setAxis* call.
+    plot->setReplotSuppressed(true);
+
     // Set up plot properties
     plot->updateTheme(); // Auto-detect theme and set appropriate background
     plot->setGridEnabled(true);
@@ -133,8 +137,8 @@ void VisibleDropOutAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
     // Set the frame marker position
     plotMarker->setPosition(QPointF(static_cast<double>(_currentFrameNumber), yMax / 2));
 
-    // Render the plot
-    plot->replot();
+    // Render the plot (unsuppress performs the single deferred replot).
+    plot->setReplotSuppressed(false);
 }
 
 // Method to update the frame marker (throttled for performance)

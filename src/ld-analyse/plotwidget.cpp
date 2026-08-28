@@ -16,6 +16,7 @@
 #include <QPainter>
 #include <QGestureEvent>
 #include <QPinchGesture>
+#include <QTimer>
 #include <algorithm>
 #include <cmath>
 namespace {
@@ -26,6 +27,23 @@ QFont plotUiFont(const QWidget *widget, int pointDelta)
         baseFont.setPointSize(baseFont.pointSize() + pointDelta);
     }
     return baseFont;
+}
+
+// Smallest "nice" step (1/2/5 x 10^n) that is >= framesPerPixel. Used to snap
+// the hover readout to a clean frame increment that scales with zoom, so the
+// readout advances ~one round step per pixel instead of jumping by the raw
+// frames-per-pixel ratio on every pixel of mouse motion.
+double niceStepFor(double framesPerPixel)
+{
+    if (framesPerPixel <= 0.0) return 1.0;
+    const double mag = std::pow(10.0, std::floor(std::log10(framesPerPixel)));
+    const double norm = framesPerPixel / mag; // [1, 10)
+    double niceNorm;
+    if (norm <= 1.0) niceNorm = 1.0;
+    else if (norm <= 2.0) niceNorm = 2.0;
+    else if (norm <= 5.0) niceNorm = 5.0;
+    else niceNorm = 10.0;
+    return niceNorm * mag;
 }
 }
 
@@ -130,7 +148,14 @@ void PlotWidget::setupView()
     updateTheme();
     
     connect(m_scene, &QGraphicsScene::selectionChanged, this, &PlotWidget::onSceneSelectionChanged);
-    
+
+    // Zoom/pan replot throttle timer (~60fps coalescing of stacked wheel/pinch
+    // events, which otherwise each trigger an O(N) bucketing pass + scene repaint).
+    m_zoomPanTimer = new QTimer(this);
+    m_zoomPanTimer->setSingleShot(true);
+    m_zoomPanTimer->setInterval(16);
+    connect(m_zoomPanTimer, &QTimer::timeout, this, &PlotWidget::onZoomPanReplotTimeout);
+
     updatePlotArea();
 }
 
@@ -353,6 +378,11 @@ void PlotWidget::setPanEnabled(bool enabled)
     m_panEnabled = enabled;
 }
 
+void PlotWidget::setZoomAnchorSeries(PlotSeries *series)
+{
+    m_zoomAnchorSeries = series;
+}
+
 void PlotWidget::setHoverEnabled(bool enabled)
 {
     m_hoverEnabled = enabled;
@@ -383,6 +413,16 @@ void PlotWidget::setCanvasBackground(const QColor &color)
     m_usePaletteCanvasBackground = false;
     m_canvasBackground = color;
     m_scene->setBackgroundBrush(QBrush(color));
+}
+
+void PlotWidget::setReplotSuppressed(bool suppressed)
+{
+    if (m_replotSuppressed == suppressed) return;
+    m_replotSuppressed = suppressed;
+    if (!suppressed && m_pendingReplot) {
+        m_pendingReplot = false;
+        replot();
+    }
 }
 
 bool PlotWidget::isDarkTheme()
@@ -422,6 +462,18 @@ void PlotWidget::updateTheme()
 
 void PlotWidget::replot()
 {
+    if (m_replotSuppressed) {
+        m_pendingReplot = true;
+        return;
+    }
+
+    // A direct replot() absorbs any pending zoom/pan throttled replot, since
+    // it already reflects the latest ranges.
+    if (m_zoomPanReplotPending) {
+        m_zoomPanReplotPending = false;
+        if (m_zoomPanTimer) m_zoomPanTimer->stop();
+    }
+
     if (m_xAutoScale || m_yAutoScale) {
         calculateDataRange();
     }
@@ -671,13 +723,53 @@ void PlotWidget::onSceneSelectionChanged()
     // Handle selection changes if needed
 }
 
+void PlotWidget::scheduleZoomPanReplot()
+{
+    // Range math already applied by the caller; just coalesce the replot.
+    m_zoomPanReplotPending = true;
+    if (m_zoomPanTimer && !m_zoomPanTimer->isActive()) {
+        m_zoomPanTimer->start();
+    }
+}
+
+void PlotWidget::onZoomPanReplotTimeout()
+{
+    m_zoomPanReplotPending = false;
+    replot();
+    emit plotAreaChanged(m_plotRect);
+}
+
 void PlotWidget::zoomAt(const QPointF &scenePos, double scaleFactor)
 {
+    Q_UNUSED(scenePos);
     if (scaleFactor <= 0.0 || m_plotRect.width() <= 0.0 || m_plotRect.height() <= 0.0) {
         return;
     }
 
-    const QPointF anchorData = mapToData(scenePos);
+    // X stays centred on the current view so the graph remains horizontally
+    // centred and the fixed axis-label margins are maintained.
+    const QPointF viewCenterScene = m_plotRect.center();
+    const double anchorX = mapToData(viewCenterScene).x();
+    const double anchorFx = 0.5;
+
+    // Y anchors on the designated zoom-anchor series (the red trend line in
+    // the SNR dialogs) evaluated at the view-centre X, so zoom stays on the
+    // real data band instead of the outlier-inflated geometric centre. Falls
+    // back to view-centre Y when no anchor series is set (dropout dialogs).
+    double anchorY = mapToData(viewCenterScene).y();
+    double anchorFy = 0.5;
+    if (m_zoomAnchorSeries && m_zoomAnchorSeries->isVisible()
+        && !m_zoomAnchorSeries->data().isEmpty()) {
+        const double ty = anchorSeriesYAtX(m_zoomAnchorSeries, anchorX);
+        if (!std::isnan(ty)) {
+            const QPointF trendScene = mapFromData(QPointF(anchorX, ty));
+            anchorY = ty;
+            anchorFy = (m_plotRect.bottom() - trendScene.y()) / m_plotRect.height();
+            if (anchorFy < 0.0) anchorFy = 0.0;
+            else if (anchorFy > 1.0) anchorFy = 1.0;
+        }
+    }
+
     const double xRange = m_xMax - m_xMin;
     const double yRange = m_yMax - m_yMin;
     if (xRange <= 0.0 || yRange <= 0.0) {
@@ -691,13 +783,9 @@ void PlotWidget::zoomAt(const QPointF &scenePos, double scaleFactor)
     const double clampedXRange = qMin(newXRange, maxXRange);
     const double clampedYRange = qMin(newYRange, maxYRange);
 
-    // Keep the data point under the cursor stable as we zoom.
-    const double anchorFx = (scenePos.x() - m_plotRect.left()) / m_plotRect.width();
-    const double anchorFy = (m_plotRect.bottom() - scenePos.y()) / m_plotRect.height();
-
-    m_xMin = anchorData.x() - (anchorFx * clampedXRange);
+    m_xMin = anchorX - (anchorFx * clampedXRange);
     m_xMax = m_xMin + clampedXRange;
-    m_yMin = anchorData.y() - (anchorFy * clampedYRange);
+    m_yMin = anchorY - (anchorFy * clampedYRange);
     m_yMax = m_yMin + clampedYRange;
 
     // Clamp zoomed window to configured bounds.
@@ -724,8 +812,7 @@ void PlotWidget::zoomAt(const QPointF &scenePos, double scaleFactor)
 
     m_xAutoScale = false;
     m_yAutoScale = false;
-    replot();
-    emit plotAreaChanged(m_plotRect);
+    scheduleZoomPanReplot();
 }
 
 void PlotWidget::panBySceneDelta(const QPointF &sceneDelta)
@@ -772,8 +859,26 @@ void PlotWidget::panBySceneDelta(const QPointF &sceneDelta)
 
     m_xAutoScale = false;
     m_yAutoScale = false;
-    replot();
-    emit plotAreaChanged(m_plotRect);
+    scheduleZoomPanReplot();
+}
+
+double PlotWidget::anchorSeriesYAtX(const PlotSeries *series, double x) const
+{
+    if (!series) return qQNaN();
+    const QVector<QPointF> &data = series->data();
+    if (data.isEmpty()) return qQNaN();
+    // Data is sorted by x. Binary-search for x, then linearly interpolate
+    // between the bracketing neighbours.
+    auto it = std::lower_bound(data.constBegin(), data.constEnd(), x,
+        [](const QPointF &p, double v) { return p.x() < v; });
+    const int idx = int(it - data.constBegin());
+    if (idx <= 0) return data.first().y();
+    if (idx >= data.size()) return data.last().y();
+    const QPointF &a = data.at(idx - 1);
+    const QPointF &b = data.at(idx);
+    if (b.x() == a.x()) return a.y();
+    const double t = (x - a.x()) / (b.x() - a.x());
+    return a.y() + t * (b.y() - a.y());
 }
 
 bool PlotWidget::findNearestDataPoint(const QPointF &scenePos, QPointF &outPoint, const PlotSeries *&outSeries) const
@@ -782,27 +887,40 @@ bool PlotWidget::findNearestDataPoint(const QPointF &scenePos, QPointF &outPoint
         return false;
     }
     const QPointF cursorData = mapToData(scenePos);
+
+    // Snap the target frame to a "nice" step (1/2/5 x 10^n) sized to roughly
+    // one step per pixel at the current zoom. This keeps the hover readout
+    // advancing in clean round increments (10/50/100/...) instead of jumping
+    // by the full frames-per-pixel ratio on every pixel of mouse motion, and
+    // selecting by x-distance (not Euclidean) makes the scan monotonic.
+    const double xRange = m_xMax - m_xMin;
+    const double fpp = (xRange > 0.0 && m_plotRect.width() > 0.0)
+                           ? xRange / m_plotRect.width()
+                           : 1.0;
+    const double step = niceStepFor(fpp);
+    const double snappedX = (step > 0.0)
+        ? std::floor(cursorData.x() / step + 0.5) * step
+        : cursorData.x();
+
     bool found = false;
     double bestDist = 0.0;
     for (PlotSeries *series : m_series) {
         if (!series->isVisible()) continue;
         const QVector<QPointF> &data = series->data();
         if (data.isEmpty()) continue;
-        // Data is sorted by x (frameNumber). Binary-search for the closest x,
-        // then pick the closer of the two neighbours by Euclidean distance.
-        auto it = std::lower_bound(data.constBegin(), data.constEnd(), cursorData.x(),
+        // Data is sorted by x (frameNumber). Binary-search for the point
+        // closest to snappedX, then pick the closer of the two neighbours by
+        // x-distance (frame proximity), not Euclidean distance.
+        auto it = std::lower_bound(data.constBegin(), data.constEnd(), snappedX,
             [](const QPointF &p, double x) { return p.x() < x; });
         const int idx = int(it - data.constBegin());
         int bestIdx = -1;
         double bestLocal = 0.0;
         for (int cand : {idx - 1, idx}) {
             if (cand < 0 || cand >= data.size()) continue;
-            const QPointF sp = mapFromData(data.at(cand));
-            const double dx = sp.x() - scenePos.x();
-            const double dy = sp.y() - scenePos.y();
-            const double dist = dx * dx + dy * dy;
-            if (bestIdx < 0 || dist < bestLocal) {
-                bestLocal = dist;
+            const double d = std::abs(data.at(cand).x() - snappedX);
+            if (bestIdx < 0 || d < bestLocal) {
+                bestLocal = d;
                 bestIdx = cand;
             }
         }
@@ -965,6 +1083,8 @@ void PlotSeries::setStyle(PlotStyle style)
 void PlotSeries::setData(const QVector<QPointF> &data)
 {
     m_data = data;
+    ++m_dataGen;
+    m_hasValidCache = false;
 }
 
 void PlotSeries::setData(const QVector<double> &xData, const QVector<double> &yData)
@@ -974,6 +1094,8 @@ void PlotSeries::setData(const QVector<double> &xData, const QVector<double> &yD
     for (int i = 0; i < count; ++i) {
         m_data.append(QPointF(xData[i], yData[i]));
     }
+    ++m_dataGen;
+    m_hasValidCache = false;
 }
 
 void PlotSeries::setVisible(bool visible)
@@ -985,36 +1107,144 @@ void PlotSeries::updatePath(const QRectF &plotRect, const QRectF &dataRect)
 {
     if (m_data.isEmpty() || !m_plotWidget) return;
     m_plotRect = plotRect;  // cached for clipping in paint()
-    
+
+    // Path cache: skip the rebuild when nothing that affects curve geometry
+    // changed since the last build (e.g. setAxisTitle/setGridEnabled call
+    // replot() but do not alter the path). setData() invalidates via m_dataGen.
+    const CacheKey key{plotRect, dataRect, m_dataGen, m_style, pen().widthF()};
+    if (m_hasValidCache && m_cacheKey == key) {
+        return;  // path already current
+    }
+
+    const double xMin = dataRect.left();
+    const double xMax = dataRect.right();
+    const double yMin = dataRect.top();
+    const double yMax = dataRect.bottom();
+    const double plotW = plotRect.width();
+    const double plotH = plotRect.height();
+
+    // Degenerate geometry -> nothing drawable; avoid divide-by-zero below.
+    if (xMax <= xMin || yMax <= yMin || plotW <= 0.0 || plotH <= 0.0) {
+        setPath(QPainterPath());
+        m_cacheKey = key;
+        m_hasValidCache = true;
+        return;
+    }
+
+    // Precomputed data->scene linear transform (avoids a per-point call to
+    // mapFromData(), which does two divisions each). x is sorted ascending so
+    // the same coefficients apply to every point.
+    const double sx = plotRect.left();
+    const double sy = plotRect.top();
+    const double kx = plotW / (xMax - xMin);
+    const double ky = plotH / (yMax - yMin);
+    const auto toSceneX = [&](double dx) { return sx + (dx - xMin) * kx; };
+    const auto toSceneY = [&](double dy) { return sy + (yMax - dy) * ky; };
+
+    // Binary-search the in-view x range so zoomed-in ticks iterate only the
+    // visible points instead of the full series (up to 800k frames).
+    const auto compLess = [](const QPointF &p, double x) { return p.x() < x; };
+    auto startIt = std::lower_bound(m_data.constBegin(), m_data.constEnd(),
+                                    xMin, compLess);
+    auto endIt = std::upper_bound(m_data.constBegin(), m_data.constEnd(), xMax,
+                                  [](double x, const QPointF &p) { return x < p.x(); });
+    const int inViewCount = int(endIt - startIt);
+
     QPainterPath path;
-    
+
+    // Downsample to pixel resolution when in-view points outnumber pixel
+    // columns. Emit a per-column min/max envelope so peaks and dips survive
+    // decimation (important for dropout spikes and SNR dips). When <= 1 point
+    // per pixel, emit one segment per point so zoomed-in views stay exact.
+    const int plotWidthPx = int(std::ceil(plotW));
+    const bool downsample = (plotWidthPx > 0) && (inViewCount > plotWidthPx);
+
     if (m_style == Bars) {
-        // Draw vertical bars from x-axis (y=0) to each data point
-        for (const QPointF &dataPoint : m_data) {
-            QPointF scenePoint = m_plotWidget->mapFromData(dataPoint);
-            QPointF basePoint = m_plotWidget->mapFromData(QPointF(dataPoint.x(), 0.0));
-            
-            // Draw vertical line from base (y=0) to the data point
-            path.moveTo(basePoint);
-            path.lineTo(scenePoint);
-        }
-    } else {
-        // Default Lines style: connect points with continuous line
-        bool firstPoint = true;
-        
-        for (const QPointF &dataPoint : m_data) {
-            QPointF scenePoint = m_plotWidget->mapFromData(dataPoint);
-            
-            if (firstPoint) {
-                path.moveTo(scenePoint);
-                firstPoint = false;
-            } else {
+        const double baseSceneY = toSceneY(0.0);
+        if (downsample) {
+            // Per pixel column: draw baseline(0)->max so the tallest spike in
+            // the column wins, matching the overdrawn look of stacked bars.
+            struct Col { double maxY; bool used; };
+            QVector<Col> cols(plotWidthPx, {0.0, false});
+            for (auto it = startIt; it != endIt; ++it) {
+                int col = int(toSceneX(it->x()) - sx);
+                if (col < 0) col = 0;
+                else if (col >= plotWidthPx) col = plotWidthPx - 1;
+                if (!cols[col].used || it->y() > cols[col].maxY) {
+                    cols[col].maxY = it->y();
+                    cols[col].used = true;
+                }
+            }
+            for (int col = 0; col < plotWidthPx; ++col) {
+                if (!cols[col].used) continue;
+                const double cx = sx + col + 0.5;
+                path.moveTo(QPointF(cx, baseSceneY));
+                path.lineTo(QPointF(cx, toSceneY(cols[col].maxY)));
+            }
+        } else {
+            for (auto it = startIt; it != endIt; ++it) {
+                const double cx = toSceneX(it->x());
+                const QPointF scenePoint(cx, toSceneY(it->y()));
+                path.moveTo(QPointF(cx, baseSceneY));
                 path.lineTo(scenePoint);
             }
         }
+    } else {
+        // Lines style
+        if (downsample) {
+            // Per pixel column min/max envelope rendered as a connected zigzag
+            // (top_i -> bot_i -> top_{i+1} -> bot_{i+1} ...). This fills the
+            // value band like the original dense polyline -- no gaps between
+            // columns, and the bottom edge (minima / SNR dips) stays connected
+            // instead of reading as clipped/ragged. 2 segments per occupied
+            // pixel column.
+            struct Col { double minY, maxY; bool used; };
+            QVector<Col> cols(plotWidthPx, {0.0, 0.0, false});
+            for (auto it = startIt; it != endIt; ++it) {
+                int col = int(toSceneX(it->x()) - sx);
+                if (col < 0) col = 0;
+                else if (col >= plotWidthPx) col = plotWidthPx - 1;
+                const double v = it->y();
+                if (!cols[col].used) {
+                    cols[col].minY = cols[col].maxY = v;
+                    cols[col].used = true;
+                } else {
+                    if (v < cols[col].minY) cols[col].minY = v;
+                    if (v > cols[col].maxY) cols[col].maxY = v;
+                }
+            }
+            bool firstCol = true;
+            for (int col = 0; col < plotWidthPx; ++col) {
+                if (!cols[col].used) continue;
+                const double cx = sx + col + 0.5;
+                const double topY = toSceneY(cols[col].maxY); // higher on screen
+                const double botY = toSceneY(cols[col].minY); // lower on screen
+                if (firstCol) {
+                    path.moveTo(QPointF(cx, topY));
+                    path.lineTo(QPointF(cx, botY));
+                    firstCol = false;
+                } else {
+                    path.lineTo(QPointF(cx, topY)); // diagonal from prev bot
+                    path.lineTo(QPointF(cx, botY)); // vertical down to this bot
+                }
+            }
+        } else {
+            bool firstPoint = true;
+            for (auto it = startIt; it != endIt; ++it) {
+                const QPointF scenePoint(toSceneX(it->x()), toSceneY(it->y()));
+                if (firstPoint) {
+                    path.moveTo(scenePoint);
+                    firstPoint = false;
+                } else {
+                    path.lineTo(scenePoint);
+                }
+            }
+        }
     }
-    
+
     setPath(path);
+    m_cacheKey = key;
+    m_hasValidCache = true;
 }
 
 void PlotSeries::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)

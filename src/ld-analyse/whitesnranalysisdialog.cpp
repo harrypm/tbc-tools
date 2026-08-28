@@ -35,6 +35,10 @@ WhiteSnrAnalysisDialog::WhiteSnrAnalysisDialog(QWidget *parent) :
     
     trendSeries = plot->addSeries("Trend line");
     trendSeries->setPen(QPen(Qt::red, 2));
+
+    // Use the red trend line as the Y zoom anchor so zoom stays on the real
+    // SNR band instead of the outlier-inflated geometric centre.
+    plot->setZoomAnchorSeries(trendSeries);
     
     plotMarker = plot->addMarker();
     plotMarker->setStyle(PlotMarker::VLine);
@@ -103,14 +107,16 @@ void WhiteSnrAnalysisDialog::removeChartContents()
 void WhiteSnrAnalysisDialog::addDataPoint(qint32 frameNumber, double whiteSnr)
 {
     if (!std::isnan(whiteSnr)) {
-        // Clamp SNR values to minimum threshold (14 dB)
-        double clampedSnr = std::max(whiteSnr, 14.0);
-        whitePoints.append(QPointF(static_cast<qreal>(frameNumber), static_cast<qreal>(clampedSnr)));
+        // Clamp SNR values: floor 14 dB, ceiling 75 dB to reject false-reading
+        // outliers that over-extend the Y axis.
+        double displaySnr = std::min(std::max(whiteSnr, 14.0), 75.0);
+        whitePoints.append(QPointF(static_cast<qreal>(frameNumber), static_cast<qreal>(displaySnr)));
         // NOTE: the Y-axis max is computed in finishUpdate() with headroom so the
         // peak stays inside the plot boundary (not jammed against the top border).
 
-        // Add to trendline data (use original unclamped value for trend calculation)
-        tlPoint[frameNumber] = whiteSnr;
+        // Trendline: keep real low values but reject high false-reading outliers
+        // (ceiling 75 dB) so the trend isn't skewed by spikes.
+        tlPoint[frameNumber] = std::min(whiteSnr, 75.0);
     } else {
         // Add to trendline data (mark as null value)
         tlPoint[frameNumber] = -1;
@@ -120,6 +126,10 @@ void WhiteSnrAnalysisDialog::addDataPoint(qint32 frameNumber, double whiteSnr)
 // Finish the update and render the graph
 void WhiteSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
 {
+    // Suppress intermediate replots while we set up axes/data; unsuppress at
+    // the end performs one combined replot instead of one per setAxis* call.
+    plot->setReplotSuppressed(true);
+
     // Set up plot properties
     plot->updateTheme(); // Auto-detect theme and set appropriate background
     plot->setGridEnabled(true);
@@ -141,6 +151,10 @@ void WhiteSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
         actualMax = std::max(actualMax, pt.y());
     }
     maxY = std::max(42.0, std::ceil(actualMax + std::max(2.0, actualMax * 0.05)));
+    // Cap the Y-axis at 76 dB (1 dB above the 75 dB false-reading ceiling) so
+    // ceiling-clamped outliers sit inside the top border instead of over-
+    // extending the graph.
+    maxY = std::min(maxY, 76.0);
     plot->setAxisRange(Qt::Vertical, 13.0, maxY);
 
     // Set the white series data (change color to dark gray)
@@ -154,8 +168,8 @@ void WhiteSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
     // Set the frame marker position
     plotMarker->setPosition(QPointF(static_cast<double>(_currentFrameNumber), (maxY + 13.0) / 2.0));
 
-    // Render the plot
-    plot->replot();
+    // Render the plot (unsuppress performs the single deferred replot).
+    plot->setReplotSuppressed(false);
 }
 
 // Method to update the frame marker (throttled for performance)

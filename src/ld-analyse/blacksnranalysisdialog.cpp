@@ -39,6 +39,10 @@ BlackSnrAnalysisDialog::BlackSnrAnalysisDialog(QWidget *parent) :
     
     trendSeries = plot->addSeries("Trend line");
     trendSeries->setPen(QPen(Qt::red, 2));
+
+    // Use the red trend line as the Y zoom anchor so zoom stays on the real
+    // SNR band instead of the outlier-inflated geometric centre.
+    plot->setZoomAnchorSeries(trendSeries);
     
     plotMarker = plot->addMarker();
     plotMarker->setStyle(PlotMarker::VLine);
@@ -107,14 +111,16 @@ void BlackSnrAnalysisDialog::removeChartContents()
 void BlackSnrAnalysisDialog::addDataPoint(qint32 frameNumber, double blackSnr)
 {
     if (!std::isnan(blackSnr)) {
-        // Clamp SNR values to minimum threshold (20 dB)
-        double clampedSnr = std::max(blackSnr, 20.0);
-        blackPoints.append(QPointF(static_cast<qreal>(frameNumber), static_cast<qreal>(clampedSnr)));
+        // Clamp SNR values: floor 20 dB, ceiling 75 dB to reject false-reading
+        // outliers (e.g. bSNR >70 on messy captures) that over-extend the Y axis.
+        double displaySnr = std::min(std::max(blackSnr, 20.0), 75.0);
+        blackPoints.append(QPointF(static_cast<qreal>(frameNumber), static_cast<qreal>(displaySnr)));
         // NOTE: the Y-axis max is computed in finishUpdate() with headroom so the
         // peak stays inside the plot boundary (not jammed against the top border).
 
-        // Add to trendline data (use original unclamped value for trend calculation)
-        tlPoint[frameNumber] = blackSnr;
+        // Trendline: keep real low values but reject high false-reading outliers
+        // (ceiling 75 dB) so the trend isn't skewed by spikes.
+        tlPoint[frameNumber] = std::min(blackSnr, 75.0);
     } else {
         // Add to trendline data (mark as null value)
         tlPoint[frameNumber] = -1;
@@ -124,6 +130,10 @@ void BlackSnrAnalysisDialog::addDataPoint(qint32 frameNumber, double blackSnr)
 // Finish the update and render the graph
 void BlackSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
 {
+    // Suppress intermediate replots while we set up axes/data; unsuppress at
+    // the end performs one combined replot instead of one per setAxis* call.
+    plot->setReplotSuppressed(true);
+
     // Set up plot properties
     plot->setGridEnabled(true);
     plot->setZoomEnabled(true);
@@ -144,6 +154,10 @@ void BlackSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
         actualMax = std::max(actualMax, pt.y());
     }
     maxY = std::max(48.0, std::ceil(actualMax + std::max(2.0, actualMax * 0.05)));
+    // Cap the Y-axis at 76 dB (1 dB above the 75 dB false-reading ceiling) so
+    // ceiling-clamped outliers sit inside the top border instead of over-
+    // extending the graph.
+    maxY = std::min(maxY, 76.0);
     plot->setAxisRange(Qt::Vertical, 19.0, maxY);
 
     // Set the black series data
@@ -156,8 +170,8 @@ void BlackSnrAnalysisDialog::finishUpdate(qint32 _currentFrameNumber)
     // Set the frame marker position
     plotMarker->setPosition(QPointF(static_cast<double>(_currentFrameNumber), (maxY + 19.0) / 2.0));
 
-    // Render the plot
-    plot->replot();
+    // Render the plot (unsuppress performs the single deferred replot).
+    plot->setReplotSuppressed(false);
 }
 
 // Method to update the frame marker (throttled for performance)
