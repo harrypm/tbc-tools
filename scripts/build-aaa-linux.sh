@@ -66,6 +66,16 @@ if [ "$MSBUILD_BASENAME" = "xbuild" ]; then
     MSBUILD_FRAMEWORK_ARGS=(/p:TargetFrameworkVersion=v4.5)
 fi
 
+# Make OUT_DIR absolute relative to the caller's CWD before we cd into the
+# scratch WORK_DIR below. Otherwise a relative --out-dir (the CI passes
+# "build-aaa") would be created inside WORK_DIR and deleted by the EXIT trap,
+# leaving the caller's expected output directory empty — the package script
+# then fails with "built exe missing in build-aaa".
+case "$OUT_DIR" in
+    /*) ;;
+    *) OUT_DIR="$PWD/$OUT_DIR" ;;
+esac
+
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -140,6 +150,30 @@ if [ -d appimage ]; then
     mkdir -p "$OUT_DIR/appimage"
     cp -af appimage/. "$OUT_DIR/appimage/"
 fi
+
+# Mono's dllmap (etc/mono/config) targets the unversioned libmono-native.so,
+# but Mono 6.8 on Oracle Linux 8 (EPEL mono-devel 6.8.0.123) ships only the
+# versioned libmono-native.so.0 / .so.0.0.0 and omits the unversioned dev
+# symlink, so host mono throws DllNotFoundException: System.Native on the
+# first DateTime.Now (the AAA Log prefixes timestamps) and the smoke test
+# below would fail for an environmental reason rather than a build problem.
+# Create the unversioned symlink on the host if it is missing, pointing at
+# whichever versioned lib is present (prefer .so.0, then .so.0.0.0, then the
+# real file). No-op on distros that already ship the symlink (Debian/Ubuntu
+# mono 6.8.0.105, Mono 6.12+). Best effort: skipped silently without write
+# permission and without sudo. The CI jobs run as root, so this always applies
+# there.
+LN_SUDO=""
+[ "$(id -u)" -eq 0 ] || LN_SUDO="sudo"
+for libdir in /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu; do
+    [ -e "$libdir/libmono-native.so" ] && continue
+    target=""
+    for cand in libmono-native.so.0 libmono-native.so.0.0.0; do
+        if [ -e "$libdir/$cand" ]; then target="$cand"; break; fi
+    done
+    [ -n "$target" ] || continue
+    $LN_SUDO ln -s "$target" "$libdir/libmono-native.so" 2>/dev/null || true
+done
 
 # Smoke test: the built exe must run under mono (the CI packaging step bundles
 # mono into the AppImage, but confirming the exe is a valid managed assembly
