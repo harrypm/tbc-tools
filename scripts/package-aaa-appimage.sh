@@ -101,6 +101,7 @@ for lib in \
     libmono-2.0.so.1 \
     libMonoPosixHelper.so \
     libikvm-native.so \
+    libmono-btls-shared.so \
     libmono-native.so.0; do
     for candidate in \
         "$MONO_PREFIX/lib64/$lib" \
@@ -125,6 +126,19 @@ done
 if [ -n "$MONO_CFG_SRC" ]; then
     mkdir -p "$APPDIR/etc"
     cp -aL "$MONO_CFG_SRC" "$APPDIR/etc/mono"
+fi
+# Rewrite the bundled dllmap config so the Mono-native P/Invoke targets are
+# BARE filenames (e.g. "libmono-native.so") instead of absolute paths rooted
+# at $mono_libdir. Mono resolves $mono_libdir from its compile-time prefix
+# (e.g. /usr/lib64 on Oracle Linux 8) and is NOT relocatable on older Mono
+# (6.8), so an absolute-path dllmap target would point at the HOST lib, not
+# the bundled one, and LD_LIBRARY_PATH could not redirect it. With bare
+# filenames the dynamic loader resolves them via LD_LIBRARY_PATH (set by
+# AppRun to $HERE/usr/lib), so the AppImage is self-contained regardless of
+# Mono's relocatability. This is the same mechanism Mono's own libc dllmap
+# relies on. Other (non-$mono_libdir) entries are left untouched.
+if [ -f "$APPDIR/etc/mono/config" ]; then
+    sed -i 's#\$mono_libdir/##g; s#\$mono_libdir##g' "$APPDIR/etc/mono/config"
 fi
 
 # The Mono dllmap targets the unversioned libmono-native.so, but distros ship
@@ -190,7 +204,15 @@ ARCH="$(uname -m)" APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" "$APPDIR" "$OUTPUT
     || die "appimagetool failed to package $OUTPUT"
 
 # Smoke test: the AppImage must run without host mono (it bundles mono).
-APPIMAGE_EXTRACT_AND_RUN=1 "$OUTPUT" show-build-info 2>&1 | grep -q -i "audio" \
-    || die "packaged AppImage did not run (show-build-info) — host mono missing?"
+# Capture the output and print it on failure so a broken AppImage is
+# diagnosable from the CI log instead of a bare "did not run" message.
+SMOKE_LOG="$WORK_DIR/aaa-appimage-smoke.log"
+if ! APPIMAGE_EXTRACT_AND_RUN=1 "$OUTPUT" show-build-info >"$SMOKE_LOG" 2>&1 \
+        || ! grep -q -i "audio" "$SMOKE_LOG"; then
+    echo "----- AAA AppImage smoke test output (show-build-info) -----" >&2
+    cat "$SMOKE_LOG" >&2
+    echo "-------------------------------------------------------------" >&2
+    die "packaged AppImage did not run (show-build-info) — see output above"
+fi
 
 echo "Packaged $OUTPUT"
