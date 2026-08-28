@@ -65,7 +65,14 @@ mkdir -p \
 cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "${0}")")"
-"$HERE/usr/bin/mono" "$HERE/usr/aaa/VhsDecodeAutoAudioAlign.exe" "$@"
+# Self-contained Mono: the bundled mono relocates its libdir relative to this
+# binary, so point it at the bundled dllmap config (MONO_CFG_DIR) and put the
+# bundled native libs on the loader path. Without these the AppImage silently
+# falls back to the host's /etc/mono + /usr/lib — the "needs host Mono"
+# failure this AppImage exists to fix.
+export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export MONO_CFG_DIR="$HERE/etc"
+exec "$HERE/usr/bin/mono" "$HERE/usr/aaa/VhsDecodeAutoAudioAlign.exe" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
@@ -107,6 +114,26 @@ for lib in \
     done
 done
 
+# Bundle Mono's dllmap config (etc/mono/config) so the bundled mono can
+# resolve P/Invokes such as System.Native -> libmono-native.so without a host
+# /etc/mono. It lives at /etc/mono on distro Mono installs (and under
+# <prefix>/etc/mono on custom-prefix builds); copy whichever exists.
+MONO_CFG_SRC=""
+for cfg in "$MONO_PREFIX/etc/mono" "/etc/mono"; do
+    [ -d "$cfg" ] && MONO_CFG_SRC="$cfg" && break
+done
+if [ -n "$MONO_CFG_SRC" ]; then
+    mkdir -p "$APPDIR/etc"
+    cp -aL "$MONO_CFG_SRC" "$APPDIR/etc/mono"
+fi
+
+# The Mono dllmap targets the unversioned libmono-native.so, but distros ship
+# only the versioned libmono-native.so.0. Create the unversioned symlink inside
+# the bundle so the dllmap resolves against the bundled lib (not the host's).
+if [ -f "$APPDIR/usr/lib/libmono-native.so.0" ] && [ ! -e "$APPDIR/usr/lib/libmono-native.so" ]; then
+    ln -s libmono-native.so.0 "$APPDIR/usr/lib/libmono-native.so"
+fi
+
 # Transitive dependency closure: copy every NEEDED shared lib the bundled
 # mono + mono libs reference, recursing until no new libs appear.
 SKIP_LIB_REGEX='^(libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|libresolv\.so\.2|ld-linux-.*\.so\..*|libnss_.*|libutil\.so\..*|libanl\.so\..*|libgcc_s\.so\.1|libstdc\+\+\.so\.6)$'
@@ -133,6 +160,19 @@ gather_deps() {
     done
 }
 gather_deps
+
+# Harden the bundled Mono runtime: set RPATH on the bundled mono binary +
+# native libs so the dynamic loader finds them even if LD_LIBRARY_PATH is
+# stripped by a launcher. AppRun's export is the primary mechanism; this is
+# belt-and-suspenders so the AppImage stays self-contained. Skipped silently
+# where patchelf is unavailable.
+PATCH_ELF_BIN="$(command -v patchelf || true)"
+if [ -n "$PATCH_ELF_BIN" ]; then
+    for elf in "$APPDIR"/usr/bin/mono "$APPDIR"/usr/lib/*.so*; do
+        [ -f "$elf" ] || continue
+        "$PATCH_ELF_BIN" --set-rpath '$ORIGIN:$ORIGIN/../lib' "$elf" 2>/dev/null || true
+    done
+fi
 
 # appimagetool packs AppDir into the AppImage. Download it if absent.
 APPIMAGETOOL="${APPIMAGETOOL:-}"
