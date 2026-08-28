@@ -14,6 +14,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -68,6 +71,22 @@ void appendDerivedRootCandidates(QStringList &candidates, const QString &baseNam
             appendUniqueCandidate(candidates, current);
             changed = true;
         }
+    }
+
+    // The standard vhs-decode naming convention puts the metadata at
+    // <stem>-video.tbc.json. After stripping ".tbc" the root is
+    // <stem>-video, which the linear (<stem>-linear.flac) and hifi
+    // (<stem>-hifi.flac) inputs do not relate to under the prefix-match
+    // rules, so preferred-detect fails and the Any fallback targets the RF
+    // dump. Strip a single trailing "-video" / "_video" segment so the
+    // capture <stem> is also a root candidate; the linear/hifi inputs then
+    // match <stem>-linear / <stem>-hifi. Verified against a real capture dir.
+    if (current.endsWith(QStringLiteral("-video"), Qt::CaseInsensitive)) {
+        current.chop(6);
+        appendUniqueCandidate(candidates, current);
+    } else if (current.endsWith(QStringLiteral("_video"), Qt::CaseInsensitive)) {
+        current.chop(6);
+        appendUniqueCandidate(candidates, current);
     }
 }
 
@@ -499,9 +518,18 @@ bool containsBasebandKeyword(const QString &audioBaseLower)
 
 bool hasExcludedAutoInputKeyword(const QString &audioFilenameLower)
 {
+    // Exclude aligned outputs and the RF/video payload dumps. The RF video
+    // capture is commonly stored as <stem>-video.flac (and chroma as
+    // <stem>-video_chroma.tbc, already filtered by extension). These use audio
+    // containers but are not alignment inputs, so without excluding "video"
+    // and "chroma" the Any-preference fallback would auto-target the RF dump
+    // (verified against a real capture dir). The bare-substring style matches
+    // the existing "rf"/"align" checks.
     return audioFilenameLower.contains(QStringLiteral("rf"))
         || audioFilenameLower.contains(QStringLiteral("align"))
-        || audioFilenameLower.contains(QStringLiteral("aligned"));
+        || audioFilenameLower.contains(QStringLiteral("aligned"))
+        || audioFilenameLower.contains(QStringLiteral("video"))
+        || audioFilenameLower.contains(QStringLiteral("chroma"));
 }
 
 bool hasPreferredKeyword(const QString &audioBaseLower, AudioPreference preference)
@@ -708,6 +736,27 @@ QString autoDetectInputAudioFileInternal(const QString &jsonFilename,
 
     return QDir::toNativeSeparators(bestMatch.absoluteFilePath());
 }
+
+// Reads a positive sample-rate value from a JSON object, accepting either an
+// integer or a numeric string (some metadata writers serialise rates as
+// strings). Returns 0 if the field is absent or not a usable positive number.
+quint32 positiveRateValueFromJson(const QJsonObject &object, const QString &key)
+{
+    if (object.isEmpty() || key.isEmpty()) {
+        return 0;
+    }
+    const QJsonValue value = object.value(key);
+    if (value.isDouble()) {
+        const quint32 parsed = static_cast<quint32>(value.toDouble(0.0));
+        return parsed == 0 ? 0 : parsed;
+    }
+    if (value.isString()) {
+        bool ok = false;
+        const quint32 parsed = value.toString().trimmed().toUInt(&ok);
+        return (ok && parsed > 0) ? parsed : 0;
+    }
+    return 0;
+}
 } // namespace
 
 namespace AudioAlignmentUtil {
@@ -747,28 +796,77 @@ QString autoDetectInputAudioFile(const QString &jsonFilename, const QString &exc
 
 QString autoDetectLinearInputAudioFile(const QString &jsonFilename, const QString &excludeFile)
 {
-    if (const QString preferred = autoDetectInputAudioFileInternal(
-            jsonFilename, excludeFile, AudioPreference::Linear, true); !preferred.isEmpty()) {
-        return preferred;
-    }
-    if (const QString weighted = autoDetectInputAudioFileInternal(
-            jsonFilename, excludeFile, AudioPreference::Linear, false); !weighted.isEmpty()) {
-        return weighted;
-    }
-    return autoDetectInputAudioFile(jsonFilename, excludeFile);
+    // Only fill the Linear field with an actual linear/baseband track. Do not
+    // cross-fill the hifi track (or any other root-related file) when no linear
+    // track is present — leave the field empty so the user chooses explicitly.
+    // Preferred-detect already accepts both the "linear" keyword and baseband
+    // variants, and the baseband fallback block inside the internal detector
+    // still rescues unrelated baseband files, so no weaker fallback is needed.
+    return autoDetectInputAudioFileInternal(jsonFilename, excludeFile, AudioPreference::Linear, true);
 }
 
 QString autoDetectHifiInputAudioFile(const QString &jsonFilename, const QString &excludeFile)
 {
-    if (const QString preferred = autoDetectInputAudioFileInternal(
-            jsonFilename, excludeFile, AudioPreference::Hifi, true); !preferred.isEmpty()) {
-        return preferred;
+    // Only fill the HiFi field with an actual hifi track. Do not cross-fill the
+    // linear/baseband track when no hifi track is present — leave the field
+    // empty so the user chooses explicitly.
+    return autoDetectInputAudioFileInternal(jsonFilename, excludeFile, AudioPreference::Hifi, true);
+}
+
+quint32 detectRfSourceSampleRateFromJson(const QString &jsonFilename)
+{
+    // Boundary rule (user-provided): videoParameters.sampleRate is the DECODED
+    // .tbc format rate, NOT the source RF capture timebase that AAA uses for
+    // alignment (they differ on resampled captures — e.g. decoded 4Fsc PAL
+    // 17.7 MHz vs source cxadc 40 Msps). This function therefore only returns
+    // an EXPLICIT RF-source field when the metadata carries one; it must NEVER
+    // fall back to videoParameters.sampleRate. Returns 0 when no explicit
+    // RF-source field is present, leaving the dialog at its 40 MHz default.
+    const QString normalizedJson = normalizeForPathParsing(jsonFilename);
+    if (normalizedJson.isEmpty()) {
+        return 0;
     }
-    if (const QString weighted = autoDetectInputAudioFileInternal(
-            jsonFilename, excludeFile, AudioPreference::Hifi, false); !weighted.isEmpty()) {
-        return weighted;
+    const QFileInfo jsonInfo(normalizedJson);
+    if (!jsonInfo.exists() || !jsonInfo.isFile()) {
+        return 0;
     }
-    return autoDetectInputAudioFile(jsonFilename, excludeFile);
+
+    QFile jsonFile(jsonInfo.absoluteFilePath());
+    if (!jsonFile.open(QIODevice::ReadOnly)) {
+        return 0;
+    }
+    const QJsonDocument document = QJsonDocument::fromJson(jsonFile.readAll());
+    jsonFile.close();
+    if (!document.isObject()) {
+        return 0;
+    }
+
+    const QJsonObject root = document.object();
+    const QJsonValue videoParametersValue = root.value(QStringLiteral("videoParameters"));
+    if (!videoParametersValue.isObject()) {
+        return 0;
+    }
+    const QJsonObject videoParameters = videoParametersValue.toObject();
+
+    // Recognised forward-compatible RF-source field names (Hz), checked in
+    // priority order. Names are matched exactly here; JSON object keys are
+    // case-sensitive in practice for ld-decode metadata, so no case folding.
+    const QStringList rfSourceKeys = {
+        QStringLiteral("rfSourceSampleRate"),
+        QStringLiteral("rfSourceSampleRateHz"),
+        QStringLiteral("rfSourceFreq"),
+        QStringLiteral("rfSampleRate")
+    };
+    for (const QString &key : rfSourceKeys) {
+        const quint32 parsed = positiveRateValueFromJson(videoParameters, key);
+        if (parsed > 0) {
+            return parsed;
+        }
+    }
+
+    // Deliberately do NOT fall back to videoParameters.sampleRate — see the
+    // boundary rule in the comment above.
+    return 0;
 }
 
 QString resolvedAudioAlignPath(QString *errorMessage)

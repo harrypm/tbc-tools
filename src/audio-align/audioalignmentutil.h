@@ -23,6 +23,16 @@ QString defaultAlignedOutputPath(const QString &inputFilename);
 QString autoDetectInputAudioFile(const QString &jsonFilename, const QString &excludeFile = QString());
 QString autoDetectLinearInputAudioFile(const QString &jsonFilename, const QString &excludeFile = QString());
 QString autoDetectHifiInputAudioFile(const QString &jsonFilename, const QString &excludeFile = QString());
+// Reads an explicit RF *source* capture sample rate (Hz) from the metadata
+// JSON's videoParameters, if the metadata carries a forward-compatible
+// RF-source field (rfSourceSampleRate / rfSourceSampleRateHz / rfSourceFreq /
+// rfSampleRate). Returns 0 when no such field is present. NEVER falls back to
+// the decoded videoParameters.sampleRate — that is the .tbc format rate, not
+// the source RF timebase AAA aligns against (they differ on resampled
+// captures). The dialog uses this to auto-set the RF Video Sample Rate field
+// only when the metadata explicitly provides it; otherwise the 40 MHz default
+// is kept as a user-provided value.
+quint32 detectRfSourceSampleRateFromJson(const QString &jsonFilename);
 // Resolves the VhsDecodeAutoAudioAlign executable path the same way
 // runStreamAlign does (bundled vendor dir relative to the application dir,
 // then PATH). Returns the executable path, or an empty string if not found

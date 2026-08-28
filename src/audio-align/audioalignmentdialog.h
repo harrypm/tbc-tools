@@ -77,6 +77,7 @@ private:
     void updateLinearOutputFromInput(bool forceOutputUpdate);
     void updateHifiOutputFromInput(bool forceOutputUpdate);
     void tryAutoDetectInputsFromJson(bool forceReplaceInputs);
+    void applyRfSourceRateFromJson(const QString &jsonFilename);
     bool writeExportTrackPayload(const QString &linearOutputFile,
                                  const QString &hifiOutputFile,
                                  bool includeLinearTrack,

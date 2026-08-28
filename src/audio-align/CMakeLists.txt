@@ -59,4 +59,21 @@ if(BUILD_TESTING)
         COMMAND $<TARGET_FILE:test-audio-align-runtime> --detect-aaa
     )
     set_tests_properties(aaa-detection PROPERTIES SKIP_RETURN_CODE 77)
+
+    # Auto-detect selection test: verifies the linear/hifi detectors pick the
+    # right tracks for the standard vhs-decode naming and never target the RF
+    # <stem>-video.flac dump. Pure logic (temp fixtures) — no ffmpeg/AAA.
+    add_test(
+        NAME aaa-detect-inputs
+        COMMAND $<TARGET_FILE:test-audio-align-runtime> --detect-inputs
+    )
+
+    # RF source-rate provision test: verifies detectRfSourceSampleRateFromJson
+    # returns an explicit videoParameters.rfSourceSampleRate and returns 0 (no
+    # fallback to the decoded videoParameters.sampleRate) when absent. Enforces
+    # the boundary rule that the RF timebase is user-provided / explicit-only.
+    add_test(
+        NAME aaa-detect-rf-source-rate
+        COMMAND $<TARGET_FILE:test-audio-align-runtime> --detect-rf-source-rate
+    )
 endif()

@@ -12,6 +12,7 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QTemporaryDir>
 #include <QTextStream>
 
 namespace {
@@ -73,6 +74,24 @@ int main(int argc, char *argv[])
                        "success, 1 if not found/launchable. No fixtures or ffmpeg required."));
     parser.addOption(detectAaaOption);
 
+    QCommandLineOption detectInputsOption(
+        QStringList() << QStringLiteral("detect-inputs"),
+        QStringLiteral("Auto-detect selection test: create a temp capture dir with the standard "
+                       "vhs-decode naming (<stem>-video.tbc.json + <stem>-linear.flac + "
+                       "<stem>-hifi.flac + <stem>-video.flac) and assert the linear/hifi detectors "
+                       "pick the right tracks and never the RF <stem>-video.flac. No ffmpeg/AAA "
+                       "required. Exits 0 on success, 1 on failure."));
+    parser.addOption(detectInputsOption);
+
+    QCommandLineOption detectRfSourceRateOption(
+        QStringList() << QStringLiteral("detect-rf-source-rate"),
+        QStringLiteral("RF source-rate provision test: assert detectRfSourceSampleRateFromJson "
+                       "returns an explicit videoParameters.rfSourceSampleRate value when present, "
+                       "and returns 0 (no fallback to the decoded videoParameters.sampleRate) when "
+                       "no RF-source field is present. No ffmpeg/AAA required. Exits 0 on success, "
+                       "1 on failure."));
+    parser.addOption(detectRfSourceRateOption);
+
     parser.process(app);
 
     if (parser.isSet(detectAaaOption)) {
@@ -124,7 +143,161 @@ int main(int argc, char *argv[])
             return failTest(QStringLiteral("AAA show-build-info did not report audio (output did not contain 'audio'):\n%1")
                                 .arg(aaaOutput));
         }
-        QTextStream(stdout) << "AAA detection + launch test passed." << Qt::endl;
+    QTextStream(stdout) << "AAA detection + launch test passed." << Qt::endl;
+    return 0;
+}
+
+    if (parser.isSet(detectInputsOption)) {
+        // Build a temp capture dir mirroring the standard vhs-decode naming:
+        //   <stem>-video.tbc.json  (metadata)
+        //   <stem>-linear.flac     (linear/baseband audio input)
+        //   <stem>-hifi.flac       (hifi audio input)
+        //   <stem>-video.flac      (RF video dump in an audio container — must NOT be picked)
+        // Empty files are enough; the detectors only inspect names/paths.
+        QTemporaryDir tempDir;
+        if (!tempDir.isValid()) {
+            return failTest(QStringLiteral("Could not create temp dir for detect-inputs test."));
+        }
+        const QString stem = QStringLiteral("capture_demo_2026-01-01_12_00_00");
+        const QString dirPath = tempDir.path();
+        const QString jsonPath = dirPath + QStringLiteral("/") + stem + QStringLiteral("-video.tbc.json");
+        const QString linearPath = dirPath + QStringLiteral("/") + stem + QStringLiteral("-linear.flac");
+        const QString hifiPath = dirPath + QStringLiteral("/") + stem + QStringLiteral("-hifi.flac");
+        const QString rfVideoPath = dirPath + QStringLiteral("/") + stem + QStringLiteral("-video.flac");
+        const QStringList createPaths = {jsonPath, linearPath, hifiPath, rfVideoPath};
+        for (const QString &path : createPaths) {
+            QFile f(path);
+            if (!f.open(QIODevice::WriteOnly)) {
+                return failTest(QStringLiteral("Could not create fixture file: %1").arg(path));
+            }
+            f.close();
+        }
+
+        const QString detectedLinear = AudioAlignmentUtil::autoDetectLinearInputAudioFile(jsonPath);
+        if (detectedLinear.isEmpty()) {
+            return failTest(QStringLiteral("Linear auto-detect returned nothing for %1").arg(jsonPath));
+        }
+        if (!detectedLinear.endsWith(QStringLiteral("-linear.flac"), Qt::CaseInsensitive)) {
+            return failTest(QStringLiteral("Linear auto-detect picked the wrong file: %1").arg(detectedLinear));
+        }
+        if (detectedLinear.compare(rfVideoPath, Qt::CaseInsensitive) == 0) {
+            return failTest(QStringLiteral("Linear auto-detect mistakenly targeted the RF video dump: %1").arg(detectedLinear));
+        }
+
+        const QString detectedHifi = AudioAlignmentUtil::autoDetectHifiInputAudioFile(jsonPath, detectedLinear);
+        if (detectedHifi.isEmpty()) {
+            return failTest(QStringLiteral("Hifi auto-detect returned nothing for %1").arg(jsonPath));
+        }
+        if (!detectedHifi.endsWith(QStringLiteral("-hifi.flac"), Qt::CaseInsensitive)) {
+            return failTest(QStringLiteral("Hifi auto-detect picked the wrong file: %1").arg(detectedHifi));
+        }
+        if (detectedHifi.compare(rfVideoPath, Qt::CaseInsensitive) == 0) {
+            return failTest(QStringLiteral("Hifi auto-detect mistakenly targeted the RF video dump: %1").arg(detectedHifi));
+        }
+
+        // The Any fallback must also never return the RF video dump.
+        const QString detectedAny = AudioAlignmentUtil::autoDetectInputAudioFile(jsonPath);
+        if (!detectedAny.isEmpty()
+            && detectedAny.compare(rfVideoPath, Qt::CaseInsensitive) == 0) {
+            return failTest(QStringLiteral("Any auto-detect mistakenly targeted the RF video dump: %1").arg(detectedAny));
+        }
+
+        // No cross-fill: when only the hifi track is present (no linear file),
+        // the Linear detector must return empty rather than filling in hifi;
+        // and vice-versa. Each field only fills with its own track type.
+        QTemporaryDir hifiOnlyDir;
+        if (!hifiOnlyDir.isValid()) {
+            return failTest(QStringLiteral("Could not create temp dir for hifi-only detect test."));
+        }
+        const QString hifiOnlyJson = hifiOnlyDir.path() + QStringLiteral("/") + stem + QStringLiteral("-video.tbc.json");
+        const QString hifiOnlyHifi = hifiOnlyDir.path() + QStringLiteral("/") + stem + QStringLiteral("-hifi.flac");
+        const QString hifiOnlyVideo = hifiOnlyDir.path() + QStringLiteral("/") + stem + QStringLiteral("-video.flac");
+        for (const QString &path : {hifiOnlyJson, hifiOnlyHifi, hifiOnlyVideo}) {
+            QFile f(path);
+            if (!f.open(QIODevice::WriteOnly)) {
+                return failTest(QStringLiteral("Could not create hifi-only fixture: %1").arg(path));
+            }
+            f.close();
+        }
+        const QString linearWhenHifiOnly = AudioAlignmentUtil::autoDetectLinearInputAudioFile(hifiOnlyJson);
+        if (!linearWhenHifiOnly.isEmpty()) {
+            return failTest(QStringLiteral("Linear auto-detect must stay empty when no linear track exists, but picked: %1").arg(linearWhenHifiOnly));
+        }
+        const QString hifiWhenHifiOnly = AudioAlignmentUtil::autoDetectHifiInputAudioFile(hifiOnlyJson);
+        if (hifiWhenHifiOnly.isEmpty() || !hifiWhenHifiOnly.endsWith(QStringLiteral("-hifi.flac"), Qt::CaseInsensitive)) {
+            return failTest(QStringLiteral("Hifi auto-detect should still find the hifi track when no linear exists, got: %1").arg(hifiWhenHifiOnly));
+        }
+
+        QTemporaryDir linearOnlyDir;
+        if (!linearOnlyDir.isValid()) {
+            return failTest(QStringLiteral("Could not create temp dir for linear-only detect test."));
+        }
+        const QString linearOnlyJson = linearOnlyDir.path() + QStringLiteral("/") + stem + QStringLiteral("-video.tbc.json");
+        const QString linearOnlyLinear = linearOnlyDir.path() + QStringLiteral("/") + stem + QStringLiteral("-linear.flac");
+        const QString linearOnlyVideo = linearOnlyDir.path() + QStringLiteral("/") + stem + QStringLiteral("-video.flac");
+        for (const QString &path : {linearOnlyJson, linearOnlyLinear, linearOnlyVideo}) {
+            QFile f(path);
+            if (!f.open(QIODevice::WriteOnly)) {
+                return failTest(QStringLiteral("Could not create linear-only fixture: %1").arg(path));
+            }
+            f.close();
+        }
+        const QString hifiWhenLinearOnly = AudioAlignmentUtil::autoDetectHifiInputAudioFile(linearOnlyJson);
+        if (!hifiWhenLinearOnly.isEmpty()) {
+            return failTest(QStringLiteral("Hifi auto-detect must stay empty when no hifi track exists, but picked: %1").arg(hifiWhenLinearOnly));
+        }
+        const QString linearWhenLinearOnly = AudioAlignmentUtil::autoDetectLinearInputAudioFile(linearOnlyJson);
+        if (linearWhenLinearOnly.isEmpty() || !linearWhenLinearOnly.endsWith(QStringLiteral("-linear.flac"), Qt::CaseInsensitive)) {
+            return failTest(QStringLiteral("Linear auto-detect should still find the linear track when no hifi exists, got: %1").arg(linearWhenLinearOnly));
+        }
+
+        QTextStream(stdout) << "AAA auto-detect inputs test passed. linear="
+                            << detectedLinear << " hifi=" << detectedHifi << Qt::endl;
+        return 0;
+    }
+
+    if (parser.isSet(detectRfSourceRateOption)) {
+        // Case 1: metadata carries an explicit RF-source field -> it is returned.
+        QTemporaryDir tempDir1;
+        if (!tempDir1.isValid()) {
+            return failTest(QStringLiteral("Could not create temp dir for detect-rf-source-rate test (case 1)."));
+        }
+        const QString jsonWithRf = tempDir1.path() + QStringLiteral("/with_rf.json");
+        {
+            QFile f(jsonWithRf);
+            if (!f.open(QIODevice::WriteOnly)) {
+                return failTest(QStringLiteral("Could not write with_rf.json fixture."));
+            }
+            f.write("{\"videoParameters\":{\"system\":\"PAL\",\"sampleRate\":17734475,\"rfSourceSampleRate\":40000000}}");
+            f.close();
+        }
+        const quint32 detectedWithRf = AudioAlignmentUtil::detectRfSourceSampleRateFromJson(jsonWithRf);
+        if (detectedWithRf != 40000000) {
+            return failTest(QStringLiteral("detectRfSourceSampleRateFromJson should return 40000000 from rfSourceSampleRate, got %1").arg(detectedWithRf));
+        }
+
+        // Case 2: metadata has only the decoded sampleRate, no RF-source field
+        //         -> must return 0 (NO fallback to the decoded rate).
+        QTemporaryDir tempDir2;
+        if (!tempDir2.isValid()) {
+            return failTest(QStringLiteral("Could not create temp dir for detect-rf-source-rate test (case 2)."));
+        }
+        const QString jsonWithoutRf = tempDir2.path() + QStringLiteral("/without_rf.json");
+        {
+            QFile f(jsonWithoutRf);
+            if (!f.open(QIODevice::WriteOnly)) {
+                return failTest(QStringLiteral("Could not write without_rf.json fixture."));
+            }
+            f.write("{\"videoParameters\":{\"system\":\"PAL\",\"sampleRate\":17734475}}");
+            f.close();
+        }
+        const quint32 detectedWithoutRf = AudioAlignmentUtil::detectRfSourceSampleRateFromJson(jsonWithoutRf);
+        if (detectedWithoutRf != 0) {
+            return failTest(QStringLiteral("detectRfSourceSampleRateFromJson must return 0 when no RF-source field is present (no fallback to decoded sampleRate), got %1").arg(detectedWithoutRf));
+        }
+
+        QTextStream(stdout) << "AAA RF source-rate provision test passed. with_rf="
+                            << detectedWithRf << " without_rf=" << detectedWithoutRf << Qt::endl;
         return 0;
     }
 

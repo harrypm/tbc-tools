@@ -418,6 +418,21 @@ void AudioAlignmentDialog::setSourceDirectory(const QString &directory)
     }
 }
 
+void AudioAlignmentDialog::applyRfSourceRateFromJson(const QString &jsonFilename)
+{
+    // Auto-set the RF Video Sample Rate only when the metadata explicitly
+    // carries an RF-source field. detectRfSourceSampleRateFromJson returns 0
+    // when no such field is present, and never falls back to the decoded
+    // videoParameters.sampleRate (that is the .tbc format rate, not the source
+    // RF timebase AAA aligns against — they differ on resampled captures).
+    // A 0 result leaves the dialog at its current (default or user-set) value,
+    // so existing metadata without an RF-source field is unchanged.
+    const quint32 rfSourceRateHz = AudioAlignmentUtil::detectRfSourceSampleRateFromJson(jsonFilename);
+    if (rfSourceRateHz > 0) {
+        setDefaultRfVideoSampleRate(rfSourceRateHz);
+    }
+}
+
 void AudioAlignmentDialog::setDefaultJson(const QString &jsonFilename)
 {
     const QString normalizedJson = AudioAlignmentUtil::normalizePathForCurrentPlatform(jsonFilename);
@@ -431,6 +446,7 @@ void AudioAlignmentDialog::setDefaultJson(const QString &jsonFilename)
         sourceDirectory = jsonInfo.absolutePath();
     }
     tryAutoDetectInputsFromJson(false);
+    applyRfSourceRateFromJson(normalizedJson);
 }
 
 void AudioAlignmentDialog::setDefaultInputFile(const QString &inputFilename)
@@ -500,6 +516,7 @@ void AudioAlignmentDialog::on_jsonBrowseButton_clicked()
     const QString normalizedJson = AudioAlignmentUtil::normalizePathForCurrentPlatform(jsonFileName);
     ui->jsonLineEdit->setText(normalizedJson);
     tryAutoDetectInputsFromJson(true);
+    applyRfSourceRateFromJson(normalizedJson);
     if (ui->statusLabel) {
         ui->statusLabel->clear();
     }
