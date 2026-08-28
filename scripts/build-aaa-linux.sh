@@ -151,34 +151,16 @@ if [ -d appimage ]; then
     cp -af appimage/. "$OUT_DIR/appimage/"
 fi
 
-# Mono's dllmap (etc/mono/config) targets the unversioned libmono-native.so,
-# but Mono 6.8 on Oracle Linux 8 (EPEL mono-devel 6.8.0.123) ships only the
-# versioned libmono-native.so.0 / .so.0.0.0 and omits the unversioned dev
-# symlink, so host mono throws DllNotFoundException: System.Native on the
-# first DateTime.Now (the AAA Log prefixes timestamps) and the smoke test
-# below would fail for an environmental reason rather than a build problem.
-# Create the unversioned symlink on the host if it is missing, pointing at
-# whichever versioned lib is present (prefer .so.0, then .so.0.0.0, then the
-# real file). No-op on distros that already ship the symlink (Debian/Ubuntu
-# mono 6.8.0.105, Mono 6.12+). Best effort: skipped silently without write
-# permission and without sudo. The CI jobs run as root, so this always applies
-# there.
-LN_SUDO=""
-[ "$(id -u)" -eq 0 ] || LN_SUDO="sudo"
-for libdir in /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu; do
-    [ -e "$libdir/libmono-native.so" ] && continue
-    target=""
-    for cand in libmono-native.so.0 libmono-native.so.0.0.0; do
-        if [ -e "$libdir/$cand" ]; then target="$cand"; break; fi
-    done
-    [ -n "$target" ] || continue
-    $LN_SUDO ln -s "$target" "$libdir/libmono-native.so" 2>/dev/null || true
-done
-
-# Smoke test: the built exe must run under mono (the CI packaging step bundles
-# mono into the AppImage, but confirming the exe is a valid managed assembly
-# here catches a broken build early).
-mono "$OUT_DIR/VhsDecodeAutoAudioAlign.exe" show-build-info 2>&1 | grep -q -i "audio" \
-    || die "built VhsDecodeAutoAudioAlign.exe did not run under mono (show-build-info)"
+# Smoke test: confirm the built exe is a valid .NET assembly. We use `file`
+# (already installed in both Linux CI jobs) rather than running the exe under
+# host mono, because OL8's Mono 6.8 omits the unversioned libmono-native.so
+# that Mono's dllmap targets, so `mono show-build-info` crashes with
+# DllNotFoundException: System.Native on the first DateTime.Now (the AAA Log
+# prefixes timestamps) — an environmental host-mono issue, not a build
+# problem. The real runtime + self-containment check (bundled Mono, no host
+# Mono) is the AppImage smoke test in package-aaa-appimage.sh.
+if ! file "$OUT_DIR/VhsDecodeAutoAudioAlign.exe" 2>/dev/null | grep -qi "net assembly"; then
+    die "built VhsDecodeAutoAudioAlign.exe is not a valid .NET assembly (file check failed)"
+fi
 
 echo "Built AAA $SEMVER -> $OUT_DIR/VhsDecodeAutoAudioAlign.exe (+ Binah.dll + appimage/)"
