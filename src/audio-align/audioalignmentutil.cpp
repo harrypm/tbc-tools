@@ -771,6 +771,36 @@ QString autoDetectHifiInputAudioFile(const QString &jsonFilename, const QString 
     return autoDetectInputAudioFile(jsonFilename, excludeFile);
 }
 
+QString resolvedAudioAlignPath(QString *errorMessage)
+{
+    if (errorMessage) {
+        errorMessage->clear();
+    }
+    const QString toolPath = resolveAudioAlignExecutablePath();
+    if (toolPath.isEmpty()) {
+        if (errorMessage) {
+            *errorMessage = QObject::tr("VhsDecodeAutoAudioAlign executable not found in PATH or vendored locations.");
+        }
+    }
+    return toolPath;
+}
+
+QStringList audioAlignRunnerCommand(QString *errorMessage)
+{
+    if (errorMessage) {
+        errorMessage->clear();
+    }
+    QString program;
+    QStringList prefixArguments;
+    if (!resolveRunner(&program, &prefixArguments, errorMessage)) {
+        return {};
+    }
+    QStringList runnerCommand;
+    runnerCommand.append(program);
+    runnerCommand.append(prefixArguments);
+    return runnerCommand;
+}
+
 bool runStreamAlign(const QString &jsonFilename,
                     const QString &inputFilename,
                     const QString &outputFilename,

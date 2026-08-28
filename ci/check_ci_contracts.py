@@ -145,6 +145,14 @@ BUNDLE_VERIFY_REQUIRED_SNIPPETS = (
     # AppImage is present, executable, and runs without host mono.
     'run_smoke_test "x86-appimage-aaa-no-host-mono"',
     'run_smoke_test "arm64-aaa-no-host-mono"',
+    # AAA detection: the verifier must confirm ld-analyse's appDir-relative
+    # resolver path actually reaches the AAA AppImage (not just that the file
+    # exists at an absolute path) and launches it via the resolver's
+    # `env APPIMAGE_EXTRACT_AND_RUN=1` mechanism. Catches a bundle that placed
+    # AAA at the wrong relative location (detection would fail at runtime even
+    # though the file is present).
+    'run_smoke_test "x86-appimage-aaa-detection"',
+    'run_smoke_test "arm64-aaa-detection"',
     'require_executable "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"',
     'require_executable "$TARGET/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"',
     'require_path "$ROOT/usr/bin/tbc-video-export"',

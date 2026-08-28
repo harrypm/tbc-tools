@@ -47,4 +47,16 @@ if(BUILD_TESTING)
             --rf-video-sample-rate-hz 40000000
     )
     set_tests_properties(aaa-runtime PROPERTIES SKIP_RETURN_CODE 77)
+
+    # Detection test: verifies the AAA resolver (the same one ld-analyse uses)
+    # actually finds the vendored VhsDecodeAutoAudioAlign executable via the
+    # application-dir-relative vendor lookup + AUDIO_ALIGN_VENDOR_DIR. Fails if
+    # not detected; skips (77) if detected but not launchable in this tree
+    # (e.g. the build-tree .exe with no Mono on PATH — launchability of the
+    # self-contained AppImage is validated by the Linux bundle verifier).
+    add_test(
+        NAME aaa-detection
+        COMMAND $<TARGET_FILE:test-audio-align-runtime> --detect-aaa
+    )
+    set_tests_properties(aaa-detection PROPERTIES SKIP_RETURN_CODE 77)
 endif()

@@ -183,6 +183,20 @@ case "$MODE" in
     require_executable "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"
     run_smoke_test "x86-appimage-aaa-no-host-mono" "$ROOT/.smoke-x86-aaa.log" \
       env APPIMAGE_EXTRACT_AND_RUN=1 "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage" show-build-info
+    # AAA detection: validate ld-analyse's appDir-relative resolver path
+    # actually reaches the AAA AppImage. ld-analyse's applicationDirPath() is
+    # usr/bin, and the resolver probes vendor/vhs_decode_auto_audio_align/
+    # vhs-decode-aaa.AppImage relative to it. Compute that path from ld-analyse's
+    # own directory (not a hard-coded absolute path) so a bundle that placed AAA
+    # at the wrong relative location is caught, then launch it via the same
+    # `env APPIMAGE_EXTRACT_AND_RUN=1` mechanism resolveRunner uses.
+    LD_ANALYSE="$ROOT/usr/bin/ld-analyse"
+    require_path "$LD_ANALYSE"
+    LD_ANALYSE_DIR="$(cd "$(dirname "$LD_ANALYSE")" && pwd)"
+    DETECTED_AAA="$LD_ANALYSE_DIR/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"
+    require_executable "$DETECTED_AAA"
+    run_smoke_test "x86-appimage-aaa-detection" "$ROOT/.smoke-x86-aaa-detect.log" \
+      env APPIMAGE_EXTRACT_AND_RUN=1 "$DETECTED_AAA" show-build-info
     # vhs-teletext vendor payload must be bundled at the resolver path.
     require_path "$ROOT/usr/bin/vendor/vhs-teletext/teletext/__main__.py"
     require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"
@@ -235,6 +249,19 @@ case "$MODE" in
     require_executable "$TARGET/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"
     run_smoke_test "arm64-aaa-no-host-mono" "$TARGET/.smoke-arm64-aaa.log" \
       env APPIMAGE_EXTRACT_AND_RUN=1 "$TARGET/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage" show-build-info
+    # AAA detection: validate ld-analyse's appDir-relative resolver path
+    # actually reaches the AAA AppImage (see the x86-appimage mode for the
+    # rationale). ld-analyse's applicationDirPath() is bin, and the resolver
+    # probes vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage
+    # relative to it. Compute that path from ld-analyse's own directory and
+    # launch it via the resolver's `env APPIMAGE_EXTRACT_AND_RUN=1` mechanism.
+    LD_ANALYSE="$TARGET/bin/ld-analyse"
+    require_path "$LD_ANALYSE"
+    LD_ANALYSE_DIR="$(cd "$(dirname "$LD_ANALYSE")" && pwd)"
+    DETECTED_AAA="$LD_ANALYSE_DIR/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"
+    require_executable "$DETECTED_AAA"
+    run_smoke_test "arm64-aaa-detection" "$TARGET/.smoke-arm64-aaa-detect.log" \
+      env APPIMAGE_EXTRACT_AND_RUN=1 "$DETECTED_AAA" show-build-info
     # vhs-teletext vendor payload must be bundled at the resolver path.
     require_path "$TARGET/bin/vendor/vhs-teletext/teletext/__main__.py"
     require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"

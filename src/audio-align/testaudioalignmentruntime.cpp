@@ -65,7 +65,68 @@ int main(int argc, char *argv[])
         QStringLiteral("40000000"));
     parser.addOption(rfVideoSampleRateOption);
 
+    QCommandLineOption detectAaaOption(
+        QStringList() << QStringLiteral("detect-aaa"),
+        QStringLiteral("Resolve the VhsDecodeAutoAudioAlign executable the way ld-analyse does "
+                       "(application-dir-relative vendor lookup, then PATH) and launch it with "
+                       "show-build-info to confirm it is actually found and runnable. Exits 0 on "
+                       "success, 1 if not found/launchable. No fixtures or ffmpeg required."));
+    parser.addOption(detectAaaOption);
+
     parser.process(app);
+
+    if (parser.isSet(detectAaaOption)) {
+        // Detection (must succeed): the resolver must find the AAA executable
+        // the same way ld-analyse does (application-dir-relative vendor lookup,
+        // then PATH). This is the core check — a broken bundle layout or
+        // resolver regression makes this FAIL, not skip.
+        QString detectError;
+        const QString resolvedPath = AudioAlignmentUtil::resolvedAudioAlignPath(&detectError);
+        if (resolvedPath.isEmpty()) {
+            return failTest(QStringLiteral("AAA not detected: %1").arg(detectError));
+        }
+        QTextStream(stdout) << "Detected AAA: " << resolvedPath << Qt::endl;
+
+        // Launch (best-effort): build the runner argv. If the resolved tool is
+        // the .exe and mono is not on PATH (e.g. a build tree without Mono
+        // installed), the runner cannot be built — SKIP rather than fail,
+        // since detection itself succeeded and launchability is validated
+        // against the self-contained AppImage in the bundle verifier instead.
+        QString runnerError;
+        const QStringList runnerCommand = AudioAlignmentUtil::audioAlignRunnerCommand(&runnerError);
+        if (runnerCommand.isEmpty()) {
+            return skipTest(
+                QStringLiteral("AAA detected at %1 but not launchable here: %2")
+                    .arg(resolvedPath, runnerError));
+        }
+        QTextStream(stdout) << "Runner: " << runnerCommand.join(QLatin1Char(' ')) << Qt::endl;
+
+        // Launch AAA exactly as resolveRunner would (program + prefix args),
+        // appending show-build-info, and confirm it actually runs.
+        QProcess aaaProcess;
+        aaaProcess.setProcessChannelMode(QProcess::MergedChannels);
+        QStringList arguments = runnerCommand;
+        const QString program = arguments.takeFirst();
+        arguments << QStringLiteral("show-build-info");
+        aaaProcess.start(program, arguments);
+        if (!aaaProcess.waitForStarted(5000)) {
+            return failTest(QStringLiteral("Could not start AAA runner: %1").arg(program));
+        }
+        if (!aaaProcess.waitForFinished(60000)
+            || aaaProcess.exitStatus() != QProcess::NormalExit
+            || aaaProcess.exitCode() != 0) {
+            return failTest(QStringLiteral("AAA runner did not complete successfully (exit=%1):\n%2")
+                                .arg(aaaProcess.exitCode())
+                                .arg(QString::fromLocal8Bit(aaaProcess.readAllStandardOutput())));
+        }
+        const QString aaaOutput = QString::fromLocal8Bit(aaaProcess.readAllStandardOutput());
+        if (!aaaOutput.contains(QStringLiteral("audio"), Qt::CaseInsensitive)) {
+            return failTest(QStringLiteral("AAA show-build-info did not report audio (output did not contain 'audio'):\n%1")
+                                .arg(aaaOutput));
+        }
+        QTextStream(stdout) << "AAA detection + launch test passed." << Qt::endl;
+        return 0;
+    }
 
     const QString jsonPath = parser.value(jsonOption).trimmed();
     const QString inputAudioPath = parser.value(inputAudioOption).trimmed();
