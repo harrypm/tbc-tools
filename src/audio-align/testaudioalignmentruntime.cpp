@@ -92,6 +92,16 @@ int main(int argc, char *argv[])
                        "1 on failure."));
     parser.addOption(detectRfSourceRateOption);
 
+    QCommandLineOption detectAaaEnvBinOption(
+        QStringList() << QStringLiteral("detect-aaa-envbin"),
+        QStringLiteral("Bundled-resolution override test: stage a fake bundled AAA AppImage under a "
+                       "temp dir's vendor path, export TBC_TOOLS_APP_BIN_DIR to that dir, and assert "
+                       "resolvedAudioAlignPath finds it there. This covers the Linux AppImage/loader-"
+                       "wrapper case where applicationDirPath() points at the bundled loader's dir "
+                       "(usr/lib) instead of the binaries' dir (usr/bin). No ffmpeg/AAA launch "
+                       "required. Exits 0 on success, 1 on failure."));
+    parser.addOption(detectAaaEnvBinOption);
+
     parser.process(app);
 
     if (parser.isSet(detectAaaOption)) {
@@ -298,6 +308,62 @@ int main(int argc, char *argv[])
 
         QTextStream(stdout) << "AAA RF source-rate provision test passed. with_rf="
                             << detectedWithRf << " without_rf=" << detectedWithoutRf << Qt::endl;
+        return 0;
+    }
+
+    if (parser.isSet(detectAaaEnvBinOption)) {
+        // Reproduces the Linux AppImage loader-wrapper condition: the bundled
+        // glibc loader launches the real ELF, so QCoreApplication::applicationDirPath()
+        // returns the loader's dir (usr/lib) rather than the binaries' dir (usr/bin)
+        // where the vendored AAA lives. The resolver honors an explicit
+        // TBC_TOOLS_APP_BIN_DIR override (and a ../bin heuristic) to find the
+        // bundled AAA regardless. Stage a fake bundled AppImage under a temp
+        // dir's vendor path, point TBC_TOOLS_APP_BIN_DIR at that dir, and assert
+        // resolvedAudioAlignPath reaches it. qputenv must run before
+        // QCoreApplication exists (it already does at this point); the env var
+        // is read lazily inside resolveAudioAlignExecutablePath.
+        QTemporaryDir stageDir;
+        if (!stageDir.isValid()) {
+            return failTest(QStringLiteral("Could not create temp dir for detect-aaa-envbin test."));
+        }
+        const QString binDir = stageDir.path() + QStringLiteral("/bin");
+        const QString vendorDir = binDir + QStringLiteral("/vendor/vhs_decode_auto_audio_align");
+        if (!QDir().mkpath(vendorDir)) {
+            return failTest(QStringLiteral("Could not create staged vendor dir: %1").arg(vendorDir));
+        }
+        const QString stagedAppImage = vendorDir + QStringLiteral("/vhs-decode-aaa.AppImage");
+        {
+            QFile f(stagedAppImage);
+            if (!f.open(QIODevice::WriteOnly)) {
+                return failTest(QStringLiteral("Could not create staged AAA AppImage: %1").arg(stagedAppImage));
+            }
+            f.write("#!/bin/sh\necho fake-aaa\n");
+            f.close();
+        }
+        if (!QFile::setPermissions(stagedAppImage,
+                QFile::permissions(stagedAppImage) | QFile::ExeOwner | QFile::ExeUser | QFile::ExeGroup | QFile::ExeOther)) {
+            return failTest(QStringLiteral("Could not make staged AAA AppImage executable."));
+        }
+        // Export the override so the resolver probes binDir/vendor/... even though
+        // applicationDirPath() (this test binary's dir) is unrelated to stageDir.
+        const QByteArray envBin = binDir.toUtf8();
+        qputenv("TBC_TOOLS_APP_BIN_DIR", envBin.constData());
+
+        // The env-bin vendor candidate (envBinDir/vendor/vhs_decode_auto_audio_align)
+        // is appended to the resolver's candidate list before the AUDIO_ALIGN_VENDOR_DIR
+        // candidate, and no earlier candidate in the ctest environment ships an
+        // AppImage, so the resolver must return the staged AppImage. A regression that
+        // drops the env-bin candidate makes this fail.
+        QString detectError;
+        const QString resolvedPath = AudioAlignmentUtil::resolvedAudioAlignPath(&detectError);
+        if (resolvedPath.isEmpty()) {
+            return failTest(QStringLiteral("resolvedAudioAlignPath returned nothing with TBC_TOOLS_APP_BIN_DIR=%1: %2").arg(binDir, detectError));
+        }
+        if (resolvedPath.compare(stagedAppImage, Qt::CaseInsensitive) != 0) {
+            return failTest(QStringLiteral("resolvedAudioAlignPath should return the staged env-bin AAA (%1), got %2")
+                                .arg(stagedAppImage, resolvedPath));
+        }
+        QTextStream(stdout) << "AAA env-bin bundled-resolution test passed. resolved=" << resolvedPath << Qt::endl;
         return 0;
     }
 

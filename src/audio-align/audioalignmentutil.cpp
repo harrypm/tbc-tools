@@ -128,14 +128,24 @@ QString resolveBundledOrPathTool(const QString &baseName)
         return QString();
     }
 
+    // applicationDirPath() may point at the bundled loader's dir (usr/lib) in
+    // the Linux AppImage rather than the binaries' dir (usr/bin) — see the
+    // comment in resolveAudioAlignExecutablePath. Probe ../bin (usr/lib ->
+    // usr/bin) and honor an explicit TBC_TOOLS_APP_BIN_DIR override so the
+    // bundled ffmpeg/ffprobe are found via the bundle, not just PATH.
     const QString appDir = QCoreApplication::applicationDirPath();
+    const QString envBinDir = qEnvironmentVariable("TBC_TOOLS_APP_BIN_DIR");
     QStringList candidateDirs;
     appendUniqueCandidate(candidateDirs, appDir);
     appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("bin")));
+    appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../bin")));
     appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../MacOS")));
     appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../Resources/bin")));
     appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../../MacOS")));
     appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../../Resources/bin")));
+    if (!envBinDir.isEmpty()) {
+        appendUniqueCandidate(candidateDirs, envBinDir);
+    }
 
     const QString currentDir = QDir::currentPath();
     appendUniqueCandidate(candidateDirs, currentDir);
@@ -182,10 +192,30 @@ QString resolveAudioAlignExecutablePath()
     appendUniqueCandidate(pathCandidates, QStandardPaths::findExecutable(QStringLiteral("VhsDecodeAutoAudioAlign.exe")));
     appendUniqueCandidate(pathCandidates, QStandardPaths::findExecutable(QStringLiteral("vhs-decode-auto-audio-align.exe")));
 
+    // QCoreApplication::applicationDirPath() returns the directory of the
+    // running executable. In the Linux AppImage the ld-analyse bash wrapper
+    // launches the real ELF via the bundled glibc loader
+    // (exec <usr/lib/ld-linux-x86-64.so.2> --library-path usr/lib <usr/bin/.ld-analyse.real>),
+    // so /proc/self/exe (and thus applicationDirPath()) points at usr/lib,
+    // NOT usr/bin where the vendored AAA lives. Probe several relative
+    // layouts so the bundled AAA is found regardless of which directory Qt
+    // reports: ../bin (AppImage loader case: usr/lib -> usr/bin), the usual
+    // vendor subdirectories, and an explicit TBC_TOOLS_APP_BIN_DIR override
+    // the launcher may export to declare the real binary directory.
     const QString appDir = QCoreApplication::applicationDirPath();
+    const QString envBinDir = qEnvironmentVariable("TBC_TOOLS_APP_BIN_DIR");
     QStringList candidateDirs;
+    // An explicit launcher override takes priority over heuristic appDir
+    // probing: the Linux AppImage/tbc-tools-run launcher knows the real binary
+    // directory even when applicationDirPath() reports the bundled loader's dir.
+    if (!envBinDir.isEmpty()) {
+        appendUniqueCandidate(candidateDirs, QDir(envBinDir).filePath(QStringLiteral("vendor/vhs_decode_auto_audio_align")));
+        appendUniqueCandidate(candidateDirs, envBinDir);
+    }
     appendUniqueCandidate(candidateDirs, appDir);
+    appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../bin")));
     appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("vendor/vhs_decode_auto_audio_align")));
+    appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../bin/vendor/vhs_decode_auto_audio_align")));
     appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../vendor/vhs_decode_auto_audio_align")));
     appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../../vendor/vhs_decode_auto_audio_align")));
     appendUniqueCandidate(candidateDirs, QDir(appDir).filePath(QStringLiteral("../share/tbc-audio-align/vendor/vhs_decode_auto_audio_align")));

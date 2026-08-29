@@ -76,4 +76,14 @@ if(BUILD_TESTING)
         NAME aaa-detect-rf-source-rate
         COMMAND $<TARGET_FILE:test-audio-align-runtime> --detect-rf-source-rate
     )
+
+    # Bundled-resolution override test: verifies the resolver honors the
+    # TBC_TOOLS_APP_BIN_DIR override (and ../bin heuristic) so the bundled AAA
+    # is found inside the Linux AppImage, where the loader-wrapper makes
+    # applicationDirPath() point at usr/lib instead of usr/bin. Pure logic
+    # (temp fixtures) — no ffmpeg/AAA launch.
+    add_test(
+        NAME aaa-detect-aaa-envbin
+        COMMAND $<TARGET_FILE:test-audio-align-runtime> --detect-aaa-envbin
+    )
 endif()
