@@ -508,6 +508,53 @@ bool detectAudioSampleRateHz(const QString &ffprobePath,
     return true;
 }
 
+// Detects the channel count of the first audio stream via ffprobe. AAA always
+// receives interleaved stereo s24le (sample-size-bytes 6 = 24-bit * 2ch), so the
+// decode step must up-mix/down-mix to stereo first; this count selects the
+// correct channel filter (mono has no FL/FR labels, so the stereo identity
+// channelmap must not be used for it). Returns false on ffprobe failure.
+bool detectAudioChannelCount(const QString &ffprobePath,
+                             const QString &inputFilename,
+                             int *channelCount,
+                             QString *errorMessage)
+{
+    QString output;
+    QString processError;
+    const QStringList arguments = {
+        QStringLiteral("-v"), QStringLiteral("error"),
+        QStringLiteral("-select_streams"), QStringLiteral("a:0"),
+        QStringLiteral("-show_entries"), QStringLiteral("stream=channels"),
+        QStringLiteral("-of"), QStringLiteral("default=noprint_wrappers=1:nokey=1"),
+        inputFilename
+    };
+    if (!runProcess(ffprobePath,
+                    arguments,
+                    QString(),
+                    {},
+                    AudioAlignmentUtil::CancelCallback(),
+                    &output,
+                    &processError)) {
+        if (errorMessage) {
+            *errorMessage = processError.isEmpty()
+                ? QObject::tr("Unable to detect audio channel count using ffprobe.")
+                : processError;
+        }
+        return false;
+    }
+
+    bool ok = false;
+    const int parsedChannels = output.trimmed().toInt(&ok);
+    if (!ok || parsedChannels <= 0) {
+        if (errorMessage) {
+            *errorMessage = QObject::tr("ffprobe returned an invalid channel count: %1").arg(output);
+        }
+        return false;
+    }
+
+    *channelCount = parsedChannels;
+    return true;
+}
+
 bool isAudioInputExtensionSupported(const QString &suffix)
 {
     return suffix == QStringLiteral("wav") || suffix == QStringLiteral("flac");
@@ -1014,6 +1061,10 @@ bool runStreamAlign(const QString &jsonFilename,
     if (!detectAudioSampleRateHz(ffprobePath, normalizedInput, &streamSampleRateHz, errorMessage)) {
         return false;
     }
+    int streamChannelCount = 0;
+    if (!detectAudioChannelCount(ffprobePath, normalizedInput, &streamChannelCount, errorMessage)) {
+        return false;
+    }
     if (cancellationRequested()) {
         setCancelledError();
         return false;
@@ -1033,10 +1084,22 @@ bool runStreamAlign(const QString &jsonFilename,
     QString processOutput;
     QString processError;
 
+    // AAA aligns interleaved stereo s24le (--sample-size-bytes 6 = 24-bit * 2ch),
+    // so the decode step always emits 2 channels. The legacy identity remap
+    // channelmap=map=FL-FL|FR-FR assumes the input already exposes FL/FR and
+    // fails on mono ("input channel 'FL' not available from input layout
+    // 'mono'") — the exact regression reported on a mono linear-audio capture.
+    // Up-mix mono to stereo with pan, duplicating the single channel (referenced
+    // by index c0 so it is layout-agnostic) into both FL and FR; keep the
+    // identity remap for multi-channel inputs that already expose FL/FR.
+    const QString decodeChannelFilter = (streamChannelCount == 1)
+        ? QStringLiteral("pan=stereo|FL=c0|FR=c0")
+        : QStringLiteral("channelmap=map=FL-FL|FR-FR");
+
     QStringList decodeArguments = {
         QStringLiteral("-y"),
         QStringLiteral("-i"), normalizedInput,
-        QStringLiteral("-filter_complex"), QStringLiteral("channelmap=map=FL-FL|FR-FR"),
+        QStringLiteral("-filter_complex"), decodeChannelFilter,
         QStringLiteral("-f"), QStringLiteral("s24le"),
         QStringLiteral("-ac"), QStringLiteral("2"),
         QStringLiteral("-ar"), QString::number(streamSampleRateHz),
