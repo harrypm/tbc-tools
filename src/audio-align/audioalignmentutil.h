@@ -54,7 +54,8 @@ bool runStreamAlign(const QString &jsonFilename,
                     bool overwriteOutput,
                     const ProgressCallback &progressCallback = ProgressCallback(),
                     const CancelCallback &cancelCallback = CancelCallback(),
-                    QString *errorMessage = nullptr);
+                    QString *errorMessage = nullptr,
+                    bool convertMonoToStereo = true);
 }
 
 #endif // AUDIOALIGNMENTUTIL_H

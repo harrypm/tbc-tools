@@ -983,7 +983,8 @@ bool runStreamAlign(const QString &jsonFilename,
                     bool overwriteOutput,
                     const ProgressCallback &progressCallback,
                     const CancelCallback &cancelCallback,
-                    QString *errorMessage)
+                    QString *errorMessage,
+                    bool convertMonoToStereo)
 {
     if (errorMessage) {
         errorMessage->clear();
@@ -1084,27 +1085,42 @@ bool runStreamAlign(const QString &jsonFilename,
     QString processOutput;
     QString processError;
 
-    // AAA aligns interleaved stereo s24le (--sample-size-bytes 6 = 24-bit * 2ch),
-    // so the decode step always emits 2 channels. The legacy identity remap
+    // AAA aligns interleaved s24le; one "sample" is sample-size-bytes (24-bit
+    // * outputChannels). By default mono is up-mixed to stereo (2ch, 6 bytes) so
+    // AAA receives its expected stereo feed. When the caller opts to keep a mono
+    // input mono (convertMonoToStereo=false), the decode emits 1ch (3 bytes) and
+    // AAA is invoked with --sample-size-bytes 3. The legacy identity remap
     // channelmap=map=FL-FL|FR-FR assumes the input already exposes FL/FR and
     // fails on mono ("input channel 'FL' not available from input layout
     // 'mono'") — the exact regression reported on a mono linear-audio capture.
-    // Up-mix mono to stereo with pan, duplicating the single channel (referenced
-    // by index c0 so it is layout-agnostic) into both FL and FR; keep the
-    // identity remap for multi-channel inputs that already expose FL/FR.
-    const QString decodeChannelFilter = (streamChannelCount == 1)
-        ? QStringLiteral("pan=stereo|FL=c0|FR=c0")
-        : QStringLiteral("channelmap=map=FL-FL|FR-FR");
+    // Up-mix mono->stereo with pan (referencing the single channel by index c0
+    // so it is layout-agnostic) when conversion is requested; pass mono through
+    // unchanged (no channel filter) when it is not; keep the identity remap for
+    // multi-channel inputs that already expose FL/FR.
+    const bool inputIsMono = (streamChannelCount == 1);
+    const bool keepMono = inputIsMono && !convertMonoToStereo;
+    const int outputChannels = keepMono ? 1 : 2;
+    const int sampleSizeBytes = outputChannels * 3; // 24-bit samples
 
-    QStringList decodeArguments = {
-        QStringLiteral("-y"),
-        QStringLiteral("-i"), normalizedInput,
-        QStringLiteral("-filter_complex"), decodeChannelFilter,
-        QStringLiteral("-f"), QStringLiteral("s24le"),
-        QStringLiteral("-ac"), QStringLiteral("2"),
-        QStringLiteral("-ar"), QString::number(streamSampleRateHz),
-        rawInputPath
-    };
+    QString decodeChannelFilter;
+    if (inputIsMono) {
+        decodeChannelFilter = keepMono
+            ? QString()
+            : QStringLiteral("pan=stereo|FL=c0|FR=c0");
+    } else {
+        decodeChannelFilter = QStringLiteral("channelmap=map=FL-FL|FR-FR");
+    }
+
+    QStringList decodeArguments;
+    decodeArguments << QStringLiteral("-y")
+                    << QStringLiteral("-i") << normalizedInput;
+    if (!decodeChannelFilter.isEmpty()) {
+        decodeArguments << QStringLiteral("-filter_complex") << decodeChannelFilter;
+    }
+    decodeArguments << QStringLiteral("-f") << QStringLiteral("s24le")
+                    << QStringLiteral("-ac") << QString::number(outputChannels)
+                    << QStringLiteral("-ar") << QString::number(streamSampleRateHz)
+                    << rawInputPath;
     emitProgress(progressCallback, 10, QObject::tr("Decoding input audio..."));
     if (!runProcess(ffmpegPath, decodeArguments, QString(),
                     [&](const QString &outputLine) {
@@ -1129,7 +1145,7 @@ bool runStreamAlign(const QString &jsonFilename,
 
     QStringList alignArguments = alignLauncherPrefix;
     alignArguments << QStringLiteral("stream-align")
-                   << QStringLiteral("--sample-size-bytes") << QStringLiteral("6")
+                   << QStringLiteral("--sample-size-bytes") << QString::number(sampleSizeBytes)
                    << QStringLiteral("--stream-sample-rate-hz") << QString::number(streamSampleRateHz)
                    << QStringLiteral("--json") << normalizedJson
                    << QStringLiteral("--rf-video-sample-rate-hz") << QString::number(rfVideoSampleRateHz)
@@ -1162,7 +1178,7 @@ bool runStreamAlign(const QString &jsonFilename,
         QStringLiteral("-y"),
         QStringLiteral("-f"), QStringLiteral("s24le"),
         QStringLiteral("-ar"), QString::number(streamSampleRateHz),
-        QStringLiteral("-ac"), QStringLiteral("2"),
+        QStringLiteral("-ac"), QString::number(outputChannels),
         QStringLiteral("-i"), rawAlignedPath
     };
     if (streamSampleRateHz != 48000) {

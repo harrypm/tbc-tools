@@ -276,6 +276,23 @@
        </property>
       </widget>
      </item>
+     <item row="9" column="0">
+      <widget class="QLabel" name="monoConversionLabel">
+       <property name="text">
+        <string>Mono Conversion</string>
+       </property>
+      </widget>
+     </item>
+     <item row="9" column="1">
+      <widget class="QCheckBox" name="convertMonoToStereoCheckBox">
+       <property name="text">
+        <string>Convert mono to stereo (linear/baseband)</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
    <item>

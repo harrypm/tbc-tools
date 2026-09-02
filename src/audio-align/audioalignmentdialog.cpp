@@ -86,6 +86,18 @@ AudioAlignmentDialog::AudioAlignmentDialog(QWidget *parent) :
     if (ui->loadTracksForExportLabel) {
         ui->loadTracksForExportLabel->setToolTip(loadTracksForExportTooltip);
     }
+    const QString convertMonoTooltip = tr(
+        "When the Linear/Baseband input is a mono (1-channel) file, up-mix it to "
+        "stereo before alignment (AAA processes interleaved stereo). Enabled by "
+        "default. Uncheck to keep a mono input mono throughout alignment. No "
+        "effect on stereo/multi-channel or HiFi inputs.");
+    if (ui->convertMonoToStereoCheckBox) {
+        ui->convertMonoToStereoCheckBox->setChecked(true);
+        ui->convertMonoToStereoCheckBox->setToolTip(convertMonoTooltip);
+    }
+    if (ui->monoConversionLabel) {
+        ui->monoConversionLabel->setToolTip(convertMonoTooltip);
+    }
     if (ui->cancelButton) {
         ui->cancelButton->setToolTip(tr("Force stop the currently running alignment process."));
     }
@@ -160,6 +172,7 @@ void AudioAlignmentDialog::setAlignmentUiBusy(bool busy)
     setWidgetEnabled(ui->rfVideoSampleRateCustomSpinBox);
     setWidgetEnabled(ui->overwriteCheckBox);
     setWidgetEnabled(ui->loadTracksForExportCheckBox);
+    setWidgetEnabled(ui->convertMonoToStereoCheckBox);
 
     if (ui->alignButton) {
         ui->alignButton->setEnabled(enabled);
@@ -246,7 +259,8 @@ void AudioAlignmentDialog::startAlignmentRun(const QString &jsonFileName,
                     updateProgressStatus(trackRequest.trackLabel, stagePercent, stageMessage);
                 },
                 cancellationRequested,
-                &trackErrorMessage);
+                &trackErrorMessage,
+                trackRequest.convertMonoToStereo);
             if (!success) {
                 runResult.success = false;
                 runResult.errorMessage = trackErrorMessage;
@@ -723,6 +737,8 @@ void AudioAlignmentDialog::on_alignButton_clicked()
         request.trackLabel = tr("Baseband");
         request.inputFile = linearInputFileName;
         request.outputFile = linearOutputFileName;
+        request.convertMonoToStereo = ui->convertMonoToStereoCheckBox
+            && ui->convertMonoToStereoCheckBox->isChecked();
         trackRequests.push_back(request);
     }
     if (hasHifiTrack) {

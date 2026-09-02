@@ -57,6 +57,7 @@ private:
         QString trackLabel;
         QString inputFile;
         QString outputFile;
+        bool convertMonoToStereo = true;
     };
     struct AlignmentRunResult {
         bool success = false;
