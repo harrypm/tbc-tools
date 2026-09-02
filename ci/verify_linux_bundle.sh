@@ -121,6 +121,91 @@ run_smoke_test() {
   fi
 }
 
+# End-to-end AAA usability smoke test: drive the bundled AAA AppImage's
+# `stream-align` action (the exact codepath ld-analyse runs when the user
+# clicks Align) against a tiny synthesized fixture, and assert it produced
+# non-empty aligned output. This proves AAA is not merely detectable but
+# callable AND usable from ld-analyse (or independently), as opposed to just
+# `show-build-info`.
+#
+# Args: $1 = label prefix (e.g. x86-appimage / arm64)
+#       $2 = log dir (where the smoke log + scratch fixtures are written)
+#       $3 = path to the bundled AAA AppImage (vhs-decode-aaa.AppImage)
+#       $4 = path to the bundled ffmpeg (presence check only; synthesis
+#            prefers the system ffmpeg if available — the bundled ffmpeg's
+#            loader-wrapper hangs under `timeout` in some extraction contexts,
+#            and the synthesis step is fixture prep, not the thing under test)
+#       $5 = path to the bundle's AppRun launcher (reserved, unused)
+# Uses APPIMAGE_EXTRACT_AND_RUN=1 (the resolver's launch mechanism).
+run_aaa_stream_align_smoke() {
+  local label="$1"
+  local log_dir="$2"
+  local aaa_appimage="$3"
+  local ffmpeg_bin="$4"
+  local apprun_bin="$5"
+  require_executable "$aaa_appimage"
+  require_path "$ffmpeg_bin"
+  # Prefer the system ffmpeg for the fixture synthesis step (it's just test
+  # data prep, not the thing under test — the bundled ffmpeg is already
+  # validated by the x86-appimage-apprun-ffmpeg smoke test). The bundled
+  # ffmpeg wrapper hangs under `timeout` in some squashfs-extraction contexts.
+  local synth_ffmpeg
+  synth_ffmpeg="$(command -v ffmpeg || true)"
+  [ -n "$synth_ffmpeg" ] || synth_ffmpeg="$ffmpeg_bin"
+  # Scratch fixtures go in a temp dir under TMPDIR (not inside the extracted
+  # bundle, which may be read-only when extracted from squashfs as non-root).
+  local smoke_dir
+  smoke_dir="$(mktemp -d "${TMPDIR:-/tmp}/.aaa-smoke.XXXXXX")"
+  # Minimal TBC metadata JSON (2 PAL fields) — AAA only needs the field
+  # timing/line info, not the .tbc samples, for stream-align.
+  cat > "$smoke_dir/fixture.tbc.json" <<'JSON'
+{"videoParameters":{"system":"PAL","fieldWidth":1135","sampleRate":40000000,"activeVideoEnd":1130},"fields":[{"fieldLineCount":312,"firstActiveFieldLine":3,"lastActiveFieldLine":308},{"fieldLineCount":312,"firstActiveFieldLine":3,"lastActiveFieldLine":308}]}
+JSON
+  # Synthesize ~0.1s of 48kHz stereo audio -> raw s24le (3 bytes/sample,
+  # the format AAA expects: sample-size-bytes 6). A single sine source
+  # duplicated to stereo via -ac 2 avoids a complex amerge filtergraph that is
+  # fragile across ffmpeg builds. ffmpeg is in the bundle. Use an explicit
+  # exit-code check (not `|| { ... }`) so set -e doesn't interact with the
+  # ffmpeg wrapper's own set -e / loader exec chain.
+  # Synthesize ~0.1s of 48kHz stereo audio -> raw s24le (3 bytes/sample,
+  # the format AAA expects: sample-size-bytes 6). A single sine source
+  # duplicated to stereo via -ac 2 avoids a complex amerge filtergraph that is
+  # fragile across ffmpeg builds.
+  local ff_exit=0
+  timeout 30 "$synth_ffmpeg" -y -hide_banner -loglevel error \
+    -f lavfi -i "sine=frequency=1000:duration=0.1" \
+    -f s24le -ac 2 -ar 48000 "$smoke_dir/audio_input.s24le" \
+    >"$log_dir/.smoke-${label}-aaa-ffmpeg.log" 2>&1 || ff_exit=$?
+  if [ "$ff_exit" -ne 0 ] || [ ! -f "$smoke_dir/audio_input.s24le" ]; then
+    echo "AAA stream-align smoke test failed: $label (ffmpeg could not synthesize input audio, exit=$ff_exit)" >&2
+    sed -n '1,200p' "$log_dir/.smoke-${label}-aaa-ffmpeg.log" >&2 || true
+    rm -rf "$smoke_dir"
+    exit 1
+  fi
+  rm -f "$log_dir/.smoke-${label}-aaa-ffmpeg.log"
+  local aligned="$smoke_dir/audio_aligned.s24le"
+  rm -f "$aligned"
+  # stream-align: the real ld-analyse invocation (program + prefix args +
+  # stream-align + its switches). resolveRunner launches the AppImage via
+  # `env APPIMAGE_EXTRACT_AND_RUN=1 <appimage>`.
+  local exit_code=0
+  timeout 60 env APPIMAGE_EXTRACT_AND_RUN=1 "$aaa_appimage" stream-align \
+    --sample-size-bytes 6 --stream-sample-rate-hz 48000 \
+    --json "$smoke_dir/fixture.tbc.json" \
+    --rf-video-sample-rate-hz 40000000 \
+    --input-file "$smoke_dir/audio_input.s24le" \
+    --output-file "$aligned" --overwrite \
+    >"$log_dir/.smoke-${label}-aaa-stream-align.log" 2>&1 || exit_code=$?
+  if [ "$exit_code" -ne 0 ] || [ ! -s "$aligned" ]; then
+    echo "AAA stream-align usability smoke test failed: $label (exit=$exit_code, output non-empty=$([ -s "$aligned" ] && echo yes || echo no))" >&2
+    sed -n '1,200p' "$log_dir/.smoke-${label}-aaa-stream-align.log" >&2 || true
+    rm -rf "$smoke_dir"
+    exit 1
+  fi
+  rm -rf "$smoke_dir"
+  rm -f "$log_dir/.smoke-${label}-aaa-stream-align.log"
+}
+
 if [ "$#" -ne 2 ]; then
   usage
 fi
@@ -197,6 +282,12 @@ case "$MODE" in
     require_executable "$DETECTED_AAA"
     run_smoke_test "x86-appimage-aaa-detection" "$ROOT/.smoke-x86-aaa-detect.log" \
       env APPIMAGE_EXTRACT_AND_RUN=1 "$DETECTED_AAA" show-build-info
+    # AAA usability: drive the bundled AAA AppImage's `stream-align` (the
+    # exact codepath ld-analyse runs on Align) against a synthesized fixture
+    # and assert it produced non-empty aligned output. Proves AAA is callable
+    # AND usable, not merely detectable. Uses the bundle's ffmpeg to make the
+    # input audio so the test is self-contained at runtime.
+    run_aaa_stream_align_smoke "x86-appimage" "$ROOT" "$DETECTED_AAA" "$ROOT/usr/bin/ffmpeg" "$ROOT/AppRun"
     # vhs-teletext vendor payload must be bundled at the resolver path.
     require_path "$ROOT/usr/bin/vendor/vhs-teletext/teletext/__main__.py"
     require_path "$ROOT/usr/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"
@@ -262,6 +353,10 @@ case "$MODE" in
     require_executable "$DETECTED_AAA"
     run_smoke_test "arm64-aaa-detection" "$TARGET/.smoke-arm64-aaa-detect.log" \
       env APPIMAGE_EXTRACT_AND_RUN=1 "$DETECTED_AAA" show-build-info
+    # AAA usability: drive the bundled AAA AppImage's `stream-align` (the
+    # exact codepath ld-analyse runs on Align) against a synthesized fixture
+    # and assert it produced non-empty aligned output (see x86-appimage mode).
+    run_aaa_stream_align_smoke "arm64" "$TARGET" "$DETECTED_AAA" "$TARGET/bin/ffmpeg" "$TARGET/tbc-tools-run"
     # vhs-teletext vendor payload must be bundled at the resolver path.
     require_path "$TARGET/bin/vendor/vhs-teletext/teletext/__main__.py"
     require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext-noscanlines.css"

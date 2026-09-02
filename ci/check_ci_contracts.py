@@ -153,6 +153,12 @@ BUNDLE_VERIFY_REQUIRED_SNIPPETS = (
     # though the file is present).
     'run_smoke_test "x86-appimage-aaa-detection"',
     'run_smoke_test "arm64-aaa-detection"',
+    # AAA usability: the verifier must drive the bundled AAA AppImage's
+    # `stream-align` (the exact codepath ld-analyse runs on Align) against a
+    # synthesized fixture and assert non-empty aligned output — proving AAA is
+    # callable AND usable, not merely detectable via show-build-info.
+    'run_aaa_stream_align_smoke "x86-appimage"',
+    'run_aaa_stream_align_smoke "arm64"',
     'require_executable "$ROOT/usr/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"',
     'require_executable "$TARGET/bin/vendor/vhs_decode_auto_audio_align/vhs-decode-aaa.AppImage"',
     'require_path "$ROOT/usr/bin/tbc-video-export"',
