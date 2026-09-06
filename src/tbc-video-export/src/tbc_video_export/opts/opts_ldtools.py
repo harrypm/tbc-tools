@@ -184,7 +184,9 @@ def add_ldtool_opts(parent: argparse.ArgumentParser) -> None:
             f"  {ChromaDecoder.PAL2D} (default for PAL/PAL-M S-Video)\n"
             f"  {ChromaDecoder.TRANSFORM2D}\n"
             f"  {ChromaDecoder.TRANSFORM3D} (default for PAL/PAL-M CVBS)\n"
-            f"  {ChromaDecoder.SECAM} (for SECAM/MESECAM tapes)\n\n"
+            f"  {ChromaDecoder.SECAM} (for SECAM/MESECAM FM-block sources)\n"
+            f"  {ChromaDecoder.SECAM_PREDEMOD} (for SECAM/MESECAM pre-demod "
+            "Dr/Db sources)\n\n"
             f"  {ChromaDecoder.NTSC1D}\n"
             f"  {ChromaDecoder.NTSC2D} (default for NTSC S-Video and CVBS)\n"
             f"  {ChromaDecoder.NTSC3D} (default for NTSC CVBS LD)\n"
@@ -314,6 +316,24 @@ def add_ldtool_opts(parent: argparse.ArgumentParser) -> None:
         help=(
             "Transform: Use 1D UV filter.\n"
             "  - Only available with Transform decoders."
+            "\n\n"
+        ),
+    )
+
+    # decoder (secam)
+    secam_decoder_opts = parent.add_argument_group("decoder (SECAM)")
+    secam_decoder_opts.add_argument(
+        "--secam-first-line-is-red",
+        type=str,
+        choices=["auto", "true", "false", "red", "blue"],
+        default=None,
+        metavar="auto|true|false",
+        help=(
+            "SECAM pre-demod: force the first active line identity.\n"
+            "  - auto (default): use the per-field secamFirstLineIsRed metadata.\n"
+            "  - true/red: first line is D'R.\n"
+            "  - false/blue: first line is D'B.\n"
+            "  - Only applies to the secam-predemod decoder."
             "\n\n"
         ),
     )

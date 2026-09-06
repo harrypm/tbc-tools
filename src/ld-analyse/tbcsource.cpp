@@ -1673,6 +1673,21 @@ qint32 TbcSource::getSecondFieldNumber() const
     return secondFieldNumber;
 }
 
+// SECAM per-field first-line identity for the loaded frame's first field.
+// Used by the Metadata Editor to show the current value of secamFirstLineIsRed.
+bool TbcSource::getSecamFirstLineIsRed(qint32 fieldNumber) const
+{
+    if (loadedFrameNumber == -1) return false;
+    if (fieldNumber == firstFieldNumber) return firstField.secamFirstLineIsRed;
+    if (fieldNumber == secondFieldNumber) return secondField.secamFirstLineIsRed;
+    // Fall back to the metadata store for fields not currently loaded into the
+    // first/second field cache (e.g. when the editor queries an arbitrary field).
+    if (fieldNumber >= 1 && fieldNumber <= metaData.getNumberOfFields()) {
+        return metaData.getField(fieldNumber).secamFirstLineIsRed;
+    }
+    return false;
+}
+
 qint32 TbcSource::getCcData0() const
 {
     if (loadedFrameNumber == -1) return 0;
@@ -1868,11 +1883,50 @@ void TbcSource::configureChromaDecoder()
         // and hybrid preview modes still work.
         secamConfiguration.chromaGain = palConfiguration.chromaGain;
         secamDecoder.updateConfiguration(videoParameters, secamConfiguration);
+        // The pre-demod SECAM decoder does no FM demodulation; it only needs
+        // the line geometry plus the chroma gain and the live first-line
+        // identity override (set from the chroma config dialog).
+        secamPredemodConfiguration.chromaGain = palConfiguration.chromaGain;
+        secamPredemodConfiguration.firstLineIsRedOverride = secamPredemodFirstLineIsRedOverride;
+        secamPredemodDecoder.updateConfiguration(videoParameters, secamPredemodConfiguration);
     }
 
     // Configure the OutputWriter.
     // Because we have padding disabled, this won't change the VideoParameters.
     outputWriter.updateConfiguration(videoParameters, outputConfiguration);
+}
+
+void TbcSource::setSecamPredemodFirstLineIsRedOverride(qint8 override)
+{
+    secamPredemodFirstLineIsRedOverride = override;
+    // Push it into the live decoder config so the next decode uses it.
+    secamPredemodConfiguration.firstLineIsRedOverride = override;
+    const TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
+    if (videoParameters.system == PAL || videoParameters.system == PAL_M
+        || videoParameters.system == SECAM || videoParameters.system == MESECAM) {
+        secamPredemodDecoder.updateConfiguration(videoParameters, secamPredemodConfiguration);
+    }
+    invalidateImageCache();
+}
+
+void TbcSource::setSecamFirstLineIsRed(qint32 fieldNumber, bool value, bool applyToAll)
+{
+    if (!getIsSourceLoaded()) return;
+
+    if (applyToAll) {
+        const qint32 totalFields = metaData.getNumberOfFields();
+        for (qint32 i = 1; i <= totalFields; i++) {
+            TbcMetaData::Field field = metaData.getField(i);
+            field.secamFirstLineIsRed = value;
+            metaData.updateField(field, i);
+        }
+    } else {
+        TbcMetaData::Field field = metaData.getField(fieldNumber);
+        field.secamFirstLineIsRed = value;
+        metaData.updateField(field, fieldNumber);
+    }
+
+    invalidateImageCache();
 }
 
 void TbcSource::applyChromaSettingsFromMetadata(const TbcMetaData::VideoParameters &videoParameters)
@@ -1918,16 +1972,22 @@ void TbcSource::applyChromaSettingsFromMetadata(const TbcMetaData::VideoParamete
 
     if (!videoParameters.chromaDecoder.isEmpty()) {
         const QString decoder = videoParameters.chromaDecoder.toLower();
-        if (videoParameters.system == PAL || videoParameters.system == PAL_M
-            || videoParameters.system == SECAM || videoParameters.system == MESECAM) {
+        if (videoParameters.system == PAL || videoParameters.system == PAL_M) {
             if (decoder == "pal2d") {
                 palConfiguration.chromaFilter = PalColour::palColourFilter;
             } else if (decoder == "transform2d") {
                 palConfiguration.chromaFilter = PalColour::transform2DFilter;
             } else if (decoder == "transform3d") {
                 palConfiguration.chromaFilter = PalColour::transform3DFilter;
-            } else if (decoder == "secam") {
+            } else if (decoder == "mono") {
+                palConfiguration.chromaFilter = PalColour::mono;
+            }
+        } else if (videoParameters.system == SECAM || videoParameters.system == MESECAM) {
+            // SECAM is its own system: only SECAM decoders (and mono) are valid.
+            if (decoder == "secam") {
                 palConfiguration.chromaFilter = PalColour::secam;
+            } else if (decoder == "secam-predemod") {
+                palConfiguration.chromaFilter = PalColour::secamPredemod;
             } else if (decoder == "mono") {
                 palConfiguration.chromaFilter = PalColour::mono;
             }
@@ -2027,6 +2087,9 @@ void TbcSource::decodeFrame()
 		if ((getSystem() == PAL || getSystem() == PAL_M || getSystem() == SECAM || getSystem() == MESECAM) && palConfiguration.chromaFilter == PalColour::secam) {
 			// SECAM source: the chroma TBC carries a restored studio SECAM FM block
 			secamDecoder.decodeFrames(chromaInputFields, inputStartIndex, inputEndIndex, cFrames);
+		} else if ((getSystem() == PAL || getSystem() == PAL_M || getSystem() == SECAM || getSystem() == MESECAM) && palConfiguration.chromaFilter == PalColour::secamPredemod) {
+			// SECAM source: the chroma TBC carries pre-demodulated Dr/Db
+			secamPredemodDecoder.decodeFrames(chromaInputFields, inputStartIndex, inputEndIndex, cFrames);
 		} else if ((getSystem() == PAL || getSystem() == PAL_M || getSystem() == SECAM || getSystem() == MESECAM) && palConfiguration.chromaFilter != PalColour::mono) {
 			// PAL source
 			palColour.decodeFrames(chromaInputFields, inputStartIndex, inputEndIndex, cFrames);
@@ -2056,8 +2119,11 @@ void TbcSource::decodeFrame()
 			if(palConfiguration.chromaFilter == palColour.ChromaFilterMode::mono){
 				monoDecoder.decodeFrames(inputFields, inputStartIndex, inputEndIndex, componentFrames);
 			} else if(palConfiguration.chromaFilter == palColour.ChromaFilterMode::secam){
-				// SECAM source
+				// SECAM source: restored studio FM block
 				secamDecoder.decodeFrames(inputFields, inputStartIndex, inputEndIndex, componentFrames);
+			} else if(palConfiguration.chromaFilter == palColour.ChromaFilterMode::secamPredemod){
+				// SECAM source: pre-demodulated Dr/Db
+				secamPredemodDecoder.decodeFrames(inputFields, inputStartIndex, inputEndIndex, componentFrames);
 			} else {
 				// PAL source
 				palColour.decodeFrames(inputFields, inputStartIndex, inputEndIndex, componentFrames);

@@ -794,8 +794,18 @@
        <item>
         <widget class="QLabel" name="secamFilterLabel">
          <property name="text">
-          <string>Chroma filter:</string>
+         <string>Chroma filter:</string>
          </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="secamMonoRadioButton">
+         <property name="text">
+          <string>Mono</string>
+         </property>
+         <attribute name="buttonGroup">
+          <string notr="true">secamButtonGroup</string>
+         </attribute>
         </widget>
        </item>
        <item>
@@ -804,8 +814,44 @@
           <string>SECAM</string>
          </property>
          <attribute name="buttonGroup">
-          <string notr="true">palFilterButtonGroup</string>
+          <string notr="true">secamButtonGroup</string>
          </attribute>
+        </widget>
+       </item>
+       <item>
+        <widget class="QRadioButton" name="palFilterSecamPredemodRadioButton">
+         <property name="text">
+          <string>SECAM (pre-demod Dr/Db)</string>
+         </property>
+         <attribute name="buttonGroup">
+          <string notr="true">secamButtonGroup</string>
+         </attribute>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="secamFirstLineIsRedLabel">
+         <property name="text">
+          <string>SECAM pre-demod first field line:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="secamFirstLineIsRedComboBox">
+         <item>
+          <property name="text">
+           <string>Auto (use metadata)</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Red (D'R) first</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Blue (D'B) first</string>
+          </property>
+         </item>
         </widget>
        </item>
        <item>
@@ -832,5 +878,6 @@
  <buttongroups>
   <buttongroup name="ntscFilterButtonGroup"/>
   <buttongroup name="palFilterButtonGroup"/>
+  <buttongroup name="secamButtonGroup"/>
  </buttongroups>
 </ui>

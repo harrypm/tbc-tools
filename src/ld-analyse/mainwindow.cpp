@@ -87,6 +87,7 @@ QString chromaDecoderNameFromConfig(VideoSystem system,
                                     const Comb::Configuration &ntscConfig)
 {
     const bool isPal = (system == PAL || system == PAL_M);
+    const bool isSecam = (system == SECAM || system == MESECAM);
     if (isPal) {
         switch (palConfig.chromaFilter) {
         case PalColour::palColourFilter:
@@ -97,8 +98,20 @@ QString chromaDecoderNameFromConfig(VideoSystem system,
             return QStringLiteral("transform3d");
         case PalColour::mono:
             return QStringLiteral("mono");
+        default:
+            break;
+        }
+    } else if (isSecam) {
+        // SECAM is its own system: only SECAM decoders (and mono) are named here.
+        switch (palConfig.chromaFilter) {
         case PalColour::secam:
             return QStringLiteral("secam");
+        case PalColour::secamPredemod:
+            return QStringLiteral("secam-predemod");
+        case PalColour::mono:
+            return QStringLiteral("mono");
+        default:
+            break;
         }
     }
 
@@ -1399,6 +1412,15 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
             this, [this]() {
         if (!tbcSource.getIsSourceLoaded()) return;
         tbcSource.saveSourceMetadata();
+    });
+    // SECAM per-field first-line-identity edits from the Metadata Editor.
+    connect(metadataEditorDialog, &MetadataEditorDialog::secamFirstLineIsRedChanged,
+            this, [this](qint32 fieldNumber, bool value, bool applyToAll) {
+        if (!tbcSource.getIsSourceLoaded()) return;
+        tbcSource.setSecamFirstLineIsRed(fieldNumber, value, applyToAll);
+        ui->actionSave_Metadata->setEnabled(true);
+        updateMetadataStatusPanel();
+        updateImage();
     });
     notesViewerDialog = new NotesViewerDialog(this);
     notesViewerDialog->setWindowFlag(Qt::Window, true);
@@ -5512,6 +5534,15 @@ void MainWindow::on_actionMetadata_Editor_triggered()
     }
     metadataEditorDialog->setVideoParameters(tbcSource.getVideoParameters());
     metadataEditorDialog->setPcmAudioParameters(tbcSource.getPcmAudioParameters());
+    // Push the current frame's first-field SECAM line identity so the per-field
+    // checkbox reflects the loaded source. Only meaningful for SECAM-family.
+    {
+        const VideoSystem system = tbcSource.getSystem();
+        const bool isSecamFamily = (system == SECAM || system == MESECAM);
+        const qint32 firstField = tbcSource.getFirstFieldNumber();
+        const bool firstLineIsRed = (firstField >= 1) ? tbcSource.getSecamFirstLineIsRed(firstField) : false;
+        metadataEditorDialog->setSecamFieldContext(firstField, firstLineIsRed, isSecamFamily);
+    }
     metadataEditorDialog->show();
     metadataEditorDialog->raise();
     metadataEditorDialog->activateWindow();
@@ -7702,6 +7733,7 @@ void MainWindow::chromaDecoderConfigChangedSignalHandler()
     const Comb::Configuration &ntscConfig = chromaDecoderConfigDialog->getNtscConfiguration();
     // Set the new configuration
     tbcSource.setChromaConfiguration(palConfig, ntscConfig);
+    tbcSource.setSecamPredemodFirstLineIsRedOverride(chromaDecoderConfigDialog->getSecamPredemodFirstLineIsRedOverride());
 
     TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     videoParameters.chromaGain = palConfig.chromaGain;

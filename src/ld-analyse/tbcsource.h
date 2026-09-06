@@ -33,6 +33,7 @@
 #include "comb.h"
 #include "monodecoder.h"
 #include "secamdecoder.h"
+#include "secampredemoddecoder.h"
 
 struct YuvRangeSettings;
 
@@ -169,11 +170,15 @@ public:
 
     qint32 getFirstFieldNumber() const;
     qint32 getSecondFieldNumber() const;
+    bool getSecamFirstLineIsRed(qint32 fieldNumber) const;
 
     qint32 getCcData0() const;
     qint32 getCcData1() const;
 
     void setChromaConfiguration(const PalColour::Configuration &palConfiguration, const Comb::Configuration &ntscConfiguration);
+    void setSecamPredemodFirstLineIsRedOverride(qint8 override);
+    qint8 getSecamPredemodFirstLineIsRedOverride() const { return secamPredemodFirstLineIsRedOverride; }
+    void setSecamFirstLineIsRed(qint32 fieldNumber, bool value, bool applyToAll);
     void requestNnTransform3DCancel();
     const PalColour::Configuration &getPalConfiguration() const;
     const Comb::Configuration &getNtscConfiguration() const;
@@ -222,6 +227,7 @@ private:
     // Chroma decoder objects
     PalColour palColour;
     SecamDecoder secamDecoder;
+    SecamPredemodDecoder secamPredemodDecoder;
     Comb ntscColour;
 	MonoDecoder monoDecoder;
     OutputWriter outputWriter;
@@ -279,6 +285,8 @@ private:
     // Chroma decoder configuration
     PalColour::Configuration palConfiguration;
     SecamDecoder::SecamConfiguration secamConfiguration;
+    SecamPredemodDecoder::SecamConfiguration secamPredemodConfiguration;
+    qint8 secamPredemodFirstLineIsRedOverride = -1;
     Comb::Configuration ntscConfiguration;
 	MonoDecoder::MonoConfiguration monoConfiguration;
     OutputWriter::Configuration outputConfiguration;

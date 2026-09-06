@@ -1,6 +1,6 @@
 /******************************************************************************
  * metadataeditordialog.cpp
- * ld-analyse - TBC output analysis GUI
+ * tbc-analyse - TBC output analysis GUI
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2026 Harry Munday
@@ -83,6 +83,12 @@ MetadataEditorDialog::MetadataEditorDialog(QWidget *parent) :
     connect(ui->pcmLittleEndianCheckBox, &QCheckBox::toggled,
             this, &MetadataEditorDialog::onPcmLittleEndianToggled);
 
+    // SECAM per-field first-line-identity control. Enabled only for SECAM-
+    // family sources; emits secamFirstLineIsRedChanged so MainWindow can push
+    // it into TbcSource (and mark Save Metadata dirty).
+    connect(ui->secamFirstLineIsRedCheckBox, &QCheckBox::toggled,
+            this, &MetadataEditorDialog::onSecamFirstLineIsRedToggled);
+
     // Button box
     connect(ui->buttonBox, &QDialogButtonBox::clicked, this, [this](QAbstractButton *button) {
         const auto role = ui->buttonBox->buttonRole(button);
@@ -103,14 +109,19 @@ MetadataEditorDialog::~MetadataEditorDialog()
 
 void MetadataEditorDialog::populateChromaDecoderCombo(VideoSystem system)
 {
+    // SECAM is its own system: PAL/PAL_M get the PAL decoders, SECAM/MESECAM
+    // get only the SECAM decoders (and mono). NTSC gets the NTSC set.
     QSignalBlocker blocker(ui->chromaDecoderComboBox);
     ui->chromaDecoderComboBox->clear();
-    if (system == PAL || system == PAL_M || system == SECAM || system == MESECAM) {
+    if (system == PAL || system == PAL_M) {
         ui->chromaDecoderComboBox->addItem(tr("mono"), QStringLiteral("mono"));
         ui->chromaDecoderComboBox->addItem(tr("pal2d"), QStringLiteral("pal2d"));
         ui->chromaDecoderComboBox->addItem(tr("transform2d"), QStringLiteral("transform2d"));
         ui->chromaDecoderComboBox->addItem(tr("transform3d"), QStringLiteral("transform3d"));
+    } else if (system == SECAM || system == MESECAM) {
+        ui->chromaDecoderComboBox->addItem(tr("mono"), QStringLiteral("mono"));
         ui->chromaDecoderComboBox->addItem(tr("secam"), QStringLiteral("secam"));
+        ui->chromaDecoderComboBox->addItem(tr("secam-predemod"), QStringLiteral("secam-predemod"));
     } else {
         // NTSC
         ui->chromaDecoderComboBox->addItem(tr("mono"), QStringLiteral("mono"));
@@ -199,12 +210,14 @@ void MetadataEditorDialog::onSystemChanged(int index)
         m_videoParameters.chromaDecoder = QStringLiteral("secam");
     } else if (m_videoParameters.system == PAL || m_videoParameters.system == PAL_M) {
         if (m_videoParameters.chromaDecoder.isEmpty()
-            || m_videoParameters.chromaDecoder.toLower() == QStringLiteral("secam")) {
+            || m_videoParameters.chromaDecoder.toLower() == QStringLiteral("secam")
+            || m_videoParameters.chromaDecoder.toLower() == QStringLiteral("secam-predemod")) {
             m_videoParameters.chromaDecoder = QStringLiteral("transform2d");
         }
     } else if (m_videoParameters.system == NTSC) {
         if (m_videoParameters.chromaDecoder.isEmpty()
-            || m_videoParameters.chromaDecoder.toLower() == QStringLiteral("secam")) {
+            || m_videoParameters.chromaDecoder.toLower() == QStringLiteral("secam")
+            || m_videoParameters.chromaDecoder.toLower() == QStringLiteral("secam-predemod")) {
             m_videoParameters.chromaDecoder = QStringLiteral("ntsc2d");
         }
     }
@@ -386,4 +399,31 @@ void MetadataEditorDialog::onOkClicked()
 void MetadataEditorDialog::onCancelClicked()
 {
     reject();
+}
+
+void MetadataEditorDialog::setSecamFieldContext(qint32 fieldNumber, bool firstLineIsRed, bool isSecamFamily)
+{
+    m_secamFieldNumber = fieldNumber;
+    m_isSecamFamily = isSecamFamily;
+
+    // Show/hide the per-field SECAM controls depending on the system. They are
+    // only meaningful for SECAM-family sources (used by the pre-demod decoder).
+    ui->secamFieldHeaderLabel->setVisible(isSecamFamily);
+    ui->secamFirstLineIsRedLabel->setVisible(isSecamFamily);
+    ui->secamFirstLineIsRedCheckBox->setVisible(isSecamFamily);
+    ui->applySecamToAllFieldsCheckBox->setVisible(isSecamFamily);
+    ui->secamFirstLineIsRedCheckBox->setEnabled(isSecamFamily);
+    ui->applySecamToAllFieldsCheckBox->setEnabled(isSecamFamily);
+
+    m_populating = true;
+    QSignalBlocker blocker(ui->secamFirstLineIsRedCheckBox);
+    ui->secamFirstLineIsRedCheckBox->setChecked(firstLineIsRed);
+    m_populating = false;
+}
+
+void MetadataEditorDialog::onSecamFirstLineIsRedToggled(bool checked)
+{
+    if (m_populating || !m_isSecamFamily) return;
+    const bool applyToAll = ui->applySecamToAllFieldsCheckBox->isChecked();
+    emit secamFirstLineIsRedChanged(m_secamFieldNumber, checked, applyToAll);
 }

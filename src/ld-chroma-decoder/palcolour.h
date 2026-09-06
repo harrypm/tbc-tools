@@ -2,7 +2,7 @@
 
     palcolour.h
 
-    ld-chroma-decoder - Colourisation filter for ld-decode
+    tbc-chroma-decoder - Colourisation filter for the tbc format.
     Copyright (C) 2018-2019 Simon Inns
     Copyright (C) 2019 Adam Sampson
 
@@ -56,7 +56,10 @@ public:
 		mono,
 		// SECAM FM decoder (see secamdecoder.h) -- not a PalColour filter,
 		// but selected through the same per-source chroma decoder chooser
-		secam
+		secam,
+		// SECAM pre-demod decoder (see secampredemoddecoder.h) -- expects a
+		// chroma TBC carrying pre-demodulated Dr/Db, not a PalColour filter
+		secamPredemod
     };
 
     struct Configuration {

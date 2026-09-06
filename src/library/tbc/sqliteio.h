@@ -160,7 +160,8 @@ public:
                    double diskLoc, int efmTValues, int fieldPhaseId, int fileLoc,
                    bool isFirstField, double medianBurstIre, bool pad, int syncConf,
                    bool ntscIsFmCodeDataValid, int ntscFmCodeData, bool ntscFieldFlag,
-                   bool ntscIsVideoIdDataValid, int ntscVideoIdData, bool ntscWhiteFlag);
+                   bool ntscIsVideoIdDataValid, int ntscVideoIdData, bool ntscWhiteFlag,
+                   bool secamFirstLineIsRed);
 
     // Write field-specific data
     bool writeFieldVitsMetrics(int captureId, int fieldId, double wSnr, double bPsnr);

@@ -4,6 +4,7 @@
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2025 Simon Inns
+ * SPDX-FileCopyrightText: 2026 Harry Munday
  *
  * This file is part of tbc-tools.
  ******************************************************************************/
@@ -49,7 +50,7 @@ namespace SqliteValue
 
 // SQL schema as per documentation
 static const QString SCHEMA_SQL = R"(
-PRAGMA user_version = 6;
+PRAGMA user_version = 7;
 
 CREATE TABLE IF NOT EXISTS capture (
     capture_id INTEGER PRIMARY KEY,
@@ -127,6 +128,10 @@ CREATE TABLE IF NOT EXISTS field_record (
     pad INTEGER
         CHECK (pad IN (0,1)),
     sync_conf INTEGER,
+
+    -- SECAM line identity (schema version 7); see TbcMetaData::Field::secamFirstLineIsRed
+    secam_first_line_is_red INTEGER
+        CHECK (secam_first_line_is_red IN (0,1)),
 
     ntsc_is_fm_code_data_valid INTEGER
         CHECK (ntsc_is_fm_code_data_valid IN (0,1)),
@@ -590,6 +595,38 @@ static bool ensureCaptureColumns(QSqlDatabase &db)
     return true;
 }
 
+// Ensure the field_record table has the secam_first_line_is_red column added
+// in schema version 7. Mirrors ensureCaptureColumns: old .tbc.db files written
+// by earlier tbc-tools versions lack this column, so ALTER it in place before
+// any field write. Idempotent.
+static bool ensureFieldRecordColumns(QSqlDatabase &db)
+{
+    QSqlQuery checkQuery(db);
+    if (!checkQuery.exec("PRAGMA table_info(field_record)")) {
+        qCritical() << "Failed to query field_record table columns:" << checkQuery.lastError().text();
+        return false;
+    }
+
+    QSet<QString> columns;
+    while (checkQuery.next()) {
+        columns.insert(checkQuery.value("name").toString());
+    }
+
+    if (!columns.contains("secam_first_line_is_red")) {
+        QSqlQuery alterQuery(db);
+        if (!alterQuery.exec("ALTER TABLE field_record ADD COLUMN secam_first_line_is_red INTEGER")) {
+            qCritical() << "Failed to add field_record column secam_first_line_is_red:" << alterQuery.lastError().text();
+            return false;
+        }
+        QSqlQuery versionQuery(db);
+        if (!versionQuery.exec("PRAGMA user_version = 7")) {
+            qWarning() << "Failed to update SQLite user_version to 7:" << versionQuery.lastError().text();
+        }
+    }
+
+    return true;
+}
+
 bool SqliteReader::readPcmAudioParameters(int captureId, int &bits, bool &isSigned,
                                         bool &isLittleEndian, double &sampleRate)
 {
@@ -613,12 +650,35 @@ bool SqliteReader::readPcmAudioParameters(int captureId, int &bits, bool &isSign
 bool SqliteReader::readFields(int captureId, QSqlQuery &fieldsQuery)
 {
     fieldsQuery = QSqlQuery(db);
-    fieldsQuery.prepare("SELECT field_id, audio_samples, decode_faults, disk_loc, "
-                       "efm_t_values, field_phase_id, file_loc, is_first_field, "
-                       "median_burst_ire, pad, sync_conf, ntsc_is_fm_code_data_valid, "
-                       "ntsc_fm_code_data, ntsc_field_flag, ntsc_is_video_id_data_valid, "
-                       "ntsc_video_id_data, ntsc_white_flag "
-                       "FROM field_record WHERE capture_id = ? ORDER BY field_id");
+
+    // secam_first_line_is_red was added in schema version 7; older .tbc.db
+    // files do not have the column, so conditionally include it to keep the
+    // SELECT valid on both old and new databases. The reader never mutates
+    // the database; callers handle the column's absence via record().indexOf.
+    bool hasSecamFirstLineIsRed = false;
+    {
+        QSqlQuery checkQuery(db);
+        if (checkQuery.exec("PRAGMA table_info(field_record)")) {
+            while (checkQuery.next()) {
+                if (checkQuery.value("name").toString() == QStringLiteral("secam_first_line_is_red")) {
+                    hasSecamFirstLineIsRed = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    QString selectSql = "SELECT field_id, audio_samples, decode_faults, disk_loc, "
+                        "efm_t_values, field_phase_id, file_loc, is_first_field, "
+                        "median_burst_ire, pad, sync_conf, ntsc_is_fm_code_data_valid, "
+                        "ntsc_fm_code_data, ntsc_field_flag, ntsc_is_video_id_data_valid, "
+                        "ntsc_video_id_data, ntsc_white_flag";
+    if (hasSecamFirstLineIsRed) {
+        selectSql += QStringLiteral(", secam_first_line_is_red");
+    }
+    selectSql += " FROM field_record WHERE capture_id = ? ORDER BY field_id";
+
+    fieldsQuery.prepare(selectSql);
     fieldsQuery.addBindValue(captureId);
 
     return fieldsQuery.exec();
@@ -830,6 +890,16 @@ bool SqliteWriter::createSchema()
     }
     
     tbcDebugStream() << "Schema creation completed successfully";
+
+    // New databases already include secam_first_line_is_red via SCHEMA_SQL, but
+    // createSchema is also used as the fallback when an existing file could not
+    // be read as an update (see TbcMetaData::write). In that fallback case
+    // CREATE TABLE IF NOT EXISTS is a no-op on the existing field_record table,
+    // so migrate the column explicitly. Idempotent.
+    if (!ensureFieldRecordColumns(db)) {
+        return false;
+    }
+
     return true;
 }
 
@@ -929,6 +999,9 @@ bool SqliteWriter::updateCaptureMetadata(int captureId, const QString &system, c
     if (!ensureCaptureColumns(db)) {
         return false;
     }
+    if (!ensureFieldRecordColumns(db)) {
+        return false;
+    }
     QSqlQuery query(db);
     query.prepare("UPDATE capture SET system=?, decoder=?, git_branch=?, git_commit=?, "
                  "video_sample_rate=?, active_video_start=?, active_video_end=?, "
@@ -1014,15 +1087,16 @@ bool SqliteWriter::writeField(int captureId, int fieldId, int audioSamples, int 
                             double diskLoc, int efmTValues, int fieldPhaseId, int fileLoc,
                             bool isFirstField, double medianBurstIre, bool pad, int syncConf,
                             bool ntscIsFmCodeDataValid, int ntscFmCodeData, bool ntscFieldFlag,
-                            bool ntscIsVideoIdDataValid, int ntscVideoIdData, bool ntscWhiteFlag)
+                            bool ntscIsVideoIdDataValid, int ntscVideoIdData, bool ntscWhiteFlag,
+                            bool secamFirstLineIsRed)
 {
     QSqlQuery query(db);
     query.prepare("INSERT OR REPLACE INTO field_record (capture_id, field_id, audio_samples, decode_faults, "
                  "disk_loc, efm_t_values, field_phase_id, file_loc, is_first_field, "
                  "median_burst_ire, pad, sync_conf, ntsc_is_fm_code_data_valid, "
                  "ntsc_fm_code_data, ntsc_field_flag, ntsc_is_video_id_data_valid, "
-                 "ntsc_video_id_data, ntsc_white_flag) "
-                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                 "ntsc_video_id_data, ntsc_white_flag, secam_first_line_is_red) "
+                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     query.addBindValue(captureId);
     query.addBindValue(fieldId);
@@ -1042,6 +1116,7 @@ bool SqliteWriter::writeField(int captureId, int fieldId, int audioSamples, int 
     query.addBindValue(ntscIsVideoIdDataValid ? 1 : 0);
     query.addBindValue(ntscVideoIdData);
     query.addBindValue(ntscWhiteFlag ? 1 : 0);
+    query.addBindValue(secamFirstLineIsRed ? 1 : 0);
 
     if (!query.exec()) {
         tbcDebugStream() << "Failed to insert field record:" << query.lastError().text();

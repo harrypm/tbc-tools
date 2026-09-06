@@ -40,6 +40,12 @@ class VideoSystemData:
             case VideoSystem.PAL_M:
                 return video_system_palm
 
+            case VideoSystem.SECAM | VideoSystem.MESECAM:
+                # SECAM/MESECAM share PAL's 625-line geometry and 25 fps, but
+                # default to the mono chroma decoder (the SECAM decoders are
+                # opt-in). See the SECAM/PAL separation note in enums.py.
+                return video_system_secam
+
     @dataclass(frozen=True, slots=True)
     class Size:
         """Width/height data container."""
@@ -176,3 +182,22 @@ VideoActiveLinesType: TypeAlias = Literal[
     "default", "full_vertical", "letterbox", "vbi"
 ]
 VideoAspectRatioType: TypeAlias = Literal["default", "widescreen", "letterbox"]
+
+# SECAM/MESECAM: 625-line FM-chroma systems. They share PAL's line geometry,
+# aspect ratios, active-line ranges, and ffmpeg colour config, but default the
+# chroma decoder to MONO (the SECAM / SECAM_PREDEMOD decoders are opt-in). Kept
+# as a distinct VideoSystemData instance so VideoSystemData.get() can return it
+# without special-casing, while still reflecting that SECAM is its own system.
+video_system_secam = VideoSystemData(
+    size=video_system_pal.size,
+    active_lines=video_system_pal.active_lines,
+    aspect_ratio=video_system_pal.aspect_ratio,
+    chroma_decoder={
+        ExportMode.LUMA_EXTRACTED: ChromaDecoder.MONO,
+        ExportMode.CHROMA_MERGE: ChromaDecoder.MONO,
+        ExportMode.CHROMA_COMBINED: ChromaDecoder.MONO,
+        ExportMode.CHROMA_COMBINED_LD: ChromaDecoder.MONO,
+    },
+    ffmpeg_config=video_system_pal.ffmpeg_config,
+    fps_fraction=video_system_pal.fps_fraction,
+)

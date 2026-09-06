@@ -159,6 +159,31 @@ def _validate_video_system(
                     "arguments --chroma-nr: not allowed when video-system is not ntsc"
                 )
 
+        case VideoSystem.SECAM | VideoSystem.MESECAM:
+            # SECAM is its own system: reject NTSC-only and PAL-Transform-only
+            # options that do not apply to SECAM sources.
+            if opts.oftest:
+                parser.error(
+                    "arguments --oftest: not allowed when video-system is not ntsc"
+                )
+
+            if opts.ntsc_phase_comp is not None:
+                parser.error(
+                    "arguments --ntsc-phase-comp/--no-ntsc-phase-comp: not allowed "
+                    "when video-system is not NTSC"
+                )
+
+            if opts.chroma_nr is not None:
+                parser.error(
+                    "arguments --chroma-nr: not allowed when video-system is not ntsc"
+                )
+
+            if opts.simple_pal:
+                parser.error(
+                    "arguments --simple-pal: not allowed when --video-system is "
+                    "SECAM/MESECAM"
+                )
+
         case VideoSystem.NTSC:
             if opts.simple_pal:
                 parser.error(

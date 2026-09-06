@@ -42,6 +42,7 @@
 #include "comb.h"
 #include "monodecoder.h"
 #include "secamdecoder.h"
+#include "secampredemoddecoder.h"
 #include "ntscdecoder.h"
 #include "outputwriter.h"
 #include "palcolour.h"
@@ -241,7 +242,7 @@ int main(int argc, char *argv[])
 
     // Option to select which decoder to use (-f)
     QCommandLineOption decoderOption(QStringList() << "f" << "decoder",
-                                     QCoreApplication::translate("main", "Decoder to use (pal2d, transform2d, transform3d, secam, ntsc1d, ntsc2d, ntsc3d, nntransform3d, nntsc3d, nnTransform3D, ntsc3dnoadapt, mono; default automatic)"),
+                                     QCoreApplication::translate("main", "Decoder to use (pal2d, transform2d, transform3d, secam, secam-predemod, ntsc1d, ntsc2d, ntsc3d, nntransform3d, nntsc3d, nnTransform3D, ntsc3dnoadapt, mono; default automatic)"),
                                      QCoreApplication::translate("main", "decoder"));
     parser.addOption(decoderOption);
 
@@ -335,6 +336,14 @@ int main(int argc, char *argv[])
                                       QCoreApplication::translate("main", "Transform: Overlay the input and output FFTs"));
     parser.addOption(showFFTsOption);
 
+    // -- SECAM decoder options --
+
+    // Option to force the SECAM pre-demod decoder's first-line identity
+    QCommandLineOption secamFirstLineIsRedOption(QStringList() << "secam-first-line-is-red",
+                                      QCoreApplication::translate("main", "SECAM pre-demod: force first active line identity (auto uses per-field secamFirstLineIsRed metadata; true/red = D'R first; false/blue = D'B first; default auto)"),
+                                      QCoreApplication::translate("main", "auto|true|false"));
+    parser.addOption(secamFirstLineIsRedOption);
+
     // -- Positional arguments --
 
     // Positional argument to specify input video file
@@ -383,6 +392,7 @@ int main(int argc, char *argv[])
     Comb::Configuration combConfig;
     MonoDecoder::MonoConfiguration monoConfig;
     SecamDecoder::SecamConfiguration secamConfig;
+    SecamPredemodDecoder::SecamConfiguration secamPredemodConfig;
     OutputWriter::Configuration outputConfig;
 
     if (parser.isSet(startFrameOption)) {
@@ -420,6 +430,7 @@ int main(int argc, char *argv[])
         palConfig.chromaGain = value;
         combConfig.chromaGain = value;
         secamConfig.chromaGain = value;
+        secamPredemodConfig.chromaGain = value;
 
         if (value < 0.0) {
             // Quit with error
@@ -439,6 +450,7 @@ int main(int argc, char *argv[])
         palConfig.chromaGain = 0.0;
         combConfig.chromaGain = 0.0;
         secamConfig.chromaGain = 0.0;
+        secamPredemodConfig.chromaGain = 0.0;
     }
 
     if (parser.isSet(showMapOption)) {
@@ -503,6 +515,21 @@ int main(int argc, char *argv[])
         }
     }
 
+    // SECAM pre-demod decoder: optional first-line identity override
+    if (parser.isSet(secamFirstLineIsRedOption)) {
+        const QString value = parser.value(secamFirstLineIsRedOption).trimmed().toLower();
+        if (value == QStringLiteral("auto") || value.isEmpty()) {
+            secamPredemodConfig.firstLineIsRedOverride = -1;
+        } else if (value == QStringLiteral("true") || value == QStringLiteral("1") || value == QStringLiteral("red")) {
+            secamPredemodConfig.firstLineIsRedOverride = 1;
+        } else if (value == QStringLiteral("false") || value == QStringLiteral("0") || value == QStringLiteral("blue")) {
+            secamPredemodConfig.firstLineIsRedOverride = 0;
+        } else {
+            qCritical("--secam-first-line-is-red must be one of: auto, true, false");
+            return -1;
+        }
+    }
+
     TbcMetaData::LineParameters lineParameters;
     if (parser.isSet(firstFieldLineOption)) {
         lineParameters.firstActiveFieldLine = parser.value(firstFieldLineOption).toInt();
@@ -553,6 +580,7 @@ int main(int argc, char *argv[])
         palConfig.chromaGain = videoParameters.chromaGain;
         combConfig.chromaGain = videoParameters.chromaGain;
         secamConfig.chromaGain = videoParameters.chromaGain;
+        secamPredemodConfig.chromaGain = videoParameters.chromaGain;
     }
     if (!parser.isSet(chromaPhaseOption) && videoParameters.chromaPhase != -1.0) {
         palConfig.chromaPhase = videoParameters.chromaPhase;
@@ -585,7 +613,7 @@ int main(int argc, char *argv[])
         decoderName = parser.value(decoderOption);
     } else if (!videoParameters.chromaDecoder.isEmpty()) {
         const QString metadataDecoder = videoParameters.chromaDecoder.toLower();
-        const QStringList validDecoders = { "pal2d", "transform2d", "transform3d", "ntsc1d", "ntsc2d", "ntsc3d", "nntransform3d", "nntsc3d", "ntsc3dnoadapt", "mono", "secam" };
+        const QStringList validDecoders = { "pal2d", "transform2d", "transform3d", "ntsc1d", "ntsc2d", "ntsc3d", "nntransform3d", "nntsc3d", "ntsc3dnoadapt", "mono", "secam", "secam-predemod" };
         if (validDecoders.contains(metadataDecoder)) {
             decoderName = metadataDecoder;
         } else {
@@ -673,6 +701,8 @@ int main(int argc, char *argv[])
         decoder = std::make_unique<MonoDecoder>(monoConfig);
     } else if (decoderName == "secam") {
         decoder = std::make_unique<SecamDecoder>(secamConfig);
+    } else if (decoderName == "secam-predemod") {
+        decoder = std::make_unique<SecamPredemodDecoder>(secamPredemodConfig);
     } else {
         qCritical() << "Unknown decoder" << decoderName;
         return -1;

@@ -41,6 +41,7 @@ public:
     void setVideoLevels(const TbcMetaData::VideoParameters &videoParameters);
     const PalColour::Configuration &getPalConfiguration();
     const Comb::Configuration &getNtscConfiguration();
+    qint8 getSecamPredemodFirstLineIsRedOverride() const { return secamPredemodFirstLineIsRedOverride; }
 
 signals:
     void chromaDecoderConfigChanged();
@@ -62,6 +63,8 @@ private slots:
 	void on_enableYCCombineCheckBox_clicked();
 
     void on_palFilterButtonGroup_buttonClicked(QAbstractButton *button);
+    void on_secamButtonGroup_buttonClicked(QAbstractButton *button);
+    void on_secamFirstLineIsRedComboBox_currentIndexChanged(int index);
     void on_thresholdHorizontalSlider_valueChanged(int value);
     void on_showFFTsCheckBox_clicked();
     void on_simplePALCheckBox_clicked();
@@ -83,6 +86,7 @@ private:
     PalColour::Configuration palConfiguration;
     Comb::Configuration ntscConfiguration;
     MonoDecoder::MonoConfiguration monoConfiguration;
+    qint8 secamPredemodFirstLineIsRedOverride = -1;
 	TbcSource* tbcSource = nullptr;
 	TbcSource::SourceMode sourceMode;
 	bool isInit = true;

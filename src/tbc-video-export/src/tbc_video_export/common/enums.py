@@ -66,6 +66,8 @@ class VideoSystem(Enum):
     PAL = "pal"
     PAL_M = "pal_m"
     NTSC = "ntsc"
+    SECAM = "secam"
+    MESECAM = "mesecam"
 
     def __str__(self) -> str:
         """Return formatted enum value as string."""
@@ -96,6 +98,7 @@ class ChromaDecoder(Enum):
     NNTRANSFORM3D = "nntransform3d"
     NNTSC3D = "nntsc3d"
     NTSC3DNOADAPT = "ntsc3dnoadapt"
+    SECAM_PREDEMOD = "secam-predemod"
 
     def __str__(self) -> str:
         """Return enum name as string."""

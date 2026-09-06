@@ -593,6 +593,11 @@ bool isPalFamilySystem(int system)
     return system == PAL || system == PAL_M;
 }
 
+bool isSecamFamilySystem(int system)
+{
+    return system == SECAM || system == MESECAM;
+}
+
 bool isValidChromaDecoderForSystem(const QString &decoderName, int system)
 {
     const QString normalizedDecoder = decoderName.trimmed().toLower();
@@ -603,7 +608,11 @@ bool isValidChromaDecoderForSystem(const QString &decoderName, int system)
         QStringLiteral("pal2d"),
         QStringLiteral("transform2d"),
         QStringLiteral("transform3d"),
+        QStringLiteral("mono")
+    };
+    static const QStringList secamDecoders = {
         QStringLiteral("secam"),
+        QStringLiteral("secam-predemod"),
         QStringLiteral("mono")
     };
     static const QStringList ntscDecoders = {
@@ -618,6 +627,9 @@ bool isValidChromaDecoderForSystem(const QString &decoderName, int system)
 
     if (isPalFamilySystem(system)) {
         return palDecoders.contains(normalizedDecoder);
+    }
+    if (isSecamFamilySystem(system)) {
+        return secamDecoders.contains(normalizedDecoder);
     }
     if (system == NTSC) {
         return ntscDecoders.contains(normalizedDecoder);

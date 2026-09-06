@@ -6,6 +6,8 @@
  * SPDX-FileCopyrightText: 2018-2025 Simon Inns
  * SPDX-FileCopyrightText: 2022 Ryan Holtz
  * SPDX-FileCopyrightText: 2022-2023 Adam Sampson
+ * SPDX-FileCopyrightText: 2026 Hugo Caille
+ * SPDX-FileCopyrightText: 2026 Harry Munday
  *
  * This file is part of tbc-tools.
  ******************************************************************************/
@@ -18,6 +20,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <QFileInfo>
+#include <QSqlRecord>
 #include <fstream>
 #include <QDebug>
 #include <QStringList>
@@ -336,7 +339,7 @@ void TbcMetaData::Field::write(SqliteWriter &writer, int captureId) const
                      efmTValues, fieldPhaseID, fileLoc, isFirstField, medianBurstIRE,
                      pad, syncConf, ntsc.isFmCodeDataValid, ntsc.fmCodeData,
                      ntsc.fieldFlag, ntsc.isVideoIdDataValid, ntsc.videoIdData,
-                     ntsc.whiteFlag);
+                     ntsc.whiteFlag, secamFirstLineIsRed);
 
     // Write optional field data
     vitsMetrics.write(writer, captureId, fieldId);
@@ -781,6 +784,7 @@ void TbcMetaData::Field::read(JsonReader &reader)
         else if (member == "medianBurstIRE") reader.read(medianBurstIRE);
         else if (member == "ntsc") ntsc.read(reader, closedCaption);
         else if (member == "pad") reader.read(pad);
+        else if (member == "secamFirstLineIsRed") reader.read(secamFirstLineIsRed);
         else if (member == "seqNo") reader.read(seqNo);
         else if (member == "syncConf") reader.read(syncConf);
         else if (member == "vbi") vbi.read(reader);
@@ -831,6 +835,7 @@ void TbcMetaData::Field::write(JsonWriter &writer) const
         ntsc.write(writer);
     }
     writer.writeMember("pad", pad);
+    writer.writeMember("secamFirstLineIsRed", secamFirstLineIsRed);
     writer.writeMember("seqNo", seqNo);
     writer.writeMember("syncConf", syncConf);
     if (vbi.inUse) {
@@ -1293,6 +1298,14 @@ void TbcMetaData::readFields(SqliteReader &reader, int captureId)
         field.decodeFaults = SqliteValue::toIntOrDefault(fieldsQuery, "decode_faults");
         field.efmTValues = SqliteValue::toIntOrDefault(fieldsQuery, "efm_t_values");
         field.pad = SqliteValue::toBoolOrDefault(fieldsQuery, "pad");
+        // secam_first_line_is_red was added in schema version 7; on older
+        // .tbc.db files the column is absent from the SELECT (see
+        // SqliteReader::readFields) and indexOf returns -1, leaving the
+        // struct default (false).
+        {
+            const int secamCol = fieldsQuery.record().indexOf("secam_first_line_is_red");
+            field.secamFirstLineIsRed = (secamCol >= 0) ? (fieldsQuery.value(secamCol).toInt() == 1) : false;
+        }
 
         // Read NTSC data from the main field record
         field.ntsc.isFmCodeDataValid = fieldsQuery.value("ntsc_is_fm_code_data_valid").toInt() == 1;

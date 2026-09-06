@@ -162,7 +162,8 @@ void ChromaDecoderConfigDialog::setConfiguration(VideoSystem _system, const PalC
     // Select the tab corresponding to the current standard automatically
     if (system == NTSC) {
         ui->standardTabs->setCurrentWidget(ui->ntscTab);
-    } else if (palConfiguration.chromaFilter == PalColour::secam) {
+    } else if (palConfiguration.chromaFilter == PalColour::secam
+               || palConfiguration.chromaFilter == PalColour::secamPredemod) {
         ui->standardTabs->setCurrentWidget(ui->secamTab);
     } else {
         ui->standardTabs->setCurrentWidget(ui->palTab);
@@ -331,50 +332,87 @@ void ChromaDecoderConfigDialog::updateDialog()
 		ui->enableYCCombineCheckBox->hide();
 	}
 
-    // PAL settings
-	
-	ui->palMonoRadioButton->setEnabled(isSourcePal);
+    // PAL/SECAM settings. SECAM is its own system (SECAM/MESECAM) and is not
+    // routed through the PAL radio group or PAL-only places.
+    const bool isSourceSecam = system == SECAM || system == MESECAM;
+
+    ui->palMonoRadioButton->setEnabled(isSourcePal);
     ui->palFilterPalColourRadioButton->setEnabled(isSourcePal);
     ui->palFilterTransform2DRadioButton->setEnabled(isSourcePal);
     ui->palFilterTransform3DRadioButton->setEnabled(isSourcePal);
-	ui->palFilterSecamRadioButton->setEnabled(isSourcePal);
-	
-	if(isSourcePal)
-	{
-		switch (palConfiguration.chromaFilter) {
-		case PalColour::mono:
-			ui->palMonoRadioButton->setChecked(true);
-			ui->chromaGainHorizontalSlider->setEnabled(false);
-			ui->chromaPhaseHorizontalSlider->setEnabled(false);
-			break;
-		case PalColour::palColourFilter:
-			ui->palFilterPalColourRadioButton->setChecked(true);
-			ui->chromaGainHorizontalSlider->setEnabled(true);
-			ui->chromaPhaseHorizontalSlider->setEnabled(true);
-			break;
-		case PalColour::transform2DFilter:
-			ui->palFilterTransform2DRadioButton->setChecked(true);
-			ui->chromaGainHorizontalSlider->setEnabled(true);
-			ui->chromaPhaseHorizontalSlider->setEnabled(true);
-			break;
-		case PalColour::transform3DFilter:
-			ui->palFilterTransform3DRadioButton->setChecked(true);
-			ui->chromaGainHorizontalSlider->setEnabled(true);
-			ui->chromaPhaseHorizontalSlider->setEnabled(true);
-			break;
-		case PalColour::secam:
-			ui->palFilterSecamRadioButton->setChecked(true);
-			ui->chromaGainHorizontalSlider->setEnabled(true);
-			// SECAM carries the colour difference signals as frequency, not
-			// as a subcarrier phase, so there is no chroma phase to shift.
-			ui->chromaPhaseHorizontalSlider->setEnabled(false);
-			break;
-		}
-	}
+
+    ui->secamMonoRadioButton->setEnabled(isSourceSecam);
+    ui->palFilterSecamRadioButton->setEnabled(isSourceSecam);
+    ui->palFilterSecamPredemodRadioButton->setEnabled(isSourceSecam);
+    ui->secamFirstLineIsRedLabel->setEnabled(isSourceSecam);
+    ui->secamFirstLineIsRedComboBox->setEnabled(isSourceSecam);
+
+    if(isSourcePal)
+    {
+        switch (palConfiguration.chromaFilter) {
+        case PalColour::mono:
+            ui->palMonoRadioButton->setChecked(true);
+            ui->chromaGainHorizontalSlider->setEnabled(false);
+            ui->chromaPhaseHorizontalSlider->setEnabled(false);
+            break;
+        case PalColour::palColourFilter:
+            ui->palFilterPalColourRadioButton->setChecked(true);
+            ui->chromaGainHorizontalSlider->setEnabled(true);
+            ui->chromaPhaseHorizontalSlider->setEnabled(true);
+            break;
+        case PalColour::transform2DFilter:
+            ui->palFilterTransform2DRadioButton->setChecked(true);
+            ui->chromaGainHorizontalSlider->setEnabled(true);
+            ui->chromaPhaseHorizontalSlider->setEnabled(true);
+            break;
+        case PalColour::transform3DFilter:
+            ui->palFilterTransform3DRadioButton->setChecked(true);
+            ui->chromaGainHorizontalSlider->setEnabled(true);
+            ui->chromaPhaseHorizontalSlider->setEnabled(true);
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (isSourceSecam)
+    {
+        // SECAM carries the colour difference signals as frequency, not as a
+        // subcarrier phase, so there is no chroma phase to shift for either
+        // SECAM decoder. Chroma gain still applies.
+        switch (palConfiguration.chromaFilter) {
+        case PalColour::mono:
+            ui->secamMonoRadioButton->setChecked(true);
+            ui->chromaGainHorizontalSlider->setEnabled(false);
+            ui->chromaPhaseHorizontalSlider->setEnabled(false);
+            break;
+        case PalColour::secam:
+            ui->palFilterSecamRadioButton->setChecked(true);
+            ui->chromaGainHorizontalSlider->setEnabled(true);
+            ui->chromaPhaseHorizontalSlider->setEnabled(false);
+            break;
+        case PalColour::secamPredemod:
+            ui->palFilterSecamPredemodRadioButton->setChecked(true);
+            ui->chromaGainHorizontalSlider->setEnabled(true);
+            ui->chromaPhaseHorizontalSlider->setEnabled(false);
+            break;
+        default:
+            break;
+        }
+
+        // Reflect the current first-line-identity override (auto/red/blue).
+        QSignalBlocker blocker(ui->secamFirstLineIsRedComboBox);
+        switch (secamPredemodFirstLineIsRedOverride) {
+        case 1: ui->secamFirstLineIsRedComboBox->setCurrentIndex(1); break;
+        case 0: ui->secamFirstLineIsRedComboBox->setCurrentIndex(2); break;
+        default: ui->secamFirstLineIsRedComboBox->setCurrentIndex(0); break;
+        }
+    }
 
     const bool isTransform = ((palConfiguration.chromaFilter != PalColour::palColourFilter)
                               && (palConfiguration.chromaFilter != PalColour::mono)
-                              && (palConfiguration.chromaFilter != PalColour::secam));
+                              && (palConfiguration.chromaFilter != PalColour::secam)
+                              && (palConfiguration.chromaFilter != PalColour::secamPredemod) );
 
     ui->thresholdLabel->setEnabled(isSourcePal && isTransform);
 
@@ -580,16 +618,39 @@ void ChromaDecoderConfigDialog::on_palFilterButtonGroup_buttonClicked(QAbstractB
 {
 	if (button == ui->palMonoRadioButton){
 		palConfiguration.chromaFilter = PalColour::mono;
-    } else if (button == ui->palFilterSecamRadioButton) {
-        palConfiguration.chromaFilter = PalColour::secam;
     } else if (button == ui->palFilterPalColourRadioButton) {
-        palConfiguration.chromaFilter = PalColour::palColourFilter;
+		palConfiguration.chromaFilter = PalColour::palColourFilter;
     } else if (button == ui->palFilterTransform2DRadioButton) {
-        palConfiguration.chromaFilter = PalColour::transform2DFilter;
+		palConfiguration.chromaFilter = PalColour::transform2DFilter;
     } else {
-        palConfiguration.chromaFilter = PalColour::transform3DFilter;
+		palConfiguration.chromaFilter = PalColour::transform3DFilter;
     }
     updateDialog();
+    emit chromaDecoderConfigChanged();
+}
+
+void ChromaDecoderConfigDialog::on_secamButtonGroup_buttonClicked(QAbstractButton *button)
+{
+    if (button == ui->secamMonoRadioButton) {
+        palConfiguration.chromaFilter = PalColour::mono;
+    } else if (button == ui->palFilterSecamPredemodRadioButton) {
+        palConfiguration.chromaFilter = PalColour::secamPredemod;
+    } else if (button == ui->palFilterSecamRadioButton) {
+        palConfiguration.chromaFilter = PalColour::secam;
+    }
+    updateDialog();
+    emit chromaDecoderConfigChanged();
+}
+
+void ChromaDecoderConfigDialog::on_secamFirstLineIsRedComboBox_currentIndexChanged(int index)
+{
+    // 0 = auto (use per-field secamFirstLineIsRed metadata), 1 = force red
+    // (D'R) first, 2 = force blue (D'B) first.
+    switch (index) {
+    case 1: secamPredemodFirstLineIsRedOverride = 1; break;
+    case 2: secamPredemodFirstLineIsRedOverride = 0; break;
+    default: secamPredemodFirstLineIsRedOverride = -1; break;
+    }
     emit chromaDecoderConfigChanged();
 }
 

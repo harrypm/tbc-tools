@@ -76,6 +76,9 @@ class Opts(argparse.Namespace):
     # decoder (pal)
     simple_pal: bool
 
+    # decoder (secam)
+    secam_first_line_is_red: str | None
+
     # dropout-correct
     no_dropout_correct: bool
     dropout_correct_threads: int | None

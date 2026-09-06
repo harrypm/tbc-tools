@@ -2,7 +2,9 @@
 
     secamdecoder.cpp
 
-    ld-chroma-decoder - Colourisation filter for ld-decode
+    tbc-chroma-decoder - Colourisation filter for the tbc format.
+
+    Copyright (C) 2026 Harry Munday
 
     This file is part of tbc-tools.
 

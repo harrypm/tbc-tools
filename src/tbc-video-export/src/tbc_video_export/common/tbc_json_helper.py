@@ -152,11 +152,10 @@ class TBCJsonHelper:
         if (system := self.source_video_system) is not None:
             normalized_system = self.source_video_system_normalized
 
-            # search for PAL* or NTSC* in videoParameters.system
-            # isSourcePal and isSourceNtsc sometimes used, but not
-            # sure if it's worth checking for
+            # SECAM/MESECAM are first-class VideoSystem members (not mapped to
+            # PAL), so the wrapper can validate SECAM-only decoders against them.
             match normalized_system:
-                case VideoSystem.PAL.value | "secam" | "mesecam":
+                case VideoSystem.PAL.value:
                     return VideoSystem.PAL
 
                 case VideoSystem.PAL_M.value:
@@ -164,6 +163,13 @@ class TBCJsonHelper:
 
                 case VideoSystem.NTSC.value:
                     return VideoSystem.NTSC
+
+                case VideoSystem.SECAM.value | "mesecam":
+                    return (
+                        VideoSystem.SECAM
+                        if normalized_system == VideoSystem.SECAM.value
+                        else VideoSystem.MESECAM
+                    )
 
                 case _:
                     raise exceptions.TBCError(f"System unsupported ({system}).")

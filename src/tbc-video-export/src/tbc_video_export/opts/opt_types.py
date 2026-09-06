@@ -83,7 +83,10 @@ class TypeChromaDecoder:
 
     def __call__(self, value: str) -> ChromaDecoder:  # noqa: D102
         try:
-            return ChromaDecoder[value.upper()]
+            # Decoder names use underscores in the enum (e.g. SECAM_PREDEMOD)
+            # but hyphens on the CLI (e.g. secam-predemod); normalise before
+            # lookup, mirroring TypeVideoSystem.
+            return ChromaDecoder[value.replace("-", "_").upper()]
         except KeyError:
             self._parser.error(
                 f"argument --chroma-decoder: invalid ChromaDecoder value: '{value}', "

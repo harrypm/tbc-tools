@@ -41,12 +41,12 @@ class TestTBCJson:
         assert tbc_json.video_system == VideoSystem.NTSC
         json_data = '{"videoParameters":{"system":"SECAM"}}'
         tbc_json = TBCJsonHelper(None, json_data)
-        assert tbc_json.video_system == VideoSystem.PAL
+        assert tbc_json.video_system == VideoSystem.SECAM
         assert tbc_json.is_secam_system
 
         json_data = '{"videoParameters":{"system":"MESECAM"}}'
         tbc_json = TBCJsonHelper(None, json_data)
-        assert tbc_json.video_system == VideoSystem.PAL
+        assert tbc_json.video_system == VideoSystem.MESECAM
         assert tbc_json.is_secam_system
 
         with pytest.raises(exceptions.TBCError) as e:

@@ -92,7 +92,19 @@ class WrapperLDChromaDecoder(Wrapper):
                     ChromaDecoder.PAL2D,
                     ChromaDecoder.TRANSFORM2D,
                     ChromaDecoder.TRANSFORM3D,
+                }:
+                    raise exceptions.InvalidChromaDecoderError(
+                        f"{decoder} is not a valid decoder for "
+                        f"{self._state.video_system}."
+                    )
+
+            case VideoSystem.SECAM | VideoSystem.MESECAM:
+                # SECAM is its own system: only the SECAM decoders (and mono)
+                # are valid. PAL decoders are rejected.
+                if decoder not in {
+                    ChromaDecoder.MONO,
                     ChromaDecoder.SECAM,
+                    ChromaDecoder.SECAM_PREDEMOD,
                 }:
                     raise exceptions.InvalidChromaDecoderError(
                         f"{decoder} is not a valid decoder for "
@@ -211,6 +223,14 @@ class WrapperLDChromaDecoder(Wrapper):
 
             if add_phase_check:
                 decoder_opts.append("--ntsc-phase-comp")
+
+        # SECAM pre-demod decoder: optional first-line identity override.
+        # Only forwarded when the chroma decoder is the pre-demod SECAM path.
+        if (
+            self._state.decoder_chroma is ChromaDecoder.SECAM_PREDEMOD
+            and (override := self._state.opts.secam_first_line_is_red) is not None
+        ):
+            decoder_opts.append(("--secam-first-line-is-red", override))
 
         return decoder_opts
 

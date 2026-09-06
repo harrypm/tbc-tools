@@ -135,6 +135,7 @@ set(lddecode_chroma_sources
     outputwriter.cpp
     palcolour.cpp
     secamdecoder.cpp
+    secampredemoddecoder.cpp
     sourcefield.cpp
     transformpal.cpp
     transformpal2d.cpp
@@ -181,6 +182,7 @@ add_executable(ld-chroma-decoder
     ntscdecoder.cpp
     paldecoder.cpp
     secamdecoder.cpp
+    secampredemoddecoder.cpp
 )
 
 set_target_properties(tbc-chroma PROPERTIES AUTOMOC ON)

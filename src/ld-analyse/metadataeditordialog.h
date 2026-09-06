@@ -1,6 +1,6 @@
 /******************************************************************************
  * metadataeditordialog.h
- * ld-analyse - TBC output analysis GUI
+ * tbc-analyse - TBC output analysis GUI
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2026 Harry Munday
@@ -34,11 +34,13 @@ public:
 
     void setVideoParameters(const TbcMetaData::VideoParameters &videoParameters);
     void setPcmAudioParameters(const TbcMetaData::PcmAudioParameters &pcmAudioParameters);
+    void setSecamFieldContext(qint32 fieldNumber, bool firstLineIsRed, bool isSecamFamily);
 
 signals:
     void videoParametersChanged(const TbcMetaData::VideoParameters &videoParameters);
     void pcmAudioParametersChanged(const TbcMetaData::PcmAudioParameters &pcmAudioParameters);
     void refreshRequested();
+    void secamFirstLineIsRedChanged(qint32 fieldNumber, bool value, bool applyToAll);
 
 private slots:
     void onSystemChanged(int index);
@@ -64,6 +66,7 @@ private slots:
     void onPcmBitsChanged(int value);
     void onPcmSignedToggled(bool checked);
     void onPcmLittleEndianToggled(bool checked);
+    void onSecamFirstLineIsRedToggled(bool checked);
     void onApplyClicked();
     void onOkClicked();
     void onCancelClicked();
@@ -76,6 +79,8 @@ private:
     TbcMetaData::VideoParameters m_videoParameters;
     TbcMetaData::PcmAudioParameters m_pcmAudioParameters;
     bool m_populating = false;
+    qint32 m_secamFieldNumber = 1;
+    bool m_isSecamFamily = false;
 };
 
 #endif // METADATAEDITORDIALOG_H

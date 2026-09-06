@@ -6,6 +6,8 @@
  * SPDX-FileCopyrightText: 2018-2025 Simon Inns
  * SPDX-FileCopyrightText: 2022 Ryan Holtz
  * SPDX-FileCopyrightText: 2022-2023 Adam Sampson
+ * SPDX-FileCopyrightText: 2026 Hugo Caille
+ * SPDX-FileCopyrightText: 2026 Harry Munday
  *
  * This file is part of tbc-tools.
  ******************************************************************************/
@@ -220,6 +222,12 @@ public:
         ClosedCaption closedCaption;
         DropOuts dropOuts;
         bool pad = false;
+        // SECAM: true when this field's first active line carries D'R (the R-Y
+        // line). Used by the pre-demodulated Dr/Db SECAM decoder (see
+        // secampredemoddecoder.h) for line identity, since that path has no FM
+        // rest carrier to auto-detect it from. Round-tripped with the rest of
+        // the field metadata; harmless (unused) for non-SECAM sources.
+        bool secamFirstLineIsRed = false;
 
         double diskLoc = -1;
         qint64 fileLoc = -1;
