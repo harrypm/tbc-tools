@@ -484,6 +484,10 @@ jobs:
             exit 1
           fi
           export PATH="$APPDIR/usr/bin:${PATH}"
+          # Expose the AppDir's share/ to the XDG icon/desktop lookups so
+          # QIcon::fromTheme("tbc-analyse") finds the bundled hicolor icons
+          # (required for a sharp taskbar/window icon).
+          export XDG_DATA_DIRS="$APPDIR/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
           export QT_PLUGIN_PATH="$APPDIR/usr/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
           export QT_QPA_PLATFORM_PLUGIN_PATH="$APPDIR/usr/plugins/platforms"
           export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
@@ -573,23 +577,21 @@ jobs:
           run_target "$APPDIR/usr/bin/tbc-analyse" --force-dark-theme "$@"
           EOF
           chmod +x AppDir/AppRun
-          # Create minimal desktop file
+          # Desktop file must match the app's QGuiApplication::setDesktopFileName
+          # ("tbc-analyse") and the runtime QIcon::fromTheme("tbc-analyse") lookup,
+          # so the taskbar/dock associates the running window with a sharp icon.
           mkdir -p AppDir/usr/share/applications
-          cat > AppDir/usr/share/applications/tbc-tools.desktop << EOF
-          [Desktop Entry]
-          Type=Application
-          Name=TBC Tools
-          Comment=Time Base Corrected video analysis tools
-          Exec=tbc-analyse
-          Icon=tbc-tools
-          Categories=AudioVideo;Video;
-          EOF
-          # Provide application icon for desktop entry
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-          cp src/tbc-analyse/Graphics/256-analyse.png AppDir/usr/share/icons/hicolor/256x256/apps/tbc-tools.png
-          ln -sf usr/share/applications/tbc-tools.desktop AppDir/tbc-tools.desktop
-          ln -sf usr/share/icons/hicolor/256x256/apps/tbc-tools.png AppDir/tbc-tools.png
-          ln -sf tbc-tools.png AppDir/.DirIcon
+          cp src/tbc-analyse/install/tbc-analyse.desktop AppDir/usr/share/applications/tbc-analyse.desktop
+          # Install the application icon at every hicolor size under the theme
+          # lookup name (tbc-analyse), including 256x256 for taskbar/dock use.
+          for size in 16 32 64 128 256; do
+            mkdir -p "AppDir/usr/share/icons/hicolor/${size}x${size}/apps"
+            cp "src/tbc-analyse/Graphics/${size}-analyse.png" \
+              "AppDir/usr/share/icons/hicolor/${size}x${size}/apps/tbc-analyse.png"
+          done
+          ln -sf usr/share/applications/tbc-analyse.desktop AppDir/tbc-analyse.desktop
+          ln -sf usr/share/icons/hicolor/256x256/apps/tbc-analyse.png AppDir/tbc-analyse.png
+          ln -sf tbc-analyse.png AppDir/.DirIcon
 
           ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool-x86_64.AppImage AppDir release/tbc-tools-x86_64.AppImage
       - name: Validate x86_64 AppImage bundle

@@ -5,6 +5,7 @@ NoDisplay=false
 Terminal=false
 Exec=tbc-analyse
 Icon=tbc-analyse
+StartupWMClass=tbc-analyse
 Name=tbc-analyse
 MimeType=application/video-tbc
 Comment=

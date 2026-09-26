@@ -150,6 +150,9 @@ if(UNIX)
 	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/Graphics/128-analyse.png
 		DESTINATION share/icons/hicolor/128x128/apps
 		RENAME tbc-analyse.png)
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/Graphics/256-analyse.png
+		DESTINATION share/icons/hicolor/256x256/apps
+		RENAME tbc-analyse.png)
 	
 	# Install desktop menu entry
 	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/install/tbc-analyse.desktop
