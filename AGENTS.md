@@ -4,7 +4,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Project Overview
 
-The ld-decode tools project provides professional-grade tools for digitizing, processing, and analyzing analog video sources (particularly LaserDisc captures) with exceptional quality and accuracy. The codebase consists of multiple C++ command-line tools and a shared library infrastructure.
+The tbc-tools project provides archival-grade tools for handing and processing, alongside analyzing analog video sources with exceptional quality and accuracy. The codebase consists of multiple C++ command-line tools and a shared library infrastructure.
 
 ## Development Environment
 
@@ -118,7 +118,7 @@ FIRFilter<double> filter(coefficients);
 - **Nix environment provides all dependencies** - prefer Nix over manual dependency management
 - **Qt6 required** - all tools use Qt framework even for CLI tools
 - **Multi-threading enabled** by default for performance-critical operations
-- **Hard rule: never touch or target the ld-decode-tools upstream remote** - do not fetch from, pull from, push to, diff against, cherry-pick from, or otherwise reference `https://github.com/simoninns/ld-decode-tools.git` (or a git remote alias pointing to it, e.g. `upstream`) for any task in this project
+- **Hard rule: never touch or target the legacy ld-tools upstream remote** - do not fetch from, pull from, push to, diff against, cherry-pick from, or otherwise reference `https://github.com/simoninns/ld-decode-tools.git` (or a git remote alias pointing to it, e.g. `upstream`) for any task in this project
 - **Hard rule: all build/testing work must pass GitHub Actions workflows** - do not treat build verification as complete unless GitHub Actions succeeds
 - **Hard rule: build tests must use the release workflow to test all platforms but must not publish** - the Tests workflow (`.github/workflows/tests.yml`) must call the Release workflow (`.github/workflows/release.yml`) as a reusable workflow with `create_release: false` so the full release pipeline (Linux + Windows + macOS packaging builds) is tested on every push/PR without creating or publishing a GitHub Release. The Release workflow must support `workflow_call` with the same inputs as `workflow_dispatch`. Do not replace the reusable-workflow call with individual per-platform build workflow calls.
 - **Hard rule: do not bundle commit.txt provenance assets into releases** - release assets must contain only the platform binaries (tar.xz / zip / dmg). The `tbc-tools_${RELEASE_TAG}_commit.txt` provenance file was removed from the upload step; do not re-add it. The tag commit is already visible via the GitHub Release's tag association.
