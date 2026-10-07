@@ -255,6 +255,9 @@ jobs:
         # (glibc 2.28 baseline) so the bootloader uses the standard /lib64 loader
         # and runs on any glibc >= 2.28 Linux without Nix store paths.
         run: |
+          export TBC_VIDEO_EXPORT_VENDOR_VERSION="$(python3.11 -c 'import json; print(json.load(open("vcpkg.json"))["version"])')"
+          export TBC_VIDEO_EXPORT_VENDOR_COMMIT="$(git rev-parse --short HEAD)"
+          export TBC_VIDEO_EXPORT_VENDOR_BRANCH="${GITHUB_REF_NAME}"
           cd src/tbc-video-export
           python3.11 -m pip install --upgrade pip
           python3.11 -m pip install -r pyinstaller/requirements-build-linux.txt
@@ -598,6 +601,7 @@ jobs:
         run: |
           PYTHON_RUNTIME="$(nix build nixpkgs#python311 --no-link --print-out-paths | tail -n 1)"
           export PATH="$PYTHON_RUNTIME/bin:$PATH"
+          export EXPECT_VERSION="$(python3 -c 'import json; print(json.load(open("vcpkg.json"))["version"])')"
           bash ci/verify_linux_bundle.sh x86-appimage release/tbc-tools-x86_64.AppImage
 
       - name: Copy scripts
@@ -1034,6 +1038,9 @@ jobs:
         # interpreter and all deps. Built with the runner's system python3 (3.12
         # on ubuntu-24.04-arm) so the bootloader uses the standard system loader.
         run: |
+          export TBC_VIDEO_EXPORT_VENDOR_VERSION="$(python3 -c 'import json; print(json.load(open("vcpkg.json"))["version"])')"
+          export TBC_VIDEO_EXPORT_VENDOR_COMMIT="$(git rev-parse --short HEAD)"
+          export TBC_VIDEO_EXPORT_VENDOR_BRANCH="${GITHUB_REF_NAME}"
           cd src/tbc-video-export
           python3 -m pip install --upgrade pip
           python3 -m pip install -r pyinstaller/requirements-build-linux.txt
@@ -1071,7 +1078,9 @@ jobs:
           echo "Bundled self-contained native AAA AppImage (built from source)"
 
       - name: Validate arm64 release bundle
-        run: bash ci/verify_linux_bundle.sh arm64-release release
+        run: |
+          export EXPECT_VERSION="$(python3 -c 'import json; print(json.load(open("vcpkg.json"))["version"])')"
+          bash ci/verify_linux_bundle.sh arm64-release release
 
       - name: Copy scripts
         run: find scripts -maxdepth 1 -type f -executable -exec cp {} release/ \; || true

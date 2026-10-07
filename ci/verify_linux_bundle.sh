@@ -121,6 +121,39 @@ run_smoke_test() {
   fi
 }
 
+# Assert the frozen tbc-video-export reports the real vendor version. The
+# --version exit code alone is not enough: consts.py resolves the version at
+# runtime from TBC_VIDEO_EXPORT_VENDOR_* (set by the runtime hook baked in at
+# build time), and before that injection existed every release shipped a frozen
+# tbc-video-export reporting the 0.0.0 placeholder while still exiting 0.
+# With EXPECT_VERSION exported (the Linux jobs do, read from vcpkg.json), the
+# first output line must start with it; without it, at least reject 0.0.0.
+check_frozen_exporter_version() {
+  local label="$1"
+  shift
+  local output version_line
+  output="$(timeout 20 "$@" --version 2>/dev/null || true)"
+  version_line="$(printf '%s\n' "$output" | sed -n '1p')"
+  if [ -z "$version_line" ]; then
+    echo "Frozen tbc-video-export --version produced no output: $label" >&2
+    exit 1
+  fi
+  if [ -n "${EXPECT_VERSION:-}" ]; then
+    case "$version_line" in
+      "$EXPECT_VERSION"*)
+        ;;
+      *)
+        echo "Frozen tbc-video-export version mismatch: expected $EXPECT_VERSION, got: $version_line ($label)" >&2
+        exit 1
+        ;;
+    esac
+  elif [ "$version_line" = "0.0.0" ]; then
+    echo "Frozen tbc-video-export reports placeholder version 0.0.0 (vendor version injection failed): $label" >&2
+    exit 1
+  fi
+  echo "Frozen tbc-video-export version OK ($label): $version_line"
+}
+
 # End-to-end AAA usability smoke test: drive the bundled AAA AppImage's
 # `stream-align` action (the exact codepath tbc-analyse runs when the user
 # clicks Align) against a tiny synthesized fixture, and assert it produced
@@ -251,6 +284,7 @@ case "$MODE" in
       exit 1
     fi
     run_smoke_test "x86-appimage-extract-and-run-tbc-video-export" ".smoke-x86-appimage-runtime.log" env APPIMAGE_EXTRACT_AND_RUN=1 "$TARGET" tbc-video-export --version
+    check_frozen_exporter_version "x86-appimage" env APPIMAGE_EXTRACT_AND_RUN=1 "$TARGET" tbc-video-export
 
     rm -rf squashfs-root
     APPIMAGE_EXTRACT_AND_RUN=1 "$TARGET" --appimage-extract >/dev/null
@@ -393,6 +427,7 @@ case "$MODE" in
     require_path "$TARGET/plugins/iconengines/libqsvgicon.so"
     require_path "$TARGET/plugins/imageformats/libqsvg.so"
     run_smoke_test "arm64-launcher-tbc-video-export" "$TARGET/.smoke-arm64-export.log" "$TARGET/tbc-tools-run" tbc-video-export --version
+    check_frozen_exporter_version "arm64-release" "$TARGET/tbc-tools-run" tbc-video-export
     run_smoke_test "arm64-launcher-ffmpeg" "$TARGET/.smoke-arm64.log" "$TARGET/tbc-tools-run" ffmpeg -version
     ;;
 

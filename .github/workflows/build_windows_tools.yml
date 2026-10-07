@@ -407,7 +407,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r "$exporterRoot\\pyinstaller\\requirements-build-windows.txt"
           python -c "import pywintypes, win32file, win32pipe"
-          $env:PYTHONPATH = "$exporterRoot\\src"
+          $env:TBC_VIDEO_EXPORT_VENDOR_VERSION = (python -c "import json; print(json.load(open('vcpkg.json'))['version'])").Trim()
+          $env:TBC_VIDEO_EXPORT_VENDOR_COMMIT = (git rev-parse --short HEAD).Trim()
+          $env:TBC_VIDEO_EXPORT_VENDOR_BRANCH = "$env:GITHUB_REF_NAME"
+          $env:PYTHONPATH = "$exporterRoot\src"
           Push-Location $exporterRoot
           New-Item -ItemType Directory -Force -Path .\\build | Out-Null
           python .\\pyinstaller\\build_windows.py
@@ -416,8 +419,20 @@ jobs:
           if (-not (Test-Path $builtExporter)) {
             throw "Vendored tbc-video-export build did not produce $builtExporter"
           }
-          Copy-Item -Path $builtExporter -Destination release\\
-          Copy-Item -Path "$exporterRoot\\LICENSE" -Destination release\\LICENSES\\copyright-tbc-video-export
+          Copy-Item -Path $builtExporter -Destination release\
+          Copy-Item -Path "$exporterRoot\LICENSE" -Destination release\LICENSES\copyright-tbc-video-export
+          # The frozen binary must carry the real tbc-tools version (baked in
+          # via the vendor version runtime hook), not the 0.0.0 placeholder;
+          # assert it against the vcpkg.json version so a regression fails CI.
+          $expectedExporterVersion = (python -c "import json; print(json.load(open('vcpkg.json'))['version'])").Trim()
+          if ([string]::IsNullOrWhiteSpace($expectedExporterVersion)) {
+            throw "Could not read the expected exporter version from vcpkg.json"
+          }
+          $exporterVersionOutput = (& ".\release\tbc-video-export.exe" --version 2>&1) | Out-String
+          if ($exporterVersionOutput -notmatch [regex]::Escape($expectedExporterVersion)) {
+            throw "tbc-video-export.exe version mismatch: expected $expectedExporterVersion, got: $exporterVersionOutput"
+          }
+          Write-Host "tbc-video-export.exe version OK: $exporterVersionOutput"
           if ("${{ matrix.arch }}" -eq "x86_64") {
             Push-Location release
             .\\tbc-video-export.exe --dump-default-config

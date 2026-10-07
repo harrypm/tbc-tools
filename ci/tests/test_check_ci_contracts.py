@@ -117,6 +117,32 @@ class ContractCoverageTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(set(check_ci_contracts.LINUX_REQUIRED_SNIPPETS)))
 
+    def test_pyinstaller_freeze_bakes_vendor_version(self) -> None:
+        # The frozen tbc-video-export must bake the real tbc-tools vendor version
+        # into the artifact (runtime hook + workflow env exports) and the bundle
+        # verifier must assert it, or releases keep shipping a 0.0.0 exporter.
+        expected = {"write_runtime_hook", "--runtime-hook"}
+        self.assertTrue(
+            expected.issubset(
+                set(check_ci_contracts.PYINSTALLER_BUILD_SCRIPT_REQUIRED_SNIPPETS)
+            )
+        )
+        env_expected = {
+            "TBC_VIDEO_EXPORT_VENDOR_VERSION",
+            "TBC_VIDEO_EXPORT_VENDOR_COMMIT",
+        }
+        self.assertTrue(
+            env_expected.issubset(
+                set(check_ci_contracts.VENDOR_VERSION_ENV_REQUIRED_SNIPPETS)
+            )
+        )
+        verifier_expected = {"check_frozen_exporter_version", "EXPECT_VERSION"}
+        self.assertTrue(
+            verifier_expected.issubset(
+                set(check_ci_contracts.BUNDLE_VERIFY_VERSION_REQUIRED_SNIPPETS)
+            )
+        )
+
     def test_macos_contract_forbids_host_dependency_capture(self) -> None:
         expected_forbidden = {
             "/usr/local/*|/opt/homebrew/*",

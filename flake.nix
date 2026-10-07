@@ -113,7 +113,10 @@
         runtimeLibraryPath = pkgs.lib.optionalString isLinux (pkgs.lib.makeLibraryPath ([ onnxruntimePackage ] ++ cudaRuntimeDependencies));
       in
       let
-        packageVersion = "3.3.0";
+        # Single source of truth for the tools' version is vcpkg.json (the same
+        # source root CMakeLists.txt reads APP_VERSION from when unset); derive
+        # it here so the derivation version cannot drift from the tools.
+        packageVersion = (builtins.fromJSON (builtins.readFile ./vcpkg.json)).version;
         rev = if self ? rev then self.rev else "";
         shortRev = if self ? shortRev then self.shortRev else (if rev != "" then builtins.substring 0 7 rev else "unknown");
         dirtySuffix = if self ? dirtyRev then "-dirty" else "";

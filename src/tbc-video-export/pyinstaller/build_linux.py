@@ -1,18 +1,25 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 if os.name != "posix":
     raise SystemExit("Must be run on Linux")
 
 import dunamai
 import PyInstaller.__main__
-from tbc_video_export.common import consts
+from vendor_version import write_runtime_hook
+
+# bake the build-time vendor version into the artifact via a runtime hook; the
+# frozen binary re-executes consts.py at runtime, where the TBC_VIDEO_EXPORT
+# vendor environment variables do not exist, so consts alone resolves to the
+# 0.0.0 placeholder.
+runtime_hook, vendor_version = write_runtime_hook(Path("build"))
 
 # use .99 as the 4th integer if non-final release
-is_final = dunamai.Version.parse(consts.PROJECT_VERSION).stage == ""
+is_final = dunamai.Version.parse(vendor_version).stage == ""
 version = (
-    f"{dunamai.Version.parse(consts.PROJECT_VERSION).base}{'' if is_final else '.99'}"
+    f"{dunamai.Version.parse(vendor_version).base}{'' if is_final else '.99'}"
 )
 
 print(f"Building Linux binary version {version}")
@@ -27,6 +34,8 @@ PyInstaller.__main__.run(
         "--clean",
         "--collect-submodules",
         "application",
+        "--runtime-hook",
+        str(runtime_hook),
         "--onefile",
         "--name",
         "tbc-video-export",

@@ -18,6 +18,9 @@ CUDA_PLUGIN_PACKAGE_SCRIPT = ROOT / "scripts/cuda-plugin-package.sh"
 WINDOWS_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-windows.txt"
 LINUX_BUILD_REQUIREMENTS = ROOT / "src/tbc-video-export/pyinstaller/requirements-build-linux.txt"
 LINUX_PYINSTALLER_SCRIPT = ROOT / "src/tbc-video-export/pyinstaller/build_linux.py"
+WINDOWS_PYINSTALLER_SCRIPT = ROOT / "src/tbc-video-export/pyinstaller/build_windows.py"
+MACOS_PYINSTALLER_SCRIPT = ROOT / "src/tbc-video-export/pyinstaller/build_macos.py"
+PYINSTALLER_VENDOR_VERSION_SCRIPT = ROOT / "src/tbc-video-export/pyinstaller/vendor_version.py"
 BUNDLE_VERIFY_SCRIPT = ROOT / "ci/verify_linux_bundle.sh"
 AAA_LINUX_BUILD_SCRIPT = ROOT / "scripts/build-aaa-linux.sh"
 AAA_LINUX_PACKAGE_SCRIPT = ROOT / "scripts/package-aaa-appimage.sh"
@@ -173,6 +176,31 @@ BUNDLE_VERIFY_REQUIRED_SNIPPETS = (
     'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext2.ttf"',
     'require_path "$TARGET/bin/vendor/vhs-teletext/misc/teletext4.ttf"',
     'tbc-video-export is not an ELF binary',
+)
+
+# The PyInstaller freeze must bake the tbc-tools vendor version into the artifact
+# via a runtime hook: consts.py resolves the version at runtime from the
+# TBC_VIDEO_EXPORT_VENDOR_* environment variables (set by the CMake wrapper at
+# runtime, or by the baked-in runtime hook inside the frozen binary) and from
+# importlib metadata that does not exist inside the frozen binary. Without the
+# hook every release ships a frozen tbc-video-export reporting the 0.0.0
+# placeholder while the exit-code-only --version smoke tests stay green
+# (v3.2.6 through v3.3.0 all shipped 0.0.0 for exactly this reason).
+PYINSTALLER_BUILD_SCRIPT_REQUIRED_SNIPPETS = (
+    "write_runtime_hook",
+    "--runtime-hook",
+)
+PYINSTALLER_VENDOR_VERSION_SCRIPT_REQUIRED_SNIPPETS = (
+    'os.environ.setdefault("',
+    "dunamai.Version.from_git()",
+)
+VENDOR_VERSION_ENV_REQUIRED_SNIPPETS = (
+    "TBC_VIDEO_EXPORT_VENDOR_VERSION",
+    "TBC_VIDEO_EXPORT_VENDOR_COMMIT",
+)
+BUNDLE_VERIFY_VERSION_REQUIRED_SNIPPETS = (
+    "check_frozen_exporter_version",
+    "EXPECT_VERSION",
 )
 
 WINDOWS_REQUIRED_PACKAGES = (
@@ -448,6 +476,9 @@ def main() -> int:
         WINDOWS_REQUIREMENTS,
         LINUX_BUILD_REQUIREMENTS,
         LINUX_PYINSTALLER_SCRIPT,
+        WINDOWS_PYINSTALLER_SCRIPT,
+        MACOS_PYINSTALLER_SCRIPT,
+        PYINSTALLER_VENDOR_VERSION_SCRIPT,
         BUNDLE_VERIFY_SCRIPT,
         AAA_LINUX_BUILD_SCRIPT,
         AAA_LINUX_PACKAGE_SCRIPT,
@@ -493,6 +524,23 @@ def main() -> int:
 
     # PyInstaller build step must appear in both Linux jobs (x86 container + arm64).
     check_count_at_least(LINUX_WORKFLOW, "Build self-contained tbc-video-export (PyInstaller)", 2, errors)
+    # The PyInstaller freeze must bake the vendor version into the artifact
+    # (runtime hook) and the workflows must export it (vcpkg.json version + short
+    # commit); the bundle verifier must assert the frozen --version so a 0.0.0
+    # regression fails CI instead of shipping silently.
+    for snippet in PYINSTALLER_BUILD_SCRIPT_REQUIRED_SNIPPETS:
+        check_contains(LINUX_PYINSTALLER_SCRIPT, snippet, errors)
+        check_contains(WINDOWS_PYINSTALLER_SCRIPT, snippet, errors)
+        check_contains(MACOS_PYINSTALLER_SCRIPT, snippet, errors)
+    for snippet in PYINSTALLER_VENDOR_VERSION_SCRIPT_REQUIRED_SNIPPETS:
+        check_contains(PYINSTALLER_VENDOR_VERSION_SCRIPT, snippet, errors)
+    for snippet in VENDOR_VERSION_ENV_REQUIRED_SNIPPETS:
+        check_count_at_least(LINUX_WORKFLOW, snippet, 2, errors)
+        check_contains(WINDOWS_WORKFLOW, snippet, errors)
+        check_contains(MACOS_WORKFLOW, snippet, errors)
+    for snippet in BUNDLE_VERIFY_VERSION_REQUIRED_SNIPPETS:
+        check_contains(BUNDLE_VERIFY_SCRIPT, snippet, errors)
+    check_count_at_least(LINUX_WORKFLOW, "export EXPECT_VERSION=", 2, errors)
     # The AAA build-from-source + package-AppImage step must appear in both Linux
     # jobs (x86 container + arm64) so neither ships the prebuilt Windows .exe.
     check_count_at_least(LINUX_WORKFLOW, "Build and package native AAA AppImage from vendored source", 2, errors)

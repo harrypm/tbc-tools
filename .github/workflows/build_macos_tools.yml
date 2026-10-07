@@ -241,6 +241,9 @@ jobs:
           fi
           "$PYTHON_BIN" -m pip install --upgrade pip
           "$PYTHON_BIN" -m pip install pyinstaller dunamai
+          export TBC_VIDEO_EXPORT_VENDOR_VERSION="$($PYTHON_BIN" -c 'import json; print(json.load(open("vcpkg.json"))["version"])')"
+          export TBC_VIDEO_EXPORT_VENDOR_COMMIT="$(git rev-parse --short HEAD)"
+          export TBC_VIDEO_EXPORT_VENDOR_BRANCH="${GITHUB_REF_NAME}"
           export PYTHONPATH="$EXPORTER_ROOT/src"
           cd "$EXPORTER_ROOT"
           mkdir -p build
@@ -659,6 +662,25 @@ jobs:
             sed -n '1,80p' /tmp/tbc-video-export-version.log || true
             exit 1
           fi
+          # The launch smoke test only checks the exit code; also assert the
+          # frozen version is the real release version (baked in via the vendor
+          # version runtime hook), not the 0.0.0 placeholder every release
+          # shipped before the injection existed.
+          EXPECT_EXPORTER_VERSION="$(python -c 'import json; print(json.load(open("vcpkg.json"))["version"])')"
+          EXPORTER_VERSION_LINE="$(sed -n '1p' /tmp/tbc-video-export-version.log)"
+          if [ -z "$EXPECT_EXPORTER_VERSION" ]; then
+            echo "Could not read the expected exporter version from vcpkg.json"
+            exit 1
+          fi
+          case "$EXPORTER_VERSION_LINE" in
+            "$EXPECT_EXPORTER_VERSION"*)
+              echo "Vendored exporter version OK: $EXPORTER_VERSION_LINE"
+              ;;
+            *)
+              echo "Vendored exporter version mismatch: expected $EXPECT_EXPORTER_VERSION, got: $EXPORTER_VERSION_LINE"
+              exit 1
+              ;;
+          esac
           if find dist/tbc-tools.app/Contents -type d -name "__pycache__" -not -path "*/Resources/python/*" | grep -q .; then
             echo "Bytecode caches were generated inside signed app payload."
             find dist/tbc-tools.app/Contents -type d -name "__pycache__" -not -path "*/Resources/python/*"

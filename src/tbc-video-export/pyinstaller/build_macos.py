@@ -12,9 +12,15 @@ from pathlib import Path
 import dunamai
 import PyInstaller.__main__
 import PyInstaller.utils.osx as osxutils
-from tbc_video_export.common import consts
+from vendor_version import write_runtime_hook
 
-version = dunamai.Version.parse(consts.PROJECT_VERSION).base
+# bake the build-time vendor version into the artifact via a runtime hook; the
+# frozen binary re-executes consts.py at runtime, where the TBC_VIDEO_EXPORT
+# vendor environment variables do not exist, so consts alone resolves to the
+# 0.0.0 placeholder.
+runtime_hook, vendor_version = write_runtime_hook(Path("build"))
+
+version = dunamai.Version.parse(vendor_version).base
 
 print(f"Building macOS binary version {version}")
 
@@ -33,6 +39,8 @@ PyInstaller.__main__.run(
         "application",
         "--icon",
         "assets/icon.icns",
+        "--runtime-hook",
+        str(runtime_hook),
         "--onefile",
         "--name",
         "tbc-video-export",
