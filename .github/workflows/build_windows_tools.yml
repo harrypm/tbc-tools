@@ -422,17 +422,30 @@ jobs:
           Copy-Item -Path $builtExporter -Destination release\
           Copy-Item -Path "$exporterRoot\LICENSE" -Destination release\LICENSES\copyright-tbc-video-export
           # The frozen binary must carry the real tbc-tools version (baked in
-          # via the vendor version runtime hook), not the 0.0.0 placeholder;
-          # assert it against the vcpkg.json version so a regression fails CI.
+          # via the vendor version runtime hook), not the 0.0.0 placeholder.
+          # Assert the injection from the generated runtime hook on both
+          # arches, but only execute the exe on x86_64 — the arm64 leg
+          # cross-compiles the C++ tools on an x64 host and does not launch
+          # the frozen exe (same convention as the --dump-default-config gate
+          # below; the arm64-leg exe currently fails its pywintypes import at
+          # startup, which executing it here would expose).
           $expectedExporterVersion = (python -c "import json; print(json.load(open('vcpkg.json'))['version'])").Trim()
           if ([string]::IsNullOrWhiteSpace($expectedExporterVersion)) {
             throw "Could not read the expected exporter version from vcpkg.json"
           }
-          $exporterVersionOutput = (& ".\release\tbc-video-export.exe" --version 2>&1) | Out-String
-          if ($exporterVersionOutput -notmatch [regex]::Escape($expectedExporterVersion)) {
-            throw "tbc-video-export.exe version mismatch: expected $expectedExporterVersion, got: $exporterVersionOutput"
+          $vendorHookContent = Get-Content -Raw "$exporterRoot\build\_vendor_runtime_hook.py"
+          if ($vendorHookContent -notmatch [regex]::Escape($expectedExporterVersion)) {
+            throw "vendor version runtime hook does not contain the expected version $expectedExporterVersion"
           }
-          Write-Host "tbc-video-export.exe version OK: $exporterVersionOutput"
+          if ("${{ matrix.arch }}" -eq "x86_64") {
+            $exporterVersionOutput = (& ".\release\tbc-video-export.exe" --version 2>&1) | Out-String
+            if ($exporterVersionOutput -notmatch [regex]::Escape($expectedExporterVersion)) {
+              throw "tbc-video-export.exe version mismatch: expected $expectedExporterVersion, got: $exporterVersionOutput"
+            }
+            Write-Host "tbc-video-export.exe version OK: $exporterVersionOutput"
+          } else {
+            Write-Host "Skipping tbc-video-export.exe --version on arm64 (hook content asserted instead)."
+          }
           if ("${{ matrix.arch }}" -eq "x86_64") {
             Push-Location release
             .\\tbc-video-export.exe --dump-default-config

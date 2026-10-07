@@ -334,3 +334,49 @@ User approved: "okay lets go with this cleanup" → "continue and cleanup".
 - Follow-ups from the investigation (not in this change): tbc-analyse ↔ tbc-video-export
   version handshake + resolution isolation (the decodepc fix), --dry-run exit code 1
   anomaly, decodepc machine-side diagnostics (which/PATH outputs still not provided).
+
+## Update 5 — CI break on push + patch (2026-10-07 ~12:45)
+
+User: "This broke the binarys patch it" after Tests run 37617037892 (commit 8898af3)
+failed in ~21m.
+
+### Failures (from gh job logs, hard data)
+- macOS x86_64 + arm64 jobs: step script "line 15: unexpected EOF while looking for
+  matching `)'", exit 2 — line 15 of the "Build self-contained tbc-video-export
+  (PyInstaller)" step = my TBC_VIDEO_EXPORT_VENDOR_VERSION export, committed with an
+  unbalanced quote inside the command substitution ("$($PYTHON_BIN" -c ... — quote
+  missing before the variable). actionlint did NOT catch it; bash -n on the step
+  content would have.
+- Windows arm64 job: my version assertion EXECUTED the frozen exe on the arm64 leg;
+  the captured output was a Python traceback: process_handler.py:18 → ... →
+  pywintypes.py:115 __import_pywin32_system_module__ → "ImportError: DLL load failed
+  while importing". The injection itself worked on that leg (build log: "Vendor
+  version: 3.3.0 (commit: 8898af36, branch: main)"). The repo's pre-existing
+  convention never launches the exe on the arm64 leg (--dump-default-config gate
+  skips it) — the pywintypes launch failure is PRE-EXISTING and latent: the shipped
+  Windows arm64 zip's tbc-video-export.exe has never been execution-validated by CI.
+- Green: CI guardrails; Linux build parity; Linux x86_64 + arm64 bundle validation
+  (incl. check_frozen_exporter_version with EXPECT_VERSION=3.3.0); Windows x86_64
+  (exe --version assertion PASSED — injection verified end-to-end on Windows).
+
+### Patch
+- build_macos_tools.yml: repaired the export to "$("$PYTHON_BIN" -c '...')" via a
+  deterministic chr-built rewrite; boolean-verified (fixed-present True,
+  broken-absent True).
+- build_windows_tools.yml: assertion restructured — the generated
+  build/_vendor_runtime_hook.py content is asserted on BOTH arches (must contain the
+  vcpkg.json version); the exe is executed only on x86_64, mirroring the pre-existing
+  --dump-default-config gate, with an explicit skip message on arm64.
+
+### New local guard used for validation
+- bash -n battery over every bash run: block in the Linux + macOS workflows (GitHub
+  expressions neutralized): 41/41 SYNTAX-OK. This would have caught the macOS
+  quoting bug pre-push; not yet wired into ci/run_local_ci_parity.sh or
+  check_ci_contracts.py — follow-up if desired.
+
+### Discovered follow-ups (not in this patch)
+- Windows arm64 leg's frozen tbc-video-export.exe fails to launch (pywintypes DLL
+  load ImportError) — pre-existing, first exposed by executing it; the shipped
+  arm64 release exe is unvalidated at runtime.
+- Wire the bash -n run-block battery into the local guardrails so this class of
+  quoting bug cannot reach CI again.

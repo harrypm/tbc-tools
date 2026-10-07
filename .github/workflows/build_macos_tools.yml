@@ -241,7 +241,7 @@ jobs:
           fi
           "$PYTHON_BIN" -m pip install --upgrade pip
           "$PYTHON_BIN" -m pip install pyinstaller dunamai
-          export TBC_VIDEO_EXPORT_VENDOR_VERSION="$($PYTHON_BIN" -c 'import json; print(json.load(open("vcpkg.json"))["version"])')"
+          export TBC_VIDEO_EXPORT_VENDOR_VERSION="$("$PYTHON_BIN" -c 'import json; print(json.load(open("vcpkg.json"))["version"])')"
           export TBC_VIDEO_EXPORT_VENDOR_COMMIT="$(git rev-parse --short HEAD)"
           export TBC_VIDEO_EXPORT_VENDOR_BRANCH="${GITHUB_REF_NAME}"
           export PYTHONPATH="$EXPORTER_ROOT/src"
