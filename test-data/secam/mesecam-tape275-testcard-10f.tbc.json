@@ -1,0 +1,419 @@
+{
+  "fields": [
+    {
+      "diskLoc": 0.5,
+      "dropOuts": {
+        "endx": [
+          1061
+        ],
+        "fieldLine": [
+          7
+        ],
+        "startx": [
+          1020
+        ]
+      },
+      "fieldPhaseID": 1,
+      "fileLoc": 184320,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 1,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 32.7,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 1.6,
+      "dropOuts": {
+        "endx": [
+          293,
+          346,
+          1096
+        ],
+        "fieldLine": [
+          307,
+          307,
+          307
+        ],
+        "startx": [
+          278,
+          329,
+          1079
+        ]
+      },
+      "fieldPhaseID": 1,
+      "fileLoc": 583680,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 2,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 31.4,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 2.6,
+      "dropOuts": {
+        "endx": [
+          1009,
+          457,
+          770
+        ],
+        "fieldLine": [
+          6,
+          7,
+          7
+        ],
+        "startx": [
+          977,
+          394,
+          757
+        ]
+      },
+      "fieldPhaseID": 1,
+      "fileLoc": 921600,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 3,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 33.4,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 3.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 1290240,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 4,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 30.3,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 4.6,
+      "dropOuts": {
+        "endx": [
+          497,
+          847,
+          936,
+          1062
+        ],
+        "fieldLine": [
+          6,
+          6,
+          6,
+          6
+        ],
+        "startx": [
+          482,
+          823,
+          885,
+          1023
+        ]
+      },
+      "fieldPhaseID": 1,
+      "fileLoc": 1658880,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 5,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 32.8,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 5.7,
+      "fieldPhaseID": 1,
+      "fileLoc": 2027520,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 6,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 30.3,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 6.5,
+      "dropOuts": {
+        "endx": [
+          1107
+        ],
+        "fieldLine": [
+          2
+        ],
+        "startx": [
+          1095
+        ]
+      },
+      "fieldPhaseID": 1,
+      "fileLoc": 2334720,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 7,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 34.2,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 7.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 2703360,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 8,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 31.3,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 8.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 3072000,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 9,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 32.6,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 9.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 3440640,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 10,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 30.6,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 10.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 3778560,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 11,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 32.9,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 11.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 4147200,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 12,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 31.2,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 12.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 4515840,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 13,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 33.1,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 13.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 4853760,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 14,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 31.6,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 14.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 5222400,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 15,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 33.6,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 15.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 5591040,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 16,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 31.3,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 16.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 5959680,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 17,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 34.1,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 17.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 6297600,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 18,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 31.7,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 18.6,
+      "fieldPhaseID": 1,
+      "fileLoc": 6666240,
+      "isFirstField": true,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 19,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 33.8,
+        "wSNR": 0
+      }
+    },
+    {
+      "diskLoc": 19.7,
+      "fieldPhaseID": 1,
+      "fileLoc": 7034880,
+      "isFirstField": false,
+      "medianBurstIRE": 0,
+      "pad": false,
+      "secamFirstLineIsRed": false,
+      "seqNo": 20,
+      "syncConf": 45,
+      "vitsMetrics": {
+        "bPSNR": 30.5,
+        "wSNR": 0
+      }
+    }
+  ],
+  "pcmAudioParameters": {
+    "bits": 16,
+    "isLittleEndian": true,
+    "isSigned": true,
+    "sampleRate": 0
+  },
+  "videoParameters": {
+    "activeVideoEnd": 1123,
+    "activeVideoStart": 203,
+    "black16bIre": 14746,
+    "blanking16bIre": 14746,
+    "chromaDecoder": "secam",
+    "chromaGain": 1.12,
+    "chromaPhase": 0,
+    "colourBurstEnd": 138,
+    "colourBurstStart": 98,
+    "fieldHeight": 313,
+    "fieldWidth": 1135,
+    "firstActiveFieldLine": 22,
+    "firstActiveFrameLine": 43,
+    "gitBranch": "master",
+    "gitCommit": "981942ebac01a665ef0ce594d6ebf4ad44d4d3b4",
+    "isMapped": false,
+    "isSubcarrierLocked": false,
+    "isWidescreen": false,
+    "lastActiveFieldLine": 308,
+    "lastActiveFrameLine": 620,
+    "numberOfSequentialFields": 20,
+    "sampleRate": 17734500.0,
+    "system": "MESECAM",
+    "white16bIre": 59418,
+    "lumaNR": 0,
+    "ntscAdaptThreshold": 1,
+    "ntscAdaptive": true,
+    "ntscChromaWeight": 1,
+    "ntscPhaseCompensation": false,
+    "palTransformThreshold": 0.4,
+    "tapeFormat": "VHS"
+  }
+}

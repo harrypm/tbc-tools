@@ -1,0 +1,290 @@
+{
+  "fields": [
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 1,
+      "diskLoc": 0.0,
+      "fileLoc": 0,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 46.9
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 2,
+      "diskLoc": 1.2,
+      "fileLoc": 983040,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.7
+      }
+    },
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 3,
+      "diskLoc": 2.2,
+      "fileLoc": 1751040,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.3
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 4,
+      "diskLoc": 3.2,
+      "fileLoc": 2580480,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 48.0
+      }
+    },
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 5,
+      "diskLoc": 4.2,
+      "fileLoc": 3348480,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 48.2
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 6,
+      "diskLoc": 5.2,
+      "fileLoc": 4177920,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.2
+      }
+    },
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 7,
+      "diskLoc": 6.2,
+      "fileLoc": 4976640,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.0
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 8,
+      "diskLoc": 7.2,
+      "fileLoc": 5744640,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.6
+      }
+    },
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 9,
+      "diskLoc": 8.2,
+      "fileLoc": 6574080,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.8
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 10,
+      "diskLoc": 9.2,
+      "fileLoc": 7372800,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.0
+      }
+    },
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 11,
+      "diskLoc": 10.2,
+      "fileLoc": 8171520,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.0
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 12,
+      "diskLoc": 11.2,
+      "fileLoc": 8970240,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 46.9
+      }
+    },
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 13,
+      "diskLoc": 12.2,
+      "fileLoc": 9768960,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.5
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 14,
+      "diskLoc": 13.2,
+      "fileLoc": 10567680,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.2
+      }
+    },
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 15,
+      "diskLoc": 14.2,
+      "fileLoc": 11366400,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.3
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 16,
+      "diskLoc": 15.2,
+      "fileLoc": 12165120,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 46.5
+      }
+    },
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 17,
+      "diskLoc": 16.2,
+      "fileLoc": 12963840,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.6
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 18,
+      "diskLoc": 17.2,
+      "fileLoc": 13793280,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.3
+      }
+    },
+    {
+      "isFirstField": true,
+      "detectedFirstField": true,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 19,
+      "diskLoc": 18.2,
+      "fileLoc": 14561280,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 45.9
+      }
+    },
+    {
+      "isFirstField": false,
+      "detectedFirstField": false,
+      "isDuplicateField": false,
+      "syncConf": 45,
+      "seqNo": 20,
+      "diskLoc": 19.2,
+      "fileLoc": 15360000,
+      "fieldPhaseID": 1,
+      "vitsMetrics": {
+        "bPSNR": 47.4
+      }
+    }
+  ],
+  "pcmAudioParameters": {
+    "bits": 16,
+    "isLittleEndian": true,
+    "isSigned": true,
+    "sampleRate": 0
+  },
+  "videoParameters": {
+    "numberOfSequentialFields": 20,
+    "osInfo": "",
+    "gitBranch": "master",
+    "gitCommit": "5fc95968352c21d819d998940df2e8c11224252a",
+    "gitRelease": "v4.0.0-13-g5fc9596",
+    "system": "SECAM",
+    "medium": "TAPE",
+    "fieldWidth": 1135,
+    "sampleRate": 17734475.0,
+    "rfSourceSampleRate": 40000000.0,
+    "black16bIre": 14745.599975585938,
+    "white16bIre": 59417.60008049011,
+    "fieldHeight": 313,
+    "colourBurstStart": 98,
+    "colourBurstEnd": 138,
+    "activeVideoStart": 185,
+    "activeVideoEnd": 1107,
+    "tapeFormat": "QUADRUPLEX"
+  }
+}

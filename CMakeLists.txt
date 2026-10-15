@@ -503,6 +503,53 @@ if(BUILD_TESTING)
             ${CMAKE_SOURCE_DIR}/test-data/pal/ggv-mb-1khz
     )
 
+    # SECAM/ME-SECAM fixtures: 10-frame FLAC-Chop snips (fields 1-20) of
+    # Quadruplex/tape captures, plus RF-capture snips; see
+    # test-data/secam/README.md for provenance and FLAC restore commands.
+    # Expectations measured on the snips: etienne bPSNR median 47.3 dB
+    # (min 45.9), tape275 bPSNR median 32.2 dB (min 30.3).
+    # The etienne fixture is combined luma+chroma, so the SECAM FM decoder
+    # runs in-chain on it; the tape275 fixture is a split Y/C pair, so the
+    # luma .tbc runs mono in-chain and the _chroma.tbc fixture exercises
+    # the SECAM FM decoder directly on the restored FM block.
+    add_test(
+        NAME decode-pretbc-secam-etienne-cbars
+        COMMAND ${SCRIPTS_DIR}/test-decode-pretbc
+            --build ${CMAKE_BINARY_DIR}
+            --pal
+            --no-efm  # tape sources carry no EFM data
+            --decoder mono --decoder secam
+            --expect-frames 10
+            --expect-bpsnr 45
+            ${CMAKE_SOURCE_DIR}/test-data/secam/secam-etienne-cbars-10f
+            ${CMAKE_BINARY_DIR}/testout/decode-secam-etienne-cbars
+    )
+
+    add_test(
+        NAME decode-pretbc-mesecam-tape275
+        COMMAND ${SCRIPTS_DIR}/test-decode-pretbc
+            --build ${CMAKE_BINARY_DIR}
+            --pal
+            --no-efm  # tape sources carry no EFM data
+            --decoder mono
+            --expect-frames 9
+            --expect-bpsnr 30
+            ${CMAKE_SOURCE_DIR}/test-data/secam/mesecam-tape275-testcard-10f
+            ${CMAKE_BINARY_DIR}/testout/decode-mesecam-tape275
+    )
+
+    add_test(
+        NAME decode-pretbc-mesecam-tape275-chroma
+        COMMAND ${SCRIPTS_DIR}/test-decode-pretbc
+            --build ${CMAKE_BINARY_DIR}
+            --pal
+            --no-efm  # tape sources carry no EFM data
+            --decoder secam
+            --expect-frames 9
+            ${CMAKE_SOURCE_DIR}/test-data/secam/mesecam-tape275-testcard-10f_chroma
+            ${CMAKE_BINARY_DIR}/testout/decode-mesecam-tape275-chroma
+    )
+
     # Targeted support/regression checks:
     # decode using a freshly generated SQLite metadata DB from current fixtures.
     add_test(

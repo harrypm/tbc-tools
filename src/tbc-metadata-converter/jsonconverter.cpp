@@ -637,12 +637,16 @@ bool JsonConverter::insertData(TbcMetaData &metaData)
             );
             
             query.bindValue(0, fieldId);
-            query.bindValue(1, field.audioSamples > 0 ? field.audioSamples : QVariant());
-            query.bindValue(2, field.decodeFaults > 0 ? field.decodeFaults : QVariant());
-            query.bindValue(3, field.diskLoc > 0.0 ? field.diskLoc : QVariant());
-            query.bindValue(4, field.efmTValues > 0 ? field.efmTValues : QVariant());
+            // These fields use -1 as the "not present" sentinel (see
+            // TbcMetaData::Field), and 0 is a legitimate value for all of
+            // them (e.g. diskLoc/fileLoc 0 at the start of a capture, or
+            // decodeFaults 0 for a clean field) -- only NULL the sentinel.
+            query.bindValue(1, field.audioSamples != -1 ? field.audioSamples : QVariant());
+            query.bindValue(2, field.decodeFaults != -1 ? field.decodeFaults : QVariant());
+            query.bindValue(3, field.diskLoc != -1 ? field.diskLoc : QVariant());
+            query.bindValue(4, field.efmTValues != -1 ? field.efmTValues : QVariant());
             query.bindValue(5, field.fieldPhaseID);
-            query.bindValue(6, field.fileLoc > 0 ? field.fileLoc : QVariant());
+            query.bindValue(6, field.fileLoc != -1 ? field.fileLoc : QVariant());
             query.bindValue(7, field.isFirstField ? 1 : 0);
             query.bindValue(8, field.medianBurstIRE);
             query.bindValue(9, field.pad ? 1 : 0);
