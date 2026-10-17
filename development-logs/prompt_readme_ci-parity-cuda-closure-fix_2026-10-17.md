@@ -82,7 +82,21 @@ also consumed by the Tests parity job as a conditional insurance restore
   (actionlint + contract unit tests + check_ci_contracts.py + bash -n) —
   exit 0, all ok
 
-## Result / validation
+## Result / validation (verified on GitHub Actions)
 
-(to be updated after the pushed fix's Tests run completes — the parity job
-is expected to restore the closure from tbc-tools-ci-cache and go green)
+Pushed as 3056328 ("ci(workflows): restore pinned CUDA 11.8 closure in Tests
+parity on cache miss"). Tests run 39014418365 (push to main) — **conclusion:
+success**, all jobs green:
+
+- CI guardrails ✓
+- Full Linux build and test parity ✓ — the nix store cache primary key
+  missed again (same flake hash, the failed run never saved), the new
+  insurance step triggered exactly as designed and completed successfully
+  ("Restore pinned CUDA 11.8 closure (devShell fetch insurance)" ✓ — pull +
+  restore from tbc-tools-ci-cache), then "Build and test full parity flow" ✓
+  (cmake + ninja + ctest incl. the 3 new SECAM fixtures on CI).
+- Release-style builds (Linux/Windows/macOS, x86_64 + arm64) ✓
+
+API check of the parity job (117343889736) steps confirmed the insurance
+step ran between the cache restore and the build — gate worked on the
+exact evicted-cache scenario that killed run 38805899161.
