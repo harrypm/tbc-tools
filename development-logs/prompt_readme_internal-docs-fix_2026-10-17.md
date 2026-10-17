@@ -46,4 +46,6 @@ Prompt: "fix any internal docs that need updating"
 
 ## Result
 
-(to be updated after the pushed commit's Tests run completes)
+Pushed as 08f4037. Tests run 39027338506 — **conclusion: success**, all
+jobs green (guardrails, Linux build and test parity, and all release-style
+platform builds).
