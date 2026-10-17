@@ -35,6 +35,7 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Restore and save Nix store cache
+        id: nix-cache
         uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
@@ -42,6 +43,36 @@ jobs:
             nix-${{ runner.os }}-${{ runner.arch }}-
             nix-${{ runner.os }}-
           gc-max-store-size-linux: 6G
+      # The devShell pulls the CUDA 11.8 toolchain closure (cudatoolkit =
+      # cuda-merged), whose tarballs are unfree so they are never on
+      # cache.nixos.org and must be fetched from NVIDIA's CDN when the nix
+      # store cache does not already hold them. The actions cache is evicted
+      # after 7 days without a run, and NVIDIA's CDN intermittently fails from
+      # runner IPs (2026-10-15: cuda_nvrtc 11.8.89 "cannot download from any
+      # mirror"), which reds the parity job. When the primary nix store cache
+      # key missed (including a prefix-fallback restore of an older cache
+      # that may not hold the closure), restore the pinned closure from the
+      # dedicated mirror repo first so the devShell needs no NVIDIA fetches.
+      # Best effort: on failure fall back to NVIDIA/cache.nixos.org as before.
+      - name: Restore pinned CUDA 11.8 closure (devShell fetch insurance)
+        if: steps.nix-cache.outputs.hit-primary-key != 'true'
+        shell: bash
+        continue-on-error: true
+        run: |
+          set +e
+          bash scripts/cuda-closure-cache.sh pull --out ./cuda-cache
+          pull_rc=$?
+          if [ "$pull_rc" -ne 0 ]; then
+            echo "::warning::CUDA closure pull failed (rc=$pull_rc); falling back to NVIDIA/cache.nixos.org."
+            exit 0
+          fi
+          bash scripts/cuda-closure-cache.sh restore --out ./cuda-cache
+          restore_rc=$?
+          if [ "$restore_rc" -ne 0 ]; then
+            echo "::warning::CUDA closure restore failed (rc=$restore_rc); falling back to NVIDIA/cache.nixos.org."
+            exit 0
+          fi
+          echo "CUDA 11.8 closure restored."
       - name: Build and test full parity flow
         run: bash ci/run_local_ci_parity.sh --build-test-only
   # Call the Release workflow in build-only mode (create_release=false) so

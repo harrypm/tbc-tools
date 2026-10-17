@@ -143,7 +143,7 @@ GPU acceleration for teletext deconvolution (vhs-teletext) in tbc-process-vbi is
 
 The flake vendors CUDA 11.8 from `nixpkgsLegacy` (nixos-24.11) for GTX-1000-series (Pascal) support. Nixpkgs 25.05 will remove `cudaPackages_11_8`, and `cache.nixos.org` may GC its paths. To insulate the build, the pinned closure is mirrored in the public `harrypm/tbc-tools-ci-cache` git repo as a Nix binary cache (nars > 95 MiB are chunked to fit GitHub's 100 MiB/file limit).
 
-**Note:** default release builds no longer use this closure (`packages.default` builds with `LDCHROMA_ENABLE_CUDA=OFF`). The closure is now consumed only by `packages.cuda` / the CUDA-plugin publish CI job (Phase 4). The script + cache repo remain required infrastructure.
+**Note:** default release builds no longer use this closure (`packages.default` builds with `LDCHROMA_ENABLE_CUDA=OFF`). The closure is consumed by `packages.cuda` / the CUDA-plugin publish CI job (Phase 4), and by the Tests workflow's parity job as a conditional insurance restore: when the actions nix store cache primary key missed (7-day eviction / prefix fallback), the parity job runs `cuda-closure-cache.sh pull` + `restore` first, because the devShell's CUDA 11.8 toolchain closure is unfree (never on cache.nixos.org) and NVIDIA's CDN intermittently fails from runner IPs (2026-10-15: cuda_nvrtc 11.8.89). The script + cache repo remain required infrastructure.
 
 `scripts/cuda-closure-cache.sh` manages it:
 ```bash
