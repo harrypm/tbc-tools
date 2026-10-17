@@ -55,8 +55,22 @@ Aug-19 run's restore SUCCEEDED with the identical command
 - `bash ci/run_local_ci_parity.sh --guardrails-only` — 49 unit tests ok,
   exit 0 (actionlint + check_ci_contracts.py + bash -n all pass)
 
-## Result / validation
+## Result / validation (verified on GitHub Actions)
 
-(to be updated: commit pushed, the primary nix store cache entry deleted to
-force a cache-miss parity run that exercises the sudo-restore path and the
-ubuntu-24.04-pinned release-style jobs end-to-end)
+Pushed as c49767b. To exercise the fixed insurance path end-to-end, the
+primary nix store cache (id 9084368451, nix-Linux-X64-<flake-hash>) was
+deleted via the actions/caches API, forcing the run's parity job to
+cache-miss. Tests run 39019788562 — **conclusion: success**, all jobs green.
+
+Parity job (117359451993) log proves the exact intended flow:
+- pull from tbc-tools-ci-cache ✓ (6 split nars reassembled, sha256-verified)
+- "unprivileged nix copy failed (multi-user daemon trust?); retrying the
+  same import as root" ✓ — the new root retry engaged exactly as designed
+- "restore complete: 100 paths now importable" ✓ — no NVIDIA fallback, no
+  "cannot download from any mirror" fetches at all
+- "100% tests passed, 0 tests failed out of 33" ✓
+
+Annotations on the run: the ubuntu-latest migration warnings are GONE (all
+pinned jobs ran on ubuntu-24.04) and the CUDA closure restore warning is
+GONE. The only remaining annotation is the GitHub-side macOS arm64 capacity
+notice (queue times), which has no in-repo fix.
