@@ -21,8 +21,10 @@ env:
 
 jobs:
   build-tbc-tools:
+    # Pinned: ubuntu-latest migrates to Ubuntu 26 on 2026-10-19
+    # (actions/runner-images#14748); ubuntu-24.04 keeps today's behaviour.
     name: Build tbc-tools (x86_64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: oraclelinux:8
       options: --user 0 --cap-add SYS_ADMIN --cap-add MKNOD --device /dev/fuse:mrw --security-opt apparmor:unconfined --privileged

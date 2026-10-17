@@ -44,8 +44,10 @@ env:
 
 jobs:
   resolve-tag:
+    # Pinned: ubuntu-latest migrates to Ubuntu 26 on 2026-10-19
+    # (actions/runner-images#14748); ubuntu-24.04 keeps today's behaviour.
     name: Resolve release tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       release_tag: ${{ steps.resolve.outputs.release_tag }}
       checkout_ref: ${{ steps.resolve.outputs.checkout_ref }}
@@ -290,7 +292,9 @@ jobs:
     name: Upload release assets
     needs: [resolve-tag, build-linux, build-windows, build-macos]
     if: ${{ needs.resolve-tag.outputs.publish_release == 'true' }}
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest migrates to Ubuntu 26 on 2026-10-19
+    # (actions/runner-images#14748); ubuntu-24.04 keeps today's behaviour.
+    runs-on: ubuntu-24.04
     env:
       RELEASE_TAG: ${{ needs.resolve-tag.outputs.release_tag }}
       GITHUB_TOKEN: ${{ github.token }}

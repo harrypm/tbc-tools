@@ -237,7 +237,22 @@ cmd_restore() {
   #   (3) `require-sigs = false` only lifts the trusted-key signature check --
   #       Nix still verifies each imported nar's content hash against the
   #       narinfo's narHash, so a corrupt/tampered nar still fails to import.
-  nix copy --from "file://$cache" --option require-sigs false "${paths[@]}"
+  #
+  # Under a multi-user Nix daemon (e.g. cachix/install-nix-action on GitHub
+  # runners), an untrusted client's --option overrides of trusted settings
+  # are refused by the daemon, so the copy fails with the same signature
+  # error even with require-sigs=false on the command line. Root is trusted
+  # by the daemon, so retry the identical copy as root when passwordless
+  # sudo is available (single-user installs and the publish job's
+  # --no-daemon install take the plain path and never hit this).
+  if ! nix copy --from "file://$cache" --option require-sigs false "${paths[@]}"; then
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      say "unprivileged nix copy failed (multi-user daemon trust?); retrying the same import as root"
+      sudo -n "$(command -v nix)" copy --from "file://$cache" --option require-sigs false "${paths[@]}"
+    else
+      die "nix copy --from failed and no passwordless sudo available (a multi-user Nix daemon needs a trusted/root user to lift require-sigs)"
+    fi
+  fi
   say "restore complete: $(nix path-info --recursive --store "file://$cache" "${paths[@]}" | wc -l) paths now importable"
 }
 
