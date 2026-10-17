@@ -4,7 +4,7 @@
 
 ## Overview
 
-tbc-chroma-decoder decodes color (chroma) information from Time Base Corrected (TBC) LaserDisc video files, converting them into standard RGB video suitable for playback and editing. It supports multiple decoding algorithms optimized for PAL and NTSC video systems.
+tbc-chroma-decoder decodes color (chroma) information from Time Base Corrected (TBC) LaserDisc video files, converting them into standard RGB video suitable for playback and editing. It supports multiple decoding algorithms optimized for PAL, NTSC and SECAM-family (SECAM/MESECAM) video systems.
 
 ## Usage
 
@@ -28,7 +28,9 @@ tbc-chroma-decoder [options] <input.tbc> <output.rgb>
 - `-t, --threads <number>`: Specify the number of concurrent threads (default number of logical CPUs)
 
 #### Decoder Selection
-- `-f, --decoder <decoder>`: Decoder to use (pal2d, transform2d, transform3d, ntsc1d, ntsc2d, ntsc3d, nntransform3d, nntsc3d, ntsc3dnoadapt, mono; default automatic)
+- `-f, --decoder <decoder>`: Decoder to use (pal2d, transform2d, transform3d, secam, secam-predemod, ntsc1d, ntsc2d, ntsc3d, nntransform3d, nntsc3d, nnTransform3D, ntsc3dnoadapt, mono; default automatic)
+
+The `secam` decoder FM-demodulates the restored studio SECAM chroma block (FM rest carriers 4.25/4.40625 MHz) that vhs-decode writes for SECAM/MESECAM sources; `secam-predemod` is for chroma TBCs that already carry pre-demodulated Dr/Db.
 
 #### Output Control
 - `-p, --output-format <format>`: Output format (rgb, yuv, y4m; default rgb); RGB48, YUV444P16, GRAY16 pixel formats are supported
@@ -57,56 +59,36 @@ tbc-chroma-decoder [options] <input.tbc> <output.rgb>
 - `-f ntsc3d --adapt-threshold 1.5`: More aggressive 3D filtering (less fallback to 2D/1D)
 - `-f ntsc3d --adapt-threshold 0.1`: More conservative (more likely to use 2D/1D on motion)
 
+#### SECAM-Specific Options
+- `--secam-click-nr <number>`: SECAM: FM click ("SECAM fire") concealment level (0 bypasses; default 1.0, higher = more aggressive)
+- `--secam-first-line-is-red <auto|true|false>`: SECAM pre-demod: force first active line identity (auto uses per-field `secamFirstLineIsRed` metadata; true/red = D'R first; false/blue = D'B first; default auto)
+
 #### Transform Decoder Options
 - `--simple-pal`: Transform: Use 1D UV filter (default 2D)
 - `--transform-threshold <number>`: Transform: Uniform similarity threshold (default 0.4)
 - `--transform-thresholds <file>`: Transform: File containing per-bin similarity thresholds
 - `--show-ffts`: Transform: Overlay the input and output FFTs
-- `--input-metadata <filename>`: Specify the input metadata file (default input.db)
-
-#### Active Area Selection
-- `--ffll, --first_active_field_line <number>`: The first visible line of a field
-- `--lfll, --last_active_field_line <number>`: The last visible line of a field  
-- `--ffrl, --first_active_frame_line <number>`: The first visible line of a frame
-- `--lfrl, --last_active_frame_line <number>`: The last visible line of a frame
-
-#### Chroma Processing
-- `--chroma-gain <number>`: Gain factor applied to chroma components (default 1.0)
-- `--chroma-phase <number>`: Phase rotation applied to chroma components
-- `--chroma-nr <number>`: NTSC: Chroma noise reduction
-- `--luma-nr <number>`: Luma noise reduction level in dB
-
-#### NTSC Specific
-- `-o, --oftest`: NTSC: Overlay the adaptive filter
-- `--ntsc-phase-comp`: NTSC: Adjust phase per-line using pilot burst
-
-#### Transform Decoder
-- `--simple-pal`: Transform: Use 1D UV filter  
-- `--transform-threshold <number>`: Transform: Uniform similarity threshold
-- `--transform-thresholds <file>`: Transform: File containing per-line thresholds
-- `--show-ffts`: Transform: Overlay the input and output spectra
-
-#### Standard Options
-- `-d, --debug`: Show debug messages
-- `-q, --quiet`: Suppress info and warning messages
 
 ## Examples
 
 ```bash
-# PAL LaserDisc (Transform Decoder)
-tbc-chroma-decoder -p transform input.tbc output.rgb
+# PAL (Transform 2D decoder)
+tbc-chroma-decoder --decoder transform2d input.tbc output.rgb
 
-# NTSC LaserDisc (3D Decoder)
-tbc-chroma-decoder -n 3D input.tbc output.rgb
+# NTSC (3D decoder)
+tbc-chroma-decoder --decoder ntsc3d input.tbc output.rgb
 
-# Grayscale Output
-tbc-chroma-decoder -p mono input.tbc output.rgb
+# SECAM/MESECAM (FM chroma decoder on the restored chroma block)
+tbc-chroma-decoder --decoder secam --input-metadata input.tbc.db input.tbc output.rgb
 
-# Process Specific Range
-tbc-chroma-decoder -p transform -s 1000 -l 500 input.tbc output.rgb
+# Grayscale output
+tbc-chroma-decoder --decoder mono input.tbc output.rgb
 
-# With Chroma Adjustments
-tbc-chroma-decoder -p transform --chroma-gain 1.2 --chroma-phase -2.0 input.tbc output.rgb
+# Process a specific range
+tbc-chroma-decoder --decoder transform2d -s 1000 -l 500 input.tbc output.rgb
+
+# With chroma adjustments
+tbc-chroma-decoder --decoder transform2d --chroma-gain 1.2 --chroma-phase -2.0 input.tbc output.rgb
 ```
 
 ## Input/Output
@@ -114,7 +96,7 @@ tbc-chroma-decoder -p transform --chroma-gain 1.2 --chroma-phase -2.0 input.tbc 
 ### Input Format
 - TBC files: 16-bit unsigned composite video
 - Metadata: SQLite format
-- Standards: PAL (625-line), NTSC (525-line), PAL-M (525-line PAL)
+- Standards: PAL (625-line), NTSC (525-line), PAL-M (525-line PAL), SECAM/MESECAM (625-line FM chroma)
 
 ### Output Format
 - RGB: 16-bit per channel, interlaced or progressive

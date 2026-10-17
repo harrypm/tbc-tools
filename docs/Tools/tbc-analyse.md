@@ -196,7 +196,8 @@ These controls are independent. Disabling decode JSON attachment does not disabl
 Export decoder selection follows metadata and profile settings, with the following behavior:
 
 * NTSC export accepts `nntransform3d` and `nntsc3d` decoder names.
-* If metadata video system is `SECAM` or `MESECAM` and no decoder override is set, export defaults to `mono`.
+* If metadata video system is `SECAM` or `MESECAM` and no decoder override is set, export defaults to the `secam` FM decoder (SECAM-family sources carry an FM chroma block that the PAL/NTSC QAM decoders cannot read; `mono` would render them black-and-white).
+* SECAM/MESECAM export accepts the `secam` and `secam-predemod` decoder names; chroma gain/phase are passed for them.
 * When export resolves to `mono`, chroma controls are omitted (`--chroma-gain` and `--chroma-phase` are not passed).
 
 ### Export tab dropout and field selection

@@ -392,12 +392,12 @@ if(BUILD_TESTING)
     add_subdirectory(src/tbc-analyse/testexportarguments)
 
     # Tests for the ld-decode tools.
-    # Most of the tests expect that you have cloned (or symlinked) the
-    # ld-decode-testdata repo within the source directory as "testdata".
-    # Chroma tests run sequentially to avoid file conflicts
+    # Decode fixtures (.tbc + .tbc.json + .tbc.db) are tracked in-repo under
+    # test-data/<system>/ (ntsc, pal, secam); the scripts copy them to a
+    # build-dir output before running. Chroma tests run sequentially to
+    # avoid file conflicts
 
     set(SCRIPTS_DIR ${CMAKE_SOURCE_DIR}/scripts)
-    set(TESTDATA_DIR ${CMAKE_SOURCE_DIR}/testdata)
 
     add_test(
         NAME chroma-ntsc-rgb
