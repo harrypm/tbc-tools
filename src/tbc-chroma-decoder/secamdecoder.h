@@ -155,9 +155,12 @@ private:
         bool haveLastGoodCalibration = false;
 
         // Input type (detected once per call from sync-tip presence): a
-        // combined luma+chroma TBC uses the narrow block-centred demod band;
-        // a split chroma TBC uses libchromadec's wide band
+        // combined luma+chroma TBC starts on libchromadec's wide band and
+        // falls back to the narrow block-centred band only when the porch
+        // fit fails on it (a weak-block capture whose discriminator the
+        // luma HF would own); a split chroma TBC always uses the wide band.
         bool combinedInput = false;
+        bool useNarrowBand = false;
         bool inputChecked = false;
 
         // TEMP diagnostic (SECAMDIAG)
@@ -193,6 +196,7 @@ private:
     void filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint32 row) const;
 
     /// (Re)build maskChroma/maskBand and mixFrequency for work.carrierOffset
+    /// and work.useNarrowBand
     void buildChromaMasks(FieldWork &work) const;
 
     /// Demodulate a field and reconstruct simultaneous D'R/D'B in work.dr/work.db

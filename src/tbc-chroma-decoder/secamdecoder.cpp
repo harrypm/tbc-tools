@@ -254,6 +254,7 @@ void SecamDecoder::FieldWork::init(qint32 fftBlockSize, qint32 fieldHeight, qint
     lastGoodFor = 0.0;
     haveLastGoodCalibration = false;
     combinedInput = false;
+    useNarrowBand = false;
     inputChecked = false;
 }
 
@@ -434,7 +435,7 @@ void SecamDecoder::buildChromaMasks(FieldWork &work) const
     // in decodeField; see the constants above). Both are evaluated on the
     // offset-shifted frequency, so the band follows the measured block.
     double stopLo = kBandStopLo, passLo = kBandPassLo, passHi = kBandPassHi, stopHi = kBandStopHi;
-    if (work.combinedInput) {
+    if (work.useNarrowBand) {
         const double centre = 0.5 * (kNominalFob + kNominalFor);
         stopLo = centre - kCombinedBandStopHz;
         passLo = centre - kCombinedBandFlatHz;
@@ -666,6 +667,13 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
         }
         work.combinedInput = (total > 0 && below * 100 > total); // >1% of samples below the sync level
         work.inputChecked = true;
+        // Combined input starts on the WIDE band: with the block at full
+        // level the carrier owns the band and its gentle skirts do not
+        // modulate it (the narrow band's steep edges amplitude-modulate and
+        // pull a strong carrier - measured: U/V cluster std 724 -> 404 on
+        // the wide band). decodeField's calibration falls back to the
+        // narrow band when the porch fit fails on it (weak-block capture).
+        work.useNarrowBand = false;
         buildChromaMasks(work); // rebuild at the selected band
         std::fprintf(stderr, "SECAMINPUT combined=%d (below-sync %.2f%%)\n",
                      work.combinedInput ? 1 : 0, total > 0 ? 100.0 * below / total : 0.0); // TEMP diagnostic
@@ -835,6 +843,15 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
                 buildChromaMasks(work);
                 continue;
             }
+        } else if (pass == 0 && !work.calibrated && work.combinedInput && !work.useNarrowBand) {
+            // The wide band's porch fit failed on a combined source: the
+            // block is too weak to own the wide band (the luma HF takes the
+            // discriminator over). Fall back to the narrow block-centred
+            // band and re-discriminate.
+            work.useNarrowBand = true;
+            work.carrierOffset = 0.0;
+            buildChromaMasks(work);
+            continue;
         }
         break;
     }

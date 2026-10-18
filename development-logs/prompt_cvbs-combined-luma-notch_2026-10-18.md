@@ -99,6 +99,33 @@ Net: white residual ~1290 U-units (~2.3% of scale) - CLEANER than the split
 path's own 1809 on the same measure; per-pixel U/V noise at parity with split;
 between-line wander better than split.
 
+## Round 3 (2026-10-18): vertical streaks - the demod band was the problem
+
+User: vertical streaks in the bars, very bad green->blue. Measured: the in-band
+disturbance (envelope dips, frequency pulls) is IDENTICAL in the split fixture and
+the new combined cut (33-34% of samples below half the envelope in the saturated
+bars, pull std 573/622 kHz) - the capture's in-band SNR. The streaks are the
+demod's residue of it, x-coherent because the content is static.
+
+- Loosening the concealment's envelope flag (0.5 -> 0.75 on combined input):
+  WORSE (mean-std 724 -> 794, streaks up to 4520) - reverted; the dense partial
+  dips cannot be interpolated away.
+- ROOT CAUSE: the narrow combined band's steep skirts (flat +-450 kHz, stop
+  +-580 kHz) amplitude-modulate and pull a STRONG carrier as the FM sweeps
+  across them - the band was tuned for the OLD weak-block capture where luma HF
+  owned the wide band. With the block at full level the carrier owns the WIDE
+  band, and its gentle skirts do not modulate it.
+- FIX: adaptive demod band - combined input starts on the WIDE band; when the
+  porch fit fails on it (weak-block capture, the 10-15 session's case) the
+  calibration falls back to the narrow block-centred band and re-discriminates
+  (FieldWork.useNarrowBand; the pass loop gains the fallback branch).
+
+Results (v5 combined cut): mean-std 724 -> 404 (TIGHTER than the split path's
+424-431); streak p99 green/magenta/red/blue 1114/2715/1878/3160 ->
+365/567/405/1488; white U/V residual 1277 -> 1028 (cleaner than the split
+path's 1809); porch calibration locks (ident=0, centre within 762 Hz of
+nominal); split fixture unchanged (431 vs 424); ctest 33/33.
+
 ## Colour-scale verdict: the capture, not the decoder
 
 Direct FM measurement of the yellow-bar D'B carrier (spectral peak, 4 fields x
