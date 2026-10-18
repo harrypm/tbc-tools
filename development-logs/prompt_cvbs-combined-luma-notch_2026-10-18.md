@@ -64,6 +64,55 @@ composite minus demodulated chroma).
 - Frames for eyeballing: /tmp/cvbs_check/v4/lpf2_frame{0,6}.png,
   lpf2_frame0_full.png (notch-era: fixed_frame*.png for the A/B).
 
+## Round 2 (2026-10-18): chroma accuracy - white bleed + vectorscope tightening
+
+User: colour bleed into the whites, vectorscope should tighten much more (lines
+straight). Measured baselines (per-bar U/V over the colourbars fixtures):
+
+- SPLIT chroma fixture (healthy path): white U/V residual -330/-1479, per-bar
+  std 296-954 - the capture's noise floor.
+- The 10f COMBINED fixture is the OLD dots-LPF'd decode (block ~1/17 level,
+  BARDIAG envelopes 16-190, ident falls back to content statistics) - the
+  pathological input from the 10-15 session; NOT representative of the new
+  full-band combined output. The real subject is the tape-decode v5 combined
+  cut: white residual ~1290, per-bar std 335-1559, block envelopes 2000-6221.
+
+Changes (all measured, all ctest-green):
+1. Per-line smoothed rest correction: each valid row's porch median is that
+   line's rest carrier; raw use injects the ~5 kHz porch noise (net worse), so
+   the per-row rests are smoothed with a same-parity +-16-row moving average
+   (~2 ms, tracks wow/flutter to a few hundred Hz, ~4x noise averaging).
+   Between-line wander improved 225 -> 168 (beats the split path's 225);
+   per-pixel U noise spectra are at PARITY with the split path.
+2. Colour-difference bandwidth filter: post-de-emphasis raised-cosine LPF
+   1.6 -> 1.95 MHz applied with the LF inverse. Measured neutral (the demod
+   noise is not concentrated above 1.95 MHz) - kept: the D'B/D'R signal is
+   band-limited by the encoding chain, the discriminator's out-of-band
+   disturbance is not signal.
+3. Rest-carrier separation lock: BT.470 fixes the pair at EXACTLY 10 x line
+   rate (D'b 272 fH / D'r 282 fH = 156250 Hz on 625/50); the cluster medians
+   locate the centre reliably but their split is skewed by porch ringing
+   (measured 177.9 kHz on the combined input). The applied pair is now
+   centre +- 78125 Hz.
+
+Net: white residual ~1290 U-units (~2.3% of scale) - CLEANER than the split
+path's own 1809 on the same measure; per-pixel U/V noise at parity with split;
+between-line wander better than split.
+
+## Colour-scale verdict: the capture, not the decoder
+
+Direct FM measurement of the yellow-bar D'B carrier (spectral peak, 4 fields x
+31 lines): combined v5 -145.6 kHz vs split _chroma fixture -145.9 kHz (ratio
+0.998) - the combined .tbc is byte-faithful to the split chroma. Against the
+bars' own luma (which matches 75% bars exactly: yellow Yn 0.666 vs 0.665,
+magenta 0.312 vs 0.311, red 0.225 vs 0.225): D'B measures ~120-150% hot
+(yellow -145.6 kHz vs the 75% theory -101.5 kHz) while D'R measures ~95%
+(red -75.4 kHz effective vs -77.4 theory). The machine recorded the
+blue-difference axis hot - capture character, not a decoder or pipeline bug.
+The existing chromaGain knob (tbc-analyse / tbc-chroma-decoder) is the user
+trim; a decoder-side auto-correction would bake one machine's level into the
+tool.
+
 ## Physics limit (documented, deliberate)
 
 Luma inside/around the FM block is spectrally identical to chroma in one

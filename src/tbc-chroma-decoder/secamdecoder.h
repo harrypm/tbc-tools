@@ -208,6 +208,7 @@ private:
     fftw_complex *planScratchOut = nullptr;
     std::vector<double> diffTaps;            // maximally-flat central difference
     std::vector<std::complex<double>> maskDeemphasis; // exact LF inverse, offset-independent
+    std::vector<double> maskColourLpf;               // colour-difference bandwidth filter
     qint32 porchStart = 0;                   // back-porch measurement window
     qint32 porchEnd = 0;
 

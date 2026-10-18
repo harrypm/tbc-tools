@@ -151,6 +151,12 @@ constexpr double kDevDrHi =  350000.0 / kDeviationDr;
 // there is no carrier to read a frequency from, so the reading is noise.
 constexpr double kColourKillerRatio = 0.25;
 
+// Colour-difference bandwidth filter (Hz, demod baseband): the D'B/D'R
+// signals are band-limited by the encoding chain; discriminator noise above
+// this band (in-band luma pull, tape noise) is not signal.
+constexpr double kColourDiffLpfPass = 1600000.0;
+constexpr double kColourDiffLpfStop = 1950000.0;
+
 // OutputWriter's RGB48 path (outputwriter.cpp) converts Y'UV with the fixed
 // matrix R = Y + 1.139883*V, G = Y - 0.394642*U - 0.580622*V,
 // B = Y + 2.032062*U -- the standard PAL/NTSC matrix, where U/V are the
@@ -334,9 +340,22 @@ bool SecamDecoder::configure(const TbcMetaData::VideoParameters &videoParameters
     // Exact LF pre-correction inverse, offset-independent: built once here
     // and shared read-only by all decoder threads.
     maskDeemphasis.assign(blockSize, {0.0, 0.0});
+    maskColourLpf.assign(blockSize, 0.0);
     for (qint32 k = 0; k < blockSize; k++) {
         const double f = (k <= blockSize / 2 ? k : k - blockSize) * sampleRate / blockSize;
         maskDeemphasis[k] = inverseLf(f);
+        // Colour-difference bandwidth filter: the discriminator's output is
+        // per-sample and carries every in-band disturbance (tape noise, the
+        // luma pull near colour edges) across the whole demod baseband,
+        // while the D'B/D'R signal itself is band-limited by the encoding
+        // chain. Everything above the colour bandwidth is noise; remove it
+        // before the colour differences are scaled into the output.
+        const double af = std::abs(f);
+        if (af <= kColourDiffLpfPass) maskColourLpf[k] = 1.0;
+        else if (af < kColourDiffLpfStop) {
+            const double t = (af - kColourDiffLpfPass) / (kColourDiffLpfStop - kColourDiffLpfPass);
+            maskColourLpf[k] = 0.5 - 0.5 * std::cos(M_PI * t);
+        }
     }
 
     // Differentiating FIR, applied after the analytic signal is mixed down
@@ -600,7 +619,7 @@ void SecamDecoder::filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint3
     const double scale = 1.0 / blockSize;
     for (qint32 k = 0; k < blockSize; k++) {
         const std::complex<double> s(work.fftFreq[k][0], work.fftFreq[k][1]);
-        const std::complex<double> v = s * maskDeemphasis[k];
+        const std::complex<double> v = s * maskDeemphasis[k] * maskColourLpf[k];
         work.fftWork[k][0] = v.real();
         work.fftWork[k][1] = v.imag();
     }
@@ -791,8 +810,19 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
             if (separation > kCalibrationMinSeparationHz && separation < kCalibrationMaxSeparationHz
                 && std::abs(lowMedian - kNominalFob) <= kCalibrationMaxCarrierOffsetHz
                 && std::abs(highMedian - kNominalFor) <= kCalibrationMaxCarrierOffsetHz) {
-                work.fob = lowMedian;
-                work.for_ = highMedian;
+                // BT.470: the rest-carrier pair sits EXACTLY 10 x line rate
+                // apart (D'b 272 fH, D'r 282 fH -> 156250 Hz on 625/50), and
+                // the tape/TBC time base locks the played-back line rate, so
+                // the separation is exact in the sample clock. The cluster
+                // medians locate the block CENTRE reliably, but their SPLIT
+                // is skewed by porch ringing and in-band luma (the etienne
+                // combined input measures ~178 kHz against the true
+                // 156.25 kHz - that over-split zeroed every neutral line's
+                // demod off its rest and tinted the whites). Lock the
+                // separation; keep the measured centre.
+                const double centre = 0.5 * (lowMedian + highMedian);
+                work.fob = centre - 78125.0;
+                work.for_ = centre + 78125.0;
                 work.calibrated = true;
             }
         }
@@ -954,6 +984,42 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
         ? static_cast<double>(std::max(agreeEvenIsRed, picture - agreeEvenIsRed)) / picture
         : 0.0;
 
+    // Per-line rest refinement (smoothed): tape wow/flutter moves the FM
+    // block line to line, so a field-constant zero tints every line
+    // differently (colour bleeding into whites/neutrals, where the deviation
+    // is pure rest) and smears the U/V clusters. Each valid row's porch
+    // median IS that line's rest carrier; the raw reading carries ~5 kHz of
+    // porch noise (more than the wow it corrects on clean captures), so the
+    // per-row rests are smoothed with a same-parity moving average (17 rows
+    // ~ 2 ms - tracks wow/flutter components to a few hundred Hz, averages
+    // the porch noise ~4x). Rows with an unusable or implausible porch read
+    // (beyond the calibration sanity gate) contribute nothing and inherit
+    // the smoothed neighbourhood, falling back to the field pair.
+    std::vector<double> rowZero(fieldHeight);
+    std::vector<char> rowRestUsable(fieldHeight, 0);
+    for (qint32 row = 0; row < fieldHeight; row++) {
+        const double fieldZero = work.lineIsRed[row] ? work.for_ : work.fob;
+        const bool usable = row >= chromaFirstLine && work.rowValid[row]
+            && std::abs(work.porchFreq[row] - fieldZero) <= kCalibrationMaxCarrierOffsetHz;
+        rowRestUsable[row] = usable ? 1 : 0;
+        rowZero[row] = usable ? work.porchFreq[row] : fieldZero;
+    }
+    {
+        const qint32 half = 16; // same-parity rows +-16 = 17 samples ~ 2 ms
+        for (qint32 row = 0; row < fieldHeight; row++) {
+            double sum = 0.0;
+            qint32 n = 0;
+            for (qint32 r = row - 2 * half; r <= row + 2 * half; r += 2) {
+                if (r < 0 || r >= fieldHeight || !rowRestUsable[r]) continue;
+                sum += rowZero[r];
+                n++;
+            }
+            if (n >= 3) rowZero[row] = sum / n;
+            // else: keep the raw value (valid rows keep their own porch
+            // median; invalid rows keep the field pair)
+        }
+    }
+
     std::vector<bool> hasDr(fieldHeight, false);
     std::vector<bool> hasDb(fieldHeight, false);
 
@@ -998,7 +1064,9 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
         const double *fInstLine = &work.fInst[static_cast<size_t>(row) * fieldWidth];
         const std::complex<double> *envRefLine = &work.analyticRef[static_cast<size_t>(row) * fieldWidth];
         const bool isRed = work.lineIsRed[row];
-        const double zero = isRed ? work.for_ : work.fob;
+        // Per-line smoothed rest (see the rowZero table above): the zero
+        // tracks this line's own rest carrier instead of the field pair.
+        const double zero = rowZero[row];
         const double deviation = isRed ? kDeviationDr : kDeviationDb;
         for (qint32 x = 0; x < fieldWidth; x++) {
             demodLine[x] = (killerLevel > 0.0 && std::abs(envRefLine[x]) < killerLevel)
