@@ -21,6 +21,20 @@
 
 #include "tbc/vbiprocessingoptions.h"
 
+// Advanced export options (Export page -> Advanced options dialog). Defaults
+// mirror the tbc-video-export CLI defaults; the persisted state applies to
+// both the main and the proxy exports.
+struct ExportAdvancedOptions {
+    bool exportMetadata = true;             // --export-metadata
+    bool disableMetadataEmbedding = false;  // --no-attach-json
+    bool letterboxCrop = false;             // --letterbox (default active-area framing only)
+    bool forceAnamorphic = false;           // --force-anamorphic (not with letterbox crop)
+    bool reverseFieldOrder = false;         // --reverse (forces --no-dropout-correct)
+    bool twoStep = false;                   // --two-step
+    int outputPadding = 0;                  // --output-padding (0 = off)
+    int threads = 0;                        // --threads (0 = process defaults)
+};
+
 class Configuration : public QObject
 {
     Q_OBJECT
@@ -119,6 +133,10 @@ public:
     void setVbiProcessingOptions(const VbiProcessingOptions &options);
     VbiProcessingOptions getVbiProcessingOptions(void);
 
+    // Get and set methods - advanced export options
+    void setExportAdvancedOptions(const ExportAdvancedOptions &options);
+    ExportAdvancedOptions getExportAdvancedOptions(void);
+
 signals:
 
 public slots:
@@ -197,6 +215,7 @@ private:
         CudaPlugin cudaPlugin;
         RfExport rfExport;
         VbiProcessingOptions vbiProcessing;
+        ExportAdvancedOptions exportAdvancedOptions;
     } settings;
 
     void setDefault(void);

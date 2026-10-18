@@ -1517,6 +1517,7 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
     exportDialog->setGenerateProxyEnabledPreference(configuration.getGenerateProxyEnabled());
     exportDialog->setExportProfileConfigPreference(configuration.getExportProfileConfigEnabled(),
                                                    configuration.getExportProfileConfigPath());
+    exportDialog->setExportAdvancedOptions(configuration.getExportAdvancedOptions());
     connect(exportDialog, &ExportDialog::userEditRangeSelectionChanged,
             this, &MainWindow::exportRangeSelectionChangedSignalHandler);
     connect(exportDialog, &ExportDialog::proxyGenerationPreferenceChanged, this, [this](bool enabled) {
@@ -1527,6 +1528,11 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
             [this](bool enabled, const QString &configPath) {
                 configuration.setExportProfileConfigEnabled(enabled);
                 configuration.setExportProfileConfigPath(configPath);
+                configuration.writeConfiguration();
+            });
+    connect(exportDialog, &ExportDialog::advancedOptionsChanged, this,
+            [this](const ExportAdvancedOptions &options) {
+                configuration.setExportAdvancedOptions(options);
                 configuration.writeConfiguration();
             });
 

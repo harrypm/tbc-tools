@@ -4,7 +4,8 @@
 #include <QString>
 
 namespace ExportArguments {
-bool shouldDisableDropoutCorrection(const QString &dropoutMode, int startFrameOneBased);
+bool shouldDisableDropoutCorrection(const QString &dropoutMode, int startFrameOneBased,
+                                    bool reverseFieldOrder = false);
 bool isDefaultActiveAreaFraming(const QString &resolutionMode, bool hasAnyVerticalLineAdjustment);
 QString sanitizeOutputBasePath(const QString &path);
 }

@@ -38,9 +38,15 @@ QString stripKnownOutputContainerSuffix(const QString &fileName)
 }
 } // namespace
 
-bool shouldDisableDropoutCorrection(const QString &dropoutMode, int startFrameOneBased)
+bool shouldDisableDropoutCorrection(const QString &dropoutMode, int startFrameOneBased,
+                                    bool reverseFieldOrder)
 {
     Q_UNUSED(startFrameOneBased);
+    // Reversed field order exports must disable dropout correction
+    // (tbc-video-export CLI contract: --reverse requires --no-dropout-correct).
+    if (reverseFieldOrder) {
+        return true;
+    }
     const QString normalizedMode = dropoutMode.trimmed().toLower();
     return normalizedMode == QStringLiteral("disabled");
 }

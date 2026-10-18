@@ -123,6 +123,18 @@ void Configuration::writeConfiguration(void)
     configuration->setValue("teletextMinDuplicates", settings.vbiProcessing.teletextMinDuplicates);
     configuration->endGroup();
 
+    // Advanced export options
+    configuration->beginGroup("exportAdvancedOptions");
+    configuration->setValue("exportMetadata", settings.exportAdvancedOptions.exportMetadata);
+    configuration->setValue("disableMetadataEmbedding", settings.exportAdvancedOptions.disableMetadataEmbedding);
+    configuration->setValue("letterboxCrop", settings.exportAdvancedOptions.letterboxCrop);
+    configuration->setValue("forceAnamorphic", settings.exportAdvancedOptions.forceAnamorphic);
+    configuration->setValue("reverseFieldOrder", settings.exportAdvancedOptions.reverseFieldOrder);
+    configuration->setValue("twoStep", settings.exportAdvancedOptions.twoStep);
+    configuration->setValue("outputPadding", settings.exportAdvancedOptions.outputPadding);
+    configuration->setValue("threads", settings.exportAdvancedOptions.threads);
+    configuration->endGroup();
+
     // RF segment export (FLAC-Chop)
     configuration->beginGroup("rfExport");
     configuration->setValue("flacChopPath", settings.rfExport.flacChopPath);
@@ -219,6 +231,20 @@ void Configuration::readConfiguration(void)
     if (settings.vbiProcessing.teletextMinDuplicates < 1) settings.vbiProcessing.teletextMinDuplicates = 1;
     configuration->endGroup();
 
+    // Advanced export options (additive keys - older config files fall back to defaults)
+    configuration->beginGroup("exportAdvancedOptions");
+    settings.exportAdvancedOptions.exportMetadata = configuration->value("exportMetadata", true).toBool();
+    settings.exportAdvancedOptions.disableMetadataEmbedding = configuration->value("disableMetadataEmbedding", false).toBool();
+    settings.exportAdvancedOptions.letterboxCrop = configuration->value("letterboxCrop", false).toBool();
+    settings.exportAdvancedOptions.forceAnamorphic = configuration->value("forceAnamorphic", false).toBool();
+    settings.exportAdvancedOptions.reverseFieldOrder = configuration->value("reverseFieldOrder", false).toBool();
+    settings.exportAdvancedOptions.twoStep = configuration->value("twoStep", false).toBool();
+    settings.exportAdvancedOptions.outputPadding = configuration->value("outputPadding", 0).toInt();
+    settings.exportAdvancedOptions.threads = configuration->value("threads", 0).toInt();
+    if (settings.exportAdvancedOptions.outputPadding < 0) settings.exportAdvancedOptions.outputPadding = 0;
+    if (settings.exportAdvancedOptions.threads < 0) settings.exportAdvancedOptions.threads = 0;
+    configuration->endGroup();
+
     // RF segment export (additive keys - older config files fall back to defaults)
     configuration->beginGroup("rfExport");
     settings.rfExport.flacChopPath = configuration->value("flacChopPath", QString()).toString();
@@ -288,6 +314,9 @@ void Configuration::setDefault(void)
     settings.vbiProcessing.teletextHtmlDir = QString();
     settings.vbiProcessing.teletextTapeFormat = QStringLiteral("vhs");
     settings.vbiProcessing.teletextMinDuplicates = 1;
+
+    // Advanced export options (defaults match tbc-video-export CLI defaults)
+    settings.exportAdvancedOptions = ExportAdvancedOptions();
 
     // RF segment export (FLAC-Chop)
     settings.rfExport.flacChopPath = QString();
@@ -679,4 +708,15 @@ void Configuration::setVbiProcessingOptions(const VbiProcessingOptions &options)
 VbiProcessingOptions Configuration::getVbiProcessingOptions(void)
 {
     return settings.vbiProcessing;
+}
+
+// Advanced export options
+void Configuration::setExportAdvancedOptions(const ExportAdvancedOptions &options)
+{
+    settings.exportAdvancedOptions = options;
+}
+
+ExportAdvancedOptions Configuration::getExportAdvancedOptions(void)
+{
+    return settings.exportAdvancedOptions;
 }

@@ -44,6 +44,14 @@ void testDropoutDisablePolicy()
     // Disabled mode must always disable dropout correction.
     assert(ExportArguments::shouldDisableDropoutCorrection(QStringLiteral("disabled"), 1));
     assert(ExportArguments::shouldDisableDropoutCorrection(QStringLiteral("disabled"), 250));
+
+    // Reverse field order must always disable dropout correction (--reverse
+    // requires --no-dropout-correct), regardless of the dropout mode.
+    assert(ExportArguments::shouldDisableDropoutCorrection(QStringLiteral("basic"), 1, true));
+    assert(ExportArguments::shouldDisableDropoutCorrection(QStringLiteral("heavy"), 250, true));
+    assert(ExportArguments::shouldDisableDropoutCorrection(QStringLiteral("disabled"), 1, true));
+    assert(!ExportArguments::shouldDisableDropoutCorrection(QStringLiteral("basic"), 1, false));
+    assert(!ExportArguments::shouldDisableDropoutCorrection(QStringLiteral("heavy"), 250, false));
 }
 void testDefaultActiveAreaFramingPolicy()
 {

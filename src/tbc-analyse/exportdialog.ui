@@ -253,40 +253,23 @@
          </property>
         </widget>
        </item>
-       <item>
-        <widget class="QCheckBox" name="exportMetadataCheckBox">
-         <property name="text">
-          <string>Include FFmpeg metadata + CC</string>
-         </property>
-         <property name="checked">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="disableMetadataEmbeddingCheckBox">
-         <property name="text">
-          <string>Disable decode JSON attachment</string>
-         </property>
-        </widget>
-       </item>
       <item>
-       <widget class="QCheckBox" name="letterboxCropCheckBox">
+       <widget class="QLabel" name="advancedOptionsSummaryLabel">
         <property name="toolTip">
-         <string>Adjust active lines for letterbox crop output.</string>
+         <string>Current non-default advanced export options.</string>
         </property>
         <property name="text">
-         <string>Letterbox crop</string>
+         <string>Advanced: defaults</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="forceAnamorphicCheckBox">
+       <widget class="QPushButton" name="advancedOptionsButton">
         <property name="toolTip">
-         <string>Force widescreen display aspect ratio metadata.</string>
+         <string>Open the advanced export options dialog (metadata, framing, reverse field order, pipeline options).</string>
         </property>
         <property name="text">
-         <string>Force anamorphic</string>
+         <string>Advanced options...</string>
         </property>
        </widget>
       </item>

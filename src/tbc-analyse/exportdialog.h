@@ -5,6 +5,8 @@
 #include <QProcess>
 #include <QHash>
 
+#include "configuration.h"  // for ExportAdvancedOptions
+
 class TbcSource;
 class QResizeEvent;
 class QSplitter;
@@ -40,6 +42,7 @@ public:
     void setSource(TbcSource *source);
     void setGenerateProxyEnabledPreference(bool enabled);
     void setExportProfileConfigPreference(bool enabled, const QString &configPath);
+    void setExportAdvancedOptions(const ExportAdvancedOptions &options);
     void setInPoint(int frameNumber);
     void setOutPoint(int frameNumber);
     bool hasAudioTracksConfigured() const;
@@ -52,6 +55,7 @@ signals:
     void userEditRangeSelectionChanged(int inPoint, int outPoint, bool clearMetadataValues);
     void proxyGenerationPreferenceChanged(bool enabled);
     void exportProfileConfigPreferenceChanged(bool enabled, const QString &configPath);
+    void advancedOptionsChanged(const ExportAdvancedOptions &options);
 
 private slots:
     void on_outputBrowseButton_clicked();
@@ -62,6 +66,7 @@ private slots:
     void on_exportProfileConfigCheckBox_toggled(bool checked);
     void on_exportProfileConfigLoadButton_clicked();
     void on_exportProfileConfigEjectButton_clicked();
+    void on_advancedOptionsButton_clicked();
     void on_resetInOutButton_clicked();
     void on_exportButton_clicked();
     void on_cancelButton_clicked();
@@ -138,6 +143,7 @@ private:
     void cleanupSourceStorageTemporaryRoot();
     void updateExportProfileConfigPathUi();
     void emitExportProfileConfigPreferenceChanged();
+    void updateAdvancedOptionsSummary();
     void appendStatus(const QString &message);
     void appendFeedStatus(const QString &message, const QString &feedTag);
     void clearFeedStatusLines();
@@ -175,6 +181,7 @@ private:
     QString pendingParallelProxyStdoutBuffer;
     QString pendingParallelProxyStderrBuffer;
     QString exportProfileConfigPath;
+    ExportAdvancedOptions advancedOptions;
     QString temporaryInputJsonPath;
     QString temporaryExportConfigPath;
     QStringList temporaryAudioTrackPaths;

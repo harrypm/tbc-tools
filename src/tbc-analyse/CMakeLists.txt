@@ -43,6 +43,7 @@ set(tbc-analyse_SOURCES
     tbcsource.cpp
     vbidialog.cpp vbidialog.ui
     vbiprocessingdialog.cpp vbiprocessingdialog.h
+    advancedexportoptionsdialog.cpp advancedexportoptionsdialog.h
     configuration.cpp
     dropoutanalysisdialog.cpp dropoutanalysisdialog.ui
     visibledropoutanalysisdialog.cpp visibledropoutanalysisdialog.ui
