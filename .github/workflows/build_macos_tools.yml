@@ -24,14 +24,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Pin arm64 to macos-15: the macos-latest label migrated to macos-26
+          # Pin arm64 to macOS 15: the macos-latest label migrated to macos-26
           # (Tahoe) on 2026-07-15, and the flake.lock-pinned nixpkgs Qt uic
           # crashes with SIGTRAP on macOS 26 (CMake AUTOUIC test fails ->
-          # "CMake Generate step failed"). macos-15 is the same macOS major
-          # version the x86_64 job (macos-15-intel) builds on successfully.
-          # Re-evaluate this pin when flake.lock bumps nixpkgs to a Qt that
-          # supports macOS 26.
-          - runner: macos-15
+          # "CMake Generate step failed"). macOS 15 is the same major version
+          # the x86_64 job (macos-15-intel) builds on successfully. Re-evaluate
+          # this pin when flake.lock bumps nixpkgs to a Qt that supports macOS 26.
+          #
+          # arm64 uses the macos-15-xlarge pool (same macOS 15 image): the
+          # standard macos-15 arm64 pool repeatedly failed to attach any
+          # runner on 2026-11-01 (three consecutive attempts cancelled at
+          # runner assignment, queue ~15 min, no steps executed), while
+          # macos-15-intel and the Linux/Windows pools provisioned normally.
+          # Larger runners are free for public repositories. If the standard
+          # pool recovers, this can move back to plain macos-15.
+          - runner: macos-15-xlarge
             arch: arm64
           - runner: macos-15-intel
             arch: x86_64
