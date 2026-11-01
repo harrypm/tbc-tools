@@ -73,9 +73,9 @@ struct ExportCommandLineOptions {
         guiOption(QStringList() << "g" << "gui",
                   QCoreApplication::translate("main", "Launch dedicated metadata export GUI")),
         forceDarkThemeOption("force-dark-theme",
-                             QCoreApplication::translate("main", "Force dark theme regardless of system settings (default; no-op)")),
+                             QCoreApplication::translate("main", "Pin the dark Fusion theme instead of following the system light/dark setting")),
         lightThemeOption("light-theme",
-                         QCoreApplication::translate("main", "Use the light Fusion theme instead of the stock dark theme")),
+                         QCoreApplication::translate("main", "Pin the light Fusion theme instead of following the system light/dark setting")),
         parentWindowIdOption("parent-window-id",
                              QCoreApplication::translate("main", "Set transient parent window id for GUI integration"),
                              QCoreApplication::translate("main", "id")),
@@ -254,13 +254,14 @@ int main(int argc, char *argv[])
         parser.addPositionalArgument("input", QCoreApplication::translate("main", "Specify input metadata file"));
         parser.process(a);
         processStandardDebugOptions(parser);
-        // Apply the stock theme (dark by default, light via --light-theme). Sets
-        // the Fusion palette, isDarkTheme property, Qt 6.8 color scheme override,
-        // and input-widget contrast guard; re-asserted on macOS switchover.
+        // Apply the stock theme: follow the OS light/dark colour scheme by
+        // default (dark when unknown), or pin light/dark via the explicit flags.
         if (parser.isSet(options.lightThemeOption)) {
             a.applyStockLightTheme();
-        } else {
+        } else if (parser.isSet(options.forceDarkThemeOption)) {
             a.applyStockDarkTheme();
+        } else {
+            a.applyStockThemeFollowingSystem();
         }
 
         MetadataExportDialog::InitialOptions initialOptions;

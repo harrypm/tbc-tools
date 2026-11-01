@@ -11,7 +11,6 @@
 
 #include "chromadecoderconfigdialog.h"
 #include "ui_chromadecoderconfigdialog.h"
-#include "mainwindow.h"
 #include <QEvent>
 #include <QList>
 #include <QSignalBlocker>
@@ -117,11 +116,10 @@ ChromaDecoderConfigDialog::ChromaDecoderConfigDialog(QWidget *parent) :
         }
     }
     
-	//get tbcSource instance from mainWindow
-	if (auto mw = qobject_cast<MainWindow*>(parent)) {
-		tbcSource = &mw->getTbcSource();
-	}
-	
+    // Note: the TbcSource this dialog interacts with (Y/C combine toggle,
+    // NTSC phase-compensation default) is provided explicitly via
+    // setTbcSource() by MainWindow after construction - no parent cast.
+
     // Update the dialogue
     updateDialog();
 }

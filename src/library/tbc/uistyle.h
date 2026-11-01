@@ -127,9 +127,23 @@ inline QPalette stockLightPalette()
     return palette;
 }
 
+// Resolve the OS-level colour scheme: true -> the stock dark palette, false ->
+// the stock light palette. Unknown (or a Qt build without colour-scheme
+// reporting, < 6.5) resolves to dark - the established stock default.
+inline bool systemPrefersDarkTheme()
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    return QGuiApplication::styleHints()->colorScheme() != Qt::ColorScheme::Light;
+#else
+    return true;
+#endif
+}
+
 // Must be called before QApplication construction. Disables Qt's tracking of
 // desktop palette/font changes (defense-in-depth against the macOS appearance
 // switchover; the authoritative re-assert lives in ThemedApplication::event()).
+// The stock palettes remain authoritative either way; follow-system mode only
+// READS the OS colour scheme via styleHints() to choose between them.
 inline void prepareStockThemeEnvironment()
 {
     QGuiApplication::setDesktopSettingsAware(false);
@@ -189,18 +203,26 @@ inline void enforceInputWidgetContrast(QApplication &application)
     application.setStyleSheet(styleSheet);
 }
 
-// ThemedApplication pins the stock Fusion palette (dark by default, light via
-// applyStockLightTheme()) and re-asserts it whenever the platform signals an
-// application palette change — e.g. the macOS scheduled Dark Mode switchover.
-// Without this, Qt re-reads the system palette on the switchover and overwrites
-// the manually-applied dark palette, breaking plot/input-widget theming mid-run.
+// ThemedApplication pins the stock Fusion palette (dark via
+// applyStockDarkTheme(), light via applyStockLightTheme()) and re-asserts it
+// whenever the platform signals an application palette change — e.g. the macOS
+// scheduled Dark Mode switchover. Without this, Qt re-reads the system palette
+// on the switchover and overwrites the manually-applied dark palette, breaking
+// plot/input-widget theming mid-run.
+//
+// applyStockThemeFollowingSystem() instead tracks the OS-level light/dark
+// colour scheme: it resolves styleHints()->colorScheme() to pick one of the
+// two established stock palettes and re-resolves whenever the platform
+// reports a scheme or palette change, so the app follows the OS live.
 //
 // The re-assert is deferred with QTimer::singleShot(0, ...) so it runs *after*
 // QApplication's default ApplicationPaletteChange propagation to top-level
 // windows/widgets; re-applying the palette synchronously inside event() can
 // recurse (setPalette -> ApplicationPaletteChange -> setPalette ...) and crash.
 // On Qt >= 6.8, setColorScheme() asks the platform to override the system color
-// scheme and ignore its changes (honored on macOS).
+// scheme and ignore its changes (honored on macOS); it is only used for the
+// explicit pin (dark/light), never in follow-system mode where the platform
+// scheme must stay authoritative.
 class ThemedApplication : public QApplication
 {
 public:
@@ -209,8 +231,25 @@ public:
     {
     }
 
-    void applyStockDarkTheme() { applyStockTheme(true); }
-    void applyStockLightTheme() { applyStockTheme(false); }
+    void applyStockDarkTheme()
+    {
+        m_followSystem = false;
+        applyStockTheme(true, true);
+    }
+    void applyStockLightTheme()
+    {
+        m_followSystem = false;
+        applyStockTheme(false, true);
+    }
+    // Pick one of the two established stock palettes based on the OS colour
+    // scheme, and keep following OS-level changes. Unknown resolves to dark.
+    void applyStockThemeFollowingSystem()
+    {
+        m_followSystem = true;
+        applyStockTheme(systemPrefersDarkTheme(), false);
+        connectColorSchemeChangeSignal();
+    }
+    bool isFollowingSystemTheme() const { return m_followSystem; }
 
 protected:
     bool event(QEvent *event) override
@@ -220,9 +259,15 @@ protected:
             if (!m_reasserting) {
                 m_reasserting = true;
                 QTimer::singleShot(0, this, [this]() {
-                    QApplication::setPalette(m_reassertDark ? stockDarkPalette()
-                                                             : stockLightPalette());
-                    enforceInputWidgetContrast(*this);
+                    if (m_followSystem) {
+                        // Follow mode: re-resolve the OS scheme and apply the
+                        // matching stock palette (the OS may have switched).
+                        reapplyStockThemeImmediate(systemPrefersDarkTheme());
+                    } else {
+                        QApplication::setPalette(m_reassertDark ? stockDarkPalette()
+                                                                 : stockLightPalette());
+                        enforceInputWidgetContrast(*this);
+                    }
                     m_reasserting = false;
                 });
             }
@@ -232,7 +277,7 @@ protected:
     }
 
 private:
-    void applyStockTheme(bool dark)
+    void applyStockTheme(bool dark, bool pin)
     {
         m_reassertDark = dark;
         // Set the isDarkTheme property BEFORE setPalette(): setPalette()
@@ -245,7 +290,9 @@ private:
         applyFusionStyleIfAvailable(*this);
         setPalette(dark ? stockDarkPalette() : stockLightPalette());
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
-        styleHints()->setColorScheme(dark ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
+        if (pin) {
+            styleHints()->setColorScheme(dark ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
+        }
 #endif
         enforceInputWidgetContrast(*this);
 
@@ -291,8 +338,58 @@ private:
         });
     }
 
+    // Immediate (no deferred second pass) stock-theme application used by the
+    // follow-system switch paths (scheme change / palette change re-resolve).
+    // The caller holds m_reasserting across the call so the synchronous
+    // setPalette() inside cannot recurse through event().
+    void reapplyStockThemeImmediate(bool dark)
+    {
+        m_reassertDark = dark;
+        // Property first - custom-painted widgets read it during the palette
+        // propagation below (same ordering rule as applyStockTheme).
+        setProperty("isDarkTheme", dark);
+        QApplication::setPalette(dark ? stockDarkPalette() : stockLightPalette());
+        enforceInputWidgetContrast(*this);
+        const auto tops = QApplication::topLevelWidgets();
+        for (QWidget *top : tops) {
+            top->update();
+            const auto kids = top->findChildren<QWidget *>();
+            for (QWidget *kid : kids) {
+                kid->update();
+            }
+        }
+    }
+
+    // Live OS scheme tracking (Qt >= 6.8): re-resolve and re-apply whenever
+    // the platform reports a colour-scheme change while in follow mode.
+    void connectColorSchemeChangeSignal()
+    {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+        if (m_schemeSignalConnected) {
+            return;
+        }
+        m_schemeSignalConnected = true;
+        QObject::connect(styleHints(), &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme) {
+            if (!m_followSystem || m_reasserting) {
+                return;
+            }
+            m_reasserting = true;
+            QTimer::singleShot(0, this, [this]() {
+                reapplyStockThemeImmediate(systemPrefersDarkTheme());
+                m_reasserting = false;
+            });
+        });
+#else
+        // Older Qt has no colorSchemeChanged; follow mode still resolves at
+        // startup and re-resolves on ApplicationPaletteChange (macOS emits it
+        // on the appearance switchover).
+#endif
+    }
+
     bool m_reassertDark = true;
     bool m_reasserting = false;
+    bool m_followSystem = false;
+    bool m_schemeSignalConnected = false;
 };
 
 // Access the running ThemedApplication (nullptr if the QCoreApplication is not
@@ -317,6 +414,16 @@ inline void applyStockLightThemeToApp()
 {
     if (auto *app = themedApplicationInstance()) {
         app->applyStockLightTheme();
+    }
+}
+
+// Apply the stock preset matching the OS colour scheme (dark when the OS
+// reports dark or unknown) and keep following OS-level changes. No-op if the
+// app is not a ThemedApplication.
+inline void applyStockThemeFollowingSystemToApp()
+{
+    if (auto *app = themedApplicationInstance()) {
+        app->applyStockThemeFollowingSystem();
     }
 }
 

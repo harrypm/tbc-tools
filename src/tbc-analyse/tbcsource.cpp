@@ -2027,6 +2027,14 @@ void TbcSource::applyChromaSettingsFromMetadata(const TbcMetaData::VideoParamete
             } else if (decoder == "ntsc3d") {
                 ntscConfiguration.dimensions = 3;
                 ntscConfiguration.nnTransform3D = false;
+            } else if (decoder == "ntsc3dnoadapt") {
+                // No-adaptation 3D: adaptive is expressed through the decoder
+                // name (the export passes -f explicitly, which makes
+                // tbc-chroma-decoder ignore the metadata ntscAdaptive field),
+                // so the decoder string itself must switch adaptation off.
+                ntscConfiguration.dimensions = 3;
+                ntscConfiguration.nnTransform3D = false;
+                ntscConfiguration.adaptive = false;
             } else if (decoder == "nntransform3d" || decoder == "nntsc3d") {
                 ntscConfiguration.dimensions = 3;
                 ntscConfiguration.nnTransform3D = true;

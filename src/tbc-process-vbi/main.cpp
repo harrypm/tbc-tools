@@ -410,9 +410,9 @@ static int runGui(int argc, char *argv[])
     parser.addOption(outputMetadataOption);
 
     parser.addOption(QCommandLineOption("force-dark-theme",
-                                        QCoreApplication::translate("main", "Force dark theme regardless of system settings (default; no-op)")));
+                                        QCoreApplication::translate("main", "Pin the dark Fusion theme instead of following the system light/dark setting")));
     parser.addOption(QCommandLineOption("light-theme",
-                                        QCoreApplication::translate("main", "Use the light Fusion theme instead of the stock dark theme")));
+                                        QCoreApplication::translate("main", "Pin the light Fusion theme instead of following the system light/dark setting")));
 
     parser.addPositionalArgument(
         "input",
@@ -423,11 +423,14 @@ static int runGui(int argc, char *argv[])
     parser.process(app);
     processStandardDebugOptions(parser);
 
-    // Apply the stock theme (dark by default, light via --light-theme).
+    // Apply the stock theme: follow the OS light/dark colour scheme by
+    // default (dark when unknown), or pin light/dark via the explicit flags.
     if (parser.isSet(QStringLiteral("light-theme"))) {
         app.applyStockLightTheme();
-    } else {
+    } else if (parser.isSet(QStringLiteral("force-dark-theme"))) {
         app.applyStockDarkTheme();
+    } else {
+        app.applyStockThemeFollowingSystem();
     }
 
     ProcessVbiDialog dialog;

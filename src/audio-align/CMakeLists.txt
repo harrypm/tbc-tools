@@ -86,4 +86,14 @@ if(BUILD_TESTING)
         NAME aaa-detect-aaa-envbin
         COMMAND $<TARGET_FILE:test-audio-align-runtime> --detect-aaa-envbin
     )
+
+    # Workspace placement test: the alignment workspace must resolve to the
+    # metadata JSON directory (target source directory), fall back to the
+    # output directory only when the source dir is not writable, and never
+    # resolve to the system temp location (boot drive). Pure logic (temp
+    # fixtures) — no ffmpeg/AAA launch.
+    add_test(
+        NAME aaa-workspace-dir
+        COMMAND $<TARGET_FILE:test-audio-align-runtime> --workspace-dir
+    )
 endif()

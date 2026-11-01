@@ -18,6 +18,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -361,7 +362,8 @@ bool runProcess(const QString &program,
                 const std::function<void(const QString &)> &outputLineCallback,
                 const AudioAlignmentUtil::CancelCallback &cancelCallback,
                 QString *combinedOutput,
-                QString *errorMessage)
+                QString *errorMessage,
+                const QProcessEnvironment *environmentOverride = nullptr)
 {
     if (combinedOutput) {
         combinedOutput->clear();
@@ -372,6 +374,9 @@ bool runProcess(const QString &program,
 
     QProcess process;
     process.setProcessChannelMode(QProcess::MergedChannels);
+    if (environmentOverride) {
+        process.setProcessEnvironment(*environmentOverride);
+    }
     if (!workingDirectory.isEmpty()) {
         process.setWorkingDirectory(workingDirectory);
     }
@@ -976,6 +981,61 @@ QStringList audioAlignRunnerCommand(QString *errorMessage)
     return runnerCommand;
 }
 
+QString resolveAlignmentWorkspaceDirectory(const QString &jsonFilename,
+                                           const QString &outputFilename,
+                                           QString *errorMessage)
+{
+    if (errorMessage) {
+        errorMessage->clear();
+    }
+
+    // Candidate order: the metadata JSON directory (the target source
+    // directory, where the capture data files live) first, then the output
+    // file directory (which must be writable anyway for the aligned FLAC).
+    // The system temp location is deliberately NOT a candidate: it is usually
+    // on the boot drive, and the AAA pipeline must keep its s24le
+    // intermediates plus the AppImage self-extraction (TMPDIR) on the same
+    // drive as the data files, on every platform.
+    QStringList candidates;
+    const QString jsonDirectory = QFileInfo(normalizeForPathParsing(jsonFilename)).absolutePath();
+    if (!jsonDirectory.isEmpty()) {
+        appendUniqueCandidate(candidates, jsonDirectory);
+    }
+    const QString outputDirectory = QFileInfo(normalizeForPathParsing(outputFilename)).absolutePath();
+    if (!outputDirectory.isEmpty()) {
+        appendUniqueCandidate(candidates, outputDirectory);
+    }
+
+    for (const QString &candidate : candidates) {
+        const QFileInfo candidateInfo(candidate);
+        if (!candidateInfo.exists() || !candidateInfo.isDir()) {
+            continue;
+        }
+        const QString tempRoot = QDir(candidate).filePath(QStringLiteral(".tbc-analyse-temp"));
+        if (!QDir().mkpath(tempRoot)) {
+            continue;
+        }
+        // Real-create probe (not just a permission-bit check): verifies the
+        // directory actually accepts new temp entries on this filesystem.
+        QTemporaryDir probe(QDir(tempRoot).filePath(QStringLiteral("tbc-analyse-aaa-XXXXXX")));
+        if (probe.isValid()) {
+            return QDir::toNativeSeparators(candidate);
+        }
+    }
+
+    if (errorMessage) {
+        *errorMessage = QObject::tr(
+            "No writable location for the alignment workspace: neither the metadata "
+            "directory (%1) nor the output directory (%2) can host temporary files. "
+            "The system temp location is not used because it is usually on the "
+            "boot drive.")
+            .arg(QDir::toNativeSeparators(jsonDirectory),
+                 outputDirectory.isEmpty() ? QObject::tr("(none)")
+                                           : QDir::toNativeSeparators(outputDirectory));
+    }
+    return QString();
+}
+
 bool runStreamAlign(const QString &jsonFilename,
                     const QString &inputFilename,
                     const QString &outputFilename,
@@ -1072,15 +1132,51 @@ bool runStreamAlign(const QString &jsonFilename,
     }
     emitProgress(progressCallback, 5, QObject::tr("Preparation complete."));
 
-    QTemporaryDir temporaryDirectory;
+    // Alignment workspace: created with the data files (target source
+    // directory) so the s24le intermediates - and the AAA AppImage runtime
+    // extraction via TMPDIR below - never touch the system temp location on
+    // the boot drive. The output directory is the only fallback. The
+    // `.tbc-analyse-temp` root matches the export dialog's temp layout, so its
+    // own-prefix leftover cleanup also covers these files; the empty root
+    // itself is removed by that same cleanup path.
+    QString workspaceErrorMessage;
+    const QString workspaceBaseDirectory = resolveAlignmentWorkspaceDirectory(normalizedJson,
+                                                                              normalizedOutput,
+                                                                              &workspaceErrorMessage);
+    if (workspaceBaseDirectory.isEmpty()) {
+        if (errorMessage) {
+            *errorMessage = workspaceErrorMessage.isEmpty()
+                ? QObject::tr("Unable to create a local alignment workspace directory.")
+                : workspaceErrorMessage;
+        }
+        return false;
+    }
+    const QString workspaceTempRoot = QDir(workspaceBaseDirectory).filePath(QStringLiteral(".tbc-analyse-temp"));
+    QTemporaryDir temporaryDirectory(QDir(workspaceTempRoot).filePath(QStringLiteral("tbc-analyse-aaa-XXXXXX")));
     if (!temporaryDirectory.isValid()) {
         if (errorMessage) {
-            *errorMessage = QObject::tr("Unable to create temporary directory for alignment processing.");
+            *errorMessage = QObject::tr("Unable to create temporary directory for alignment processing in: %1")
+                                .arg(QDir::toNativeSeparators(workspaceTempRoot));
         }
         return false;
     }
     const QString rawInputPath = QDir(temporaryDirectory.path()).filePath(QStringLiteral("audio_input.s24le"));
     const QString rawAlignedPath = QDir(temporaryDirectory.path()).filePath(QStringLiteral("audio_aligned.s24le"));
+
+    // Child processes run inside the target source directory, and TMPDIR
+    // (TMP/TEMP on Windows) is pinned to the source-local workspace so the
+    // self-extracting AAA AppImage and any ffmpeg temp usage stay off the
+    // boot drive on every platform.
+    const QString processWorkingDirectory = QDir(workspaceBaseDirectory).absolutePath();
+    QProcessEnvironment childEnvironment = QProcessEnvironment::systemEnvironment();
+    childEnvironment.insert(QStringLiteral("TMPDIR"), temporaryDirectory.path());
+#if defined(Q_OS_WIN)
+    childEnvironment.insert(QStringLiteral("TMP"), temporaryDirectory.path());
+    childEnvironment.insert(QStringLiteral("TEMP"), temporaryDirectory.path());
+#endif
+    emitProgress(progressCallback, 8,
+                 QObject::tr("Alignment workspace: %1")
+                     .arg(QDir::toNativeSeparators(temporaryDirectory.path())));
 
     QString processOutput;
     QString processError;
@@ -1122,7 +1218,7 @@ bool runStreamAlign(const QString &jsonFilename,
                     << QStringLiteral("-ar") << QString::number(streamSampleRateHz)
                     << rawInputPath;
     emitProgress(progressCallback, 10, QObject::tr("Decoding input audio..."));
-    if (!runProcess(ffmpegPath, decodeArguments, QString(),
+    if (!runProcess(ffmpegPath, decodeArguments, processWorkingDirectory,
                     [&](const QString &outputLine) {
                         const int stagePercent = extractPercentFromOutputLine(outputLine);
                         if (stagePercent >= 0) {
@@ -1133,7 +1229,8 @@ bool runStreamAlign(const QString &jsonFilename,
                     },
                     cancelCallback,
                     &processOutput,
-                    &processError)) {
+                    &processError,
+                    &childEnvironment)) {
         if (errorMessage) {
             *errorMessage = processError.isEmpty()
                 ? QObject::tr("Failed to decode input audio for alignment.")
@@ -1153,7 +1250,7 @@ bool runStreamAlign(const QString &jsonFilename,
                    << QStringLiteral("--output-file") << rawAlignedPath
                    << QStringLiteral("--overwrite");
     emitProgress(progressCallback, 35, QObject::tr("Aligning audio stream..."));
-    if (!runProcess(alignProgram, alignArguments, QString(),
+    if (!runProcess(alignProgram, alignArguments, processWorkingDirectory,
                     [&](const QString &outputLine) {
                         const int stagePercent = extractPercentFromOutputLine(outputLine);
                         if (stagePercent >= 0) {
@@ -1164,7 +1261,8 @@ bool runStreamAlign(const QString &jsonFilename,
                     },
                     cancelCallback,
                     &processOutput,
-                    &processError)) {
+                    &processError,
+                    &childEnvironment)) {
         if (errorMessage) {
             *errorMessage = processError.isEmpty()
                 ? QObject::tr("VhsDecodeAutoAudioAlign failed during stream alignment.")
@@ -1187,7 +1285,7 @@ bool runStreamAlign(const QString &jsonFilename,
     encodeArguments << QStringLiteral("-sample_fmt") << QStringLiteral("s32")
                     << normalizedOutput;
     emitProgress(progressCallback, 92, QObject::tr("Encoding aligned output..."));
-    if (!runProcess(ffmpegPath, encodeArguments, QString(),
+    if (!runProcess(ffmpegPath, encodeArguments, processWorkingDirectory,
                     [&](const QString &outputLine) {
                         const int stagePercent = extractPercentFromOutputLine(outputLine);
                         if (stagePercent >= 0) {
@@ -1198,7 +1296,8 @@ bool runStreamAlign(const QString &jsonFilename,
                     },
                     cancelCallback,
                     &processOutput,
-                    &processError)) {
+                    &processError,
+                    &childEnvironment)) {
         if (errorMessage) {
             *errorMessage = processError.isEmpty()
                 ? QObject::tr("Failed to encode aligned audio output.")

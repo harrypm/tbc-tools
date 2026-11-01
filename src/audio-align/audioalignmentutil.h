@@ -47,6 +47,17 @@ QString resolvedAudioAlignPath(QString *errorMessage = nullptr);
 // (mono for the .exe) is unavailable (errorMessage set). Append the tool's
 // own arguments (e.g. "show-build-info") to the returned argv to run it.
 QStringList audioAlignRunnerCommand(QString *errorMessage = nullptr);
+// Resolves the base directory that hosts the alignment workspace temp files:
+// the metadata JSON directory (the target source directory, where the capture
+// data files live), falling back to the output file directory only when the
+// source directory is not writable. Never falls back to the system temp
+// location - it is usually on the boot drive, and the AAA pipeline must keep
+// its s24le intermediates plus the AppImage self-extraction (TMPDIR) on the
+// same drive as the data files. Returns an empty string with errorMessage
+// set when neither location is usable.
+QString resolveAlignmentWorkspaceDirectory(const QString &jsonFilename,
+                                           const QString &outputFilename,
+                                           QString *errorMessage = nullptr);
 bool runStreamAlign(const QString &jsonFilename,
                     const QString &inputFilename,
                     const QString &outputFilename,

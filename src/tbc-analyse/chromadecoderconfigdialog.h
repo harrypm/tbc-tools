@@ -15,6 +15,7 @@
 #include <QDialog>
 #include <QEvent>
 #include <QSlider>
+#include <QString>
 
 #include "comb.h"
 #include "palcolour.h"
@@ -41,6 +42,12 @@ public:
     void setVideoLevels(const TbcMetaData::VideoParameters &videoParameters);
     const PalColour::Configuration &getPalConfiguration();
     const Comb::Configuration &getNtscConfiguration();
+    // Provide the TbcSource the dialog interacts with (Y/C combine toggle,
+    // NTSC phase-compensation default). MainWindow calls this right after
+    // construction; replaced the previous parent-widget MainWindow cast,
+    // which forced this dialog to include mainwindow.h and made it impossible
+    // to compile standalone (e.g. for headless tests).
+    void setTbcSource(TbcSource *source) { tbcSource = source; }
     qint8 getSecamPredemodFirstLineIsRedOverride() const { return secamPredemodFirstLineIsRedOverride; }
 
 signals:
@@ -102,5 +109,74 @@ private:
     qint32 levelForResetIndex(int index, bool white) const;
     QString formatLevelSuffix(qint32 value) const;
 };
+
+// Derives the canonical chroma decoder name (as stored in
+// VideoParameters.chromaDecoder and passed to tbc-video-export as
+// --chroma-decoder) from the live decoder configurations. Covers every
+// decoder mode: PAL (pal2d/transform2d/transform3d/mono), SECAM
+// (secam/secam-predemod/mono) and NTSC
+// (ntsc1d/ntsc2d/ntsc3d/ntsc3dnoadapt/nntransform3d/mono). The NTSC 3D
+// adaptive state is expressed through the decoder name (ntsc3dnoadapt),
+// because tbc-chroma-decoder ignores the metadata ntscAdaptive field once
+// -f selects the decoder explicitly. Returns an empty string when the
+// configurations do not map to a named decoder for the system, in which
+// case callers must leave any existing metadata value untouched. Lives
+// here (not in mainwindow.cpp) so the load-sequence test can verify every
+// mode's round trip.
+inline QString chromaDecoderNameFromConfig(VideoSystem system,
+                                           const PalColour::Configuration &palConfig,
+                                           const Comb::Configuration &ntscConfig)
+{
+    const bool isPal = (system == PAL || system == PAL_M);
+    const bool isSecam = (system == SECAM || system == MESECAM);
+    if (isPal) {
+        switch (palConfig.chromaFilter) {
+        case PalColour::palColourFilter:
+            return QStringLiteral("pal2d");
+        case PalColour::transform2DFilter:
+            return QStringLiteral("transform2d");
+        case PalColour::transform3DFilter:
+            return QStringLiteral("transform3d");
+        case PalColour::mono:
+            return QStringLiteral("mono");
+        default:
+            break;
+        }
+    } else if (isSecam) {
+        // SECAM is its own system: only SECAM decoders (and mono) are named here.
+        switch (palConfig.chromaFilter) {
+        case PalColour::secam:
+            return QStringLiteral("secam");
+        case PalColour::secamPredemod:
+            return QStringLiteral("secam-predemod");
+        case PalColour::mono:
+            return QStringLiteral("mono");
+        default:
+            break;
+        }
+    }
+
+    if (system == NTSC) {
+        if (ntscConfig.dimensions <= 0) {
+            return QStringLiteral("mono");
+        }
+        switch (ntscConfig.dimensions) {
+        case 1:
+            return QStringLiteral("ntsc1d");
+        case 2:
+            return QStringLiteral("ntsc2d");
+        case 3:
+            if (ntscConfig.nnTransform3D) {
+                return QStringLiteral("nntransform3d");
+            }
+            return ntscConfig.adaptive ? QStringLiteral("ntsc3d")
+                                       : QStringLiteral("ntsc3dnoadapt");
+        default:
+            break;
+        }
+    }
+
+    return QString();
+}
 
 #endif // CHROMADECODERCONFIGDIALOG_H

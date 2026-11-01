@@ -92,6 +92,15 @@ int main(int argc, char *argv[])
                        "1 on failure."));
     parser.addOption(detectRfSourceRateOption);
 
+    QCommandLineOption workspaceDirOption(
+        QStringList() << QStringLiteral("workspace-dir"),
+        QStringLiteral("Workspace resolution test: assert the alignment workspace resolves to the "
+                       "metadata JSON directory (target source directory), falls back to the output "
+                       "directory only when the source directory is not writable, and never resolves "
+                       "to the system temp location (boot drive). No ffmpeg/AAA launch required. "
+                       "Exits 0 on success, 1 on failure."));
+    parser.addOption(workspaceDirOption);
+
     QCommandLineOption detectAaaEnvBinOption(
         QStringList() << QStringLiteral("detect-aaa-envbin"),
         QStringLiteral("Bundled-resolution override test: stage a fake bundled AAA AppImage under a "
@@ -367,6 +376,167 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    if (parser.isSet(workspaceDirOption)) {
+        // Workspace resolution contract: temp files live with the data files
+        // (the metadata JSON directory - the target source directory), never
+        // the system temp location (boot drive). The output directory is the
+        // only fallback.
+        const QString systemTempLocation =
+            QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+        // Fixtures must live OUTSIDE the system temp location, otherwise the
+        // "never resolves to system temp" assertions below cannot distinguish
+        // a product failure from the fixture placement (the nix devShell sets
+        // TMPDIR to a /tmp path). The executable's own directory (build/bin)
+        // is writable in every test environment.
+        const QString fixtureBase = QCoreApplication::applicationDirPath();
+
+        // Case 1: writable JSON directory -> resolves to the JSON directory,
+        // and the workspace template creates tbc-analyse-aaa-* entries there.
+        QTemporaryDir writableDir(
+            QDir(fixtureBase).filePath(QStringLiteral("tbc-test-workspace-XXXXXX")));
+        if (!writableDir.isValid()) {
+            return failTest(QStringLiteral("Could not create temp dir for workspace-dir test (case 1)."));
+        }
+        const QString writableJsonPath =
+            QDir(writableDir.path()).filePath(QStringLiteral("capture_demo-video.tbc.json"));
+        {
+            QFile f(writableJsonPath);
+            if (!f.open(QIODevice::WriteOnly)) {
+                return failTest(QStringLiteral("Could not create JSON fixture: %1").arg(writableJsonPath));
+            }
+            f.close();
+        }
+        const QString writableOutputPath =
+            QDir(writableDir.path()).filePath(QStringLiteral("out.flac"));
+        QString resolveError;
+        const QString resolvedWritable = AudioAlignmentUtil::resolveAlignmentWorkspaceDirectory(
+            writableJsonPath, writableOutputPath, &resolveError);
+        if (resolvedWritable.isEmpty()) {
+            return failTest(QStringLiteral("resolveAlignmentWorkspaceDirectory failed for writable dir: %1")
+                                .arg(resolveError));
+        }
+        if (QDir::cleanPath(resolvedWritable) != QDir::cleanPath(writableDir.path())) {
+            return failTest(QStringLiteral("Workspace should resolve to the JSON directory (%1), got: %2")
+                                .arg(writableDir.path(), resolvedWritable));
+        }
+        if (QDir::cleanPath(resolvedWritable) == QDir::cleanPath(systemTempLocation)) {
+            return failTest(QStringLiteral("Workspace must never resolve to the system temp location."));
+        }
+        const QString writableTempRoot =
+            QDir(resolvedWritable).filePath(QStringLiteral(".tbc-analyse-temp"));
+        QTemporaryDir workspaceProbe(
+            QDir(writableTempRoot).filePath(QStringLiteral("tbc-analyse-aaa-XXXXXX")));
+        if (!workspaceProbe.isValid()) {
+            return failTest(QStringLiteral("Workspace template did not create a dir under: %1")
+                                .arg(writableTempRoot));
+        }
+        if (!workspaceProbe.path().contains(QStringLiteral("tbc-analyse-aaa"))) {
+            return failTest(QStringLiteral("Workspace dir is not tbc-analyse-aaa prefixed: %1")
+                                .arg(workspaceProbe.path()));
+        }
+        if (workspaceProbe.path().startsWith(systemTempLocation)) {
+            return failTest(QStringLiteral("Workspace dir landed under the system temp location: %1")
+                                .arg(workspaceProbe.path()));
+        }
+
+#if !defined(Q_OS_WIN)
+        // Case 2: read-only JSON directory + writable output directory ->
+        // falls back to the output directory. (Directory write-protection
+        // via permission bits is not reliable on Windows, so Unix only.)
+        QTemporaryDir readOnlyDir(
+            QDir(fixtureBase).filePath(QStringLiteral("tbc-test-readonly-XXXXXX")));
+        QTemporaryDir fallbackDir(
+            QDir(fixtureBase).filePath(QStringLiteral("tbc-test-fallback-XXXXXX")));
+        if (!readOnlyDir.isValid() || !fallbackDir.isValid()) {
+            return failTest(QStringLiteral("Could not create temp dirs for workspace-dir test (case 2)."));
+        }
+        const QString readOnlyJsonPath =
+            QDir(readOnlyDir.path()).filePath(QStringLiteral("capture_demo-video.tbc.json"));
+        {
+            QFile f(readOnlyJsonPath);
+            if (!f.open(QIODevice::WriteOnly)) {
+                return failTest(QStringLiteral("Could not create JSON fixture: %1").arg(readOnlyJsonPath));
+            }
+            f.close();
+        }
+        const QString fallbackOutputPath =
+            QDir(fallbackDir.path()).filePath(QStringLiteral("out.flac"));
+        const QFile::Permissions originalPermissions = QFile::permissions(readOnlyDir.path());
+        QFile::setPermissions(readOnlyDir.path(),
+                              QFile::Permissions(QFile::ReadOwner | QFile::ExeOwner
+                                                 | QFile::ReadGroup | QFile::ExeGroup
+                                                 | QFile::ReadOther | QFile::ExeOther));
+        QString fallbackError;
+        const QString resolvedFallback = AudioAlignmentUtil::resolveAlignmentWorkspaceDirectory(
+            readOnlyJsonPath, fallbackOutputPath, &fallbackError);
+        QFile::setPermissions(readOnlyDir.path(), originalPermissions);
+        if (resolvedFallback.isEmpty()) {
+            return failTest(QStringLiteral("resolveAlignmentWorkspaceDirectory failed for read-only fallback case: %1")
+                                .arg(fallbackError));
+        }
+        if (QDir::cleanPath(resolvedFallback) == QDir::cleanPath(readOnlyDir.path())) {
+            // Running with privileges that ignore mode bits (e.g. root): the
+            // write-protection simulation cannot work, so this case is
+            // unverifiable here rather than a product failure.
+            QTextStream(stdout) << "SKIP: workspace-dir read-only fallback could not be simulated "
+                                   "(JSON dir remained writable - privileged user?)."
+                                << Qt::endl;
+        } else if (QDir::cleanPath(resolvedFallback) != QDir::cleanPath(fallbackDir.path())) {
+            return failTest(QStringLiteral("Workspace should fall back to the output directory (%1), got: %2")
+                                .arg(fallbackDir.path(), resolvedFallback));
+        }
+
+        // Case 3: both candidate directories read-only (fresh dirs, so no
+        // pre-existing writable .tbc-analyse-temp can satisfy the probe) ->
+        // refuses with an error instead of ever using the system temp.
+        QTemporaryDir readOnlyDir2(
+            QDir(fixtureBase).filePath(QStringLiteral("tbc-test-readonly2-XXXXXX")));
+        QTemporaryDir fallbackDir2(
+            QDir(fixtureBase).filePath(QStringLiteral("tbc-test-fallback2-XXXXXX")));
+        if (!readOnlyDir2.isValid() || !fallbackDir2.isValid()) {
+            return failTest(QStringLiteral("Could not create temp dirs for workspace-dir test (case 3)."));
+        }
+        const QString readOnlyJsonPath2 =
+            QDir(readOnlyDir2.path()).filePath(QStringLiteral("capture_demo-video.tbc.json"));
+        {
+            QFile f(readOnlyJsonPath2);
+            if (!f.open(QIODevice::WriteOnly)) {
+                return failTest(QStringLiteral("Could not create JSON fixture: %1").arg(readOnlyJsonPath2));
+            }
+            f.close();
+        }
+        const QString fallbackOutputPath2 =
+            QDir(fallbackDir2.path()).filePath(QStringLiteral("out.flac"));
+        const QFile::Permissions originalPermissions2 = QFile::permissions(readOnlyDir2.path());
+        const QFile::Permissions fallbackOriginalPermissions2 = QFile::permissions(fallbackDir2.path());
+        const QFile::Permissions readOnlyBits =
+            QFile::Permissions(QFile::ReadOwner | QFile::ExeOwner
+                               | QFile::ReadGroup | QFile::ExeGroup
+                               | QFile::ReadOther | QFile::ExeOther);
+        QFile::setPermissions(readOnlyDir2.path(), readOnlyBits);
+        QFile::setPermissions(fallbackDir2.path(), readOnlyBits);
+        QString bothReadOnlyError;
+        const QString resolvedNeither = AudioAlignmentUtil::resolveAlignmentWorkspaceDirectory(
+            readOnlyJsonPath2, fallbackOutputPath2, &bothReadOnlyError);
+        QFile::setPermissions(readOnlyDir2.path(), originalPermissions2);
+        QFile::setPermissions(fallbackDir2.path(), fallbackOriginalPermissions2);
+        if (!resolvedNeither.isEmpty()) {
+            if (QDir::cleanPath(resolvedNeither) == QDir::cleanPath(systemTempLocation)) {
+                return failTest(QStringLiteral("Workspace must never resolve to the system temp location, got: %1")
+                                    .arg(resolvedNeither));
+            }
+            QTextStream(stdout) << "SKIP: workspace-dir both-read-only refusal could not be simulated "
+                                   "(directories remained writable - privileged user?). resolved="
+                                << resolvedNeither << Qt::endl;
+        } else if (bothReadOnlyError.isEmpty()) {
+            return failTest(QStringLiteral("resolveAlignmentWorkspaceDirectory returned empty without an error message."));
+        }
+#endif
+
+        QTextStream(stdout) << "AAA workspace-dir test passed. workspace=" << resolvedWritable << Qt::endl;
+        return 0;
+    }
+
     const QString jsonPath = parser.value(jsonOption).trimmed();
     const QString inputAudioPath = parser.value(inputAudioOption).trimmed();
     const QString outputAudioPath = parser.value(outputAudioOption).trimmed();
@@ -398,6 +568,28 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    // Copy the fixtures into a private run directory: the alignment workspace
+    // must live with the metadata JSON (target source directory), so this keeps
+    // the run's temp files out of the source tree and lets us prove placement.
+    QTemporaryDir runtimeDir;
+    if (!runtimeDir.isValid()) {
+        return failTest(QStringLiteral("Could not create temp dir for runtime fixtures."));
+    }
+    const QString runtimeJsonPath = QDir(runtimeDir.path()).filePath(QFileInfo(jsonPath).fileName());
+    const QString runtimeInputPath = QDir(runtimeDir.path()).filePath(QFileInfo(inputAudioPath).fileName());
+    if (!QFile::copy(jsonPath, runtimeJsonPath) || !QFile::copy(inputAudioPath, runtimeInputPath)) {
+        return failTest(QStringLiteral("Could not copy fixtures into the runtime dir: %1")
+                            .arg(runtimeDir.path()));
+    }
+
+    // Snapshot pre-existing tbc-analyse-aaa entries in the system temp
+    // location so any NEW boot-drive workspace created by the run is caught.
+    const QString systemTempLocation =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    const QStringList preExistingTempEntries =
+        QDir(systemTempLocation).entryList(QStringList() << QStringLiteral("tbc-analyse-aaa-*"),
+                                           QDir::Dirs | QDir::NoDotAndDotDot);
+
     const QFileInfo outputInfo(outputAudioPath);
     if (!outputInfo.absoluteDir().exists()
         && !QDir().mkpath(outputInfo.absoluteDir().absolutePath())) {
@@ -408,8 +600,8 @@ int main(int argc, char *argv[])
 
     QString errorMessage;
     const bool ok = AudioAlignmentUtil::runStreamAlign(
-        jsonPath,
-        inputAudioPath,
+        runtimeJsonPath,
+        runtimeInputPath,
         outputAudioPath,
         rfVideoSampleRateHz,
         true,
@@ -477,7 +669,26 @@ int main(int argc, char *argv[])
                             .arg(firstStream.value(QStringLiteral("channels")).toVariant().toString()));
     }
 
-    QTextStream(stdout) << "AAA runtime fixture test passed. Output: "
-                        << alignedInfo.absoluteFilePath() << Qt::endl;
+    // The workspace root must exist next to the metadata JSON (source-local
+    // placement), and no new tbc-analyse-aaa-* workspace may have appeared in
+    // the system temp location (boot drive).
+    const QString runtimeTempRoot =
+        QDir(runtimeDir.path()).filePath(QStringLiteral(".tbc-analyse-temp"));
+    if (!QFileInfo::exists(runtimeTempRoot) || !QFileInfo(runtimeTempRoot).isDir()) {
+        return failTest(QStringLiteral("Alignment workspace was not created with the metadata JSON (expected: %1)")
+                            .arg(runtimeTempRoot));
+    }
+    const QStringList postTempEntries =
+        QDir(systemTempLocation).entryList(QStringList() << QStringLiteral("tbc-analyse-aaa-*"),
+                                           QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &entry : postTempEntries) {
+        if (!preExistingTempEntries.contains(entry)) {
+            return failTest(QStringLiteral("A new workspace appeared in the system temp location (boot drive): %1/%2")
+                                .arg(systemTempLocation, entry));
+        }
+    }
+
+    QTextStream(stdout) << "AAA runtime fixture test passed. Workspace: " << runtimeTempRoot
+                        << " Output: " << alignedInfo.absoluteFilePath() << Qt::endl;
     return 0;
 }

@@ -447,8 +447,11 @@ int main(int argc, char *argv[])
                                      QCoreApplication::translate("main", "Launch the GUI (default when no explicit CLI mode is provided)."));
         parser.addOption(guiOption);
         QCommandLineOption lightThemeOption("light-theme",
-                                            QCoreApplication::translate("main", "Use the light Fusion theme instead of the stock dark theme"));
+                                            QCoreApplication::translate("main", "Pin the light Fusion theme instead of following the system light/dark setting"));
         parser.addOption(lightThemeOption);
+        QCommandLineOption forceDarkThemeOption("force-dark-theme",
+                                                QCoreApplication::translate("main", "Pin the dark Fusion theme instead of following the system light/dark setting"));
+        parser.addOption(forceDarkThemeOption);
 
         QCommandLineOption sourceVideoFileOption(QStringList() << "i" << "input",
                     QCoreApplication::translate("main", "Specify input laserdisc sample file"), QCoreApplication::translate("main", "file"));
@@ -466,13 +469,14 @@ int main(int argc, char *argv[])
         parser.process(a);
         processStandardDebugOptions(parser);
 
-        // Apply the stock theme (dark by default, light via --light-theme). Sets
-        // the Fusion palette, isDarkTheme property, Qt 6.8 color scheme override,
-        // and input-widget contrast guard; re-asserted on macOS switchover.
+        // Apply the stock theme: follow the OS light/dark colour scheme by
+        // default (dark when unknown), or pin light/dark via the explicit flags.
         if (parser.isSet(lightThemeOption)) {
             a.applyStockLightTheme();
-        } else {
+        } else if (parser.isSet(forceDarkThemeOption)) {
             a.applyStockDarkTheme();
+        } else {
+            a.applyStockThemeFollowingSystem();
         }
 
         bool outputFormatIsValid = false;

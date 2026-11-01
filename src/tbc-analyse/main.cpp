@@ -201,12 +201,12 @@ int main(int argc, char *argv[])
     // Add the standard debug options --debug and --quiet
     addStandardDebugOptions(parser);
 
-    // Theme options. Stock default is Fusion + dark (absolute; re-asserted on
-    // macOS appearance switchover by ThemedApplication). --light-theme opts
-    // into the light palette; --force-dark-theme is kept as a back-compat
-    // no-op (dark is now the default).
-    parser.addOption(QCommandLineOption("force-dark-theme", "Force dark theme regardless of system settings (default; no-op)"));
-    parser.addOption(QCommandLineOption("light-theme", "Use the light Fusion theme instead of the stock dark theme"));
+    // Theme options. Stock default is Fusion following the OS-level light/dark
+    // colour scheme (dark when the OS reports dark or unknown); ThemedApplication
+    // re-resolves on OS scheme/palette changes. --light-theme and
+    // --force-dark-theme pin the light/dark stock palettes instead.
+    parser.addOption(QCommandLineOption("force-dark-theme", "Pin the dark Fusion theme instead of following the system light/dark setting"));
+    parser.addOption(QCommandLineOption("light-theme", "Pin the light Fusion theme instead of following the system light/dark setting"));
     parser.addOption(QCommandLineOption("metadata-only", "Load metadata (.db or .json) without TBC data"));
 
     // Positional argument to specify input video file
@@ -218,14 +218,18 @@ int main(int argc, char *argv[])
     // Standard logging options
     processStandardDebugOptions(parser);
 
-    // Apply the stock theme (dark by default, light via --light-theme). This
-    // sets the Fusion palette, the isDarkTheme app property, the Qt 6.8 color
-    // scheme override, and the input-widget contrast guard. ThemedApplication
-    // re-asserts it on any ApplicationPaletteChange (e.g. macOS switchover).
+    // Apply the stock theme: follow the OS light/dark colour scheme by
+    // default (dark when unknown), or pin light/dark via the explicit flags.
+    // This sets the Fusion palette, the isDarkTheme app property, and the
+    // input-widget contrast guard. ThemedApplication re-resolves the system
+    // scheme on OS changes while following (and re-asserts a pinned palette on
+    // any ApplicationPaletteChange, e.g. macOS switchover).
     if (parser.isSet("light-theme")) {
         a.applyStockLightTheme();
-    } else {
+    } else if (parser.isSet("force-dark-theme")) {
         a.applyStockDarkTheme();
+    } else {
+        a.applyStockThemeFollowingSystem();
     }
 
     // Get the arguments from the parser

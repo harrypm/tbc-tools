@@ -85,60 +85,6 @@
 #include "../tbc-export-metadata/metadataexportdialog.h"
 #include "tbc/uistyle.h"
 namespace {
-QString chromaDecoderNameFromConfig(VideoSystem system,
-                                    const PalColour::Configuration &palConfig,
-                                    const Comb::Configuration &ntscConfig)
-{
-    const bool isPal = (system == PAL || system == PAL_M);
-    const bool isSecam = (system == SECAM || system == MESECAM);
-    if (isPal) {
-        switch (palConfig.chromaFilter) {
-        case PalColour::palColourFilter:
-            return QStringLiteral("pal2d");
-        case PalColour::transform2DFilter:
-            return QStringLiteral("transform2d");
-        case PalColour::transform3DFilter:
-            return QStringLiteral("transform3d");
-        case PalColour::mono:
-            return QStringLiteral("mono");
-        default:
-            break;
-        }
-    } else if (isSecam) {
-        // SECAM is its own system: only SECAM decoders (and mono) are named here.
-        switch (palConfig.chromaFilter) {
-        case PalColour::secam:
-            return QStringLiteral("secam");
-        case PalColour::secamPredemod:
-            return QStringLiteral("secam-predemod");
-        case PalColour::mono:
-            return QStringLiteral("mono");
-        default:
-            break;
-        }
-    }
-
-    if (system == NTSC) {
-        if (ntscConfig.dimensions <= 0) {
-            return QStringLiteral("mono");
-        }
-        switch (ntscConfig.dimensions) {
-        case 1:
-            return QStringLiteral("ntsc1d");
-        case 2:
-            return QStringLiteral("ntsc2d");
-        case 3:
-            return ntscConfig.nnTransform3D ? QStringLiteral("nntransform3d")
-                                            : QStringLiteral("ntsc3d");
-        default:
-            break;
-        }
-    }
-
-    return QString();
-}
-
-
 QString sanitizedFileToken(const QString &value)
 {
     QString token = value.trimmed().toLower();
@@ -1423,6 +1369,7 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
     closedCaptionDialog = new ClosedCaptionsDialog(this);
     videoParametersDialog = new VideoParametersDialog(this);
     chromaDecoderConfigDialog = new ChromaDecoderConfigDialog(this);
+    chromaDecoderConfigDialog->setTbcSource(&tbcSource);
     metadataConversionDialog = new MetadataConversionDialog(this);
     metadataStatusDialog = new MetadataStatusDialog(this);
     metadataEditorDialog = new MetadataEditorDialog(this);
@@ -1815,10 +1762,33 @@ void MainWindow::populateThemesMenu()
     availableThemes.removeDuplicates();
     availableThemes.sort(Qt::CaseInsensitive);
 
-    // Dedicated stock theme presets at the top of the dropdown. Dark is the
-    // standard default; Light is a manual opt-in. Both drive the absolute
-    // Fusion palette via ThemedApplication and are re-asserted across macOS
-    // appearance switches. Exclusive with the Qt-style actions below.
+    // Dedicated stock theme presets at the top of the dropdown. System is the
+    // standard default: it follows the OS-level light/dark colour scheme (dark
+    // when unknown) and keeps following OS changes. Dark and Light pin the
+    // absolute Fusion palettes via ThemedApplication (re-asserted across macOS
+    // appearance switches). Exclusive with the Qt-style actions below.
+    QAction *systemAction = ui->menuThemes->addAction(tr("System"));
+    systemAction->setCheckable(true);
+    systemAction->setData(QStringLiteral("stock-system"));
+    themesActionGroup->addAction(systemAction);
+    connect(systemAction, &QAction::triggered, this, [this, systemAction](bool checked) {
+        if (!checked) {
+            return;
+        }
+        tbc::ui::applyStockThemeFollowingSystemToApp();
+        refreshThemeDependentUi();
+        // Mirror the user's successful "second press" behavior: re-apply once
+        // on a short delay so late-resolving widgets (cached scope renders,
+        // scene-backed controls) settle fully in one user click.
+        QTimer::singleShot(24, this, [this, systemAction]() {
+            if (!systemAction->isChecked()) {
+                return;
+            }
+            tbc::ui::applyStockThemeFollowingSystemToApp();
+            refreshThemeDependentUi();
+        });
+    });
+
     QAction *darkAction = ui->menuThemes->addAction(tr("Dark"));
     darkAction->setCheckable(true);
     darkAction->setData(QStringLiteral("stock-dark"));
@@ -1865,7 +1835,7 @@ void MainWindow::populateThemesMenu()
     if (availableThemes.isEmpty()) {
         QAction *placeholderAction = ui->menuThemes->addAction(tr("No Qt themes available"));
         placeholderAction->setEnabled(false);
-        darkAction->setChecked(true);
+        systemAction->setChecked(true);
         return;
     }
 
@@ -1890,10 +1860,10 @@ void MainWindow::populateThemesMenu()
         });
     }
 
-    // Dark is the stock default; ensure it is checked. This unchecks any Qt
+    // System is the stock default; ensure it is checked. This unchecks any Qt
     // style action the loop above may have auto-checked (the stock preset
     // owns the active palette; style actions below are advanced overrides).
-    darkAction->setChecked(true);
+    systemAction->setChecked(true);
 }
 
 void MainWindow::applyThemeStyle(const QString &styleName)
@@ -2441,12 +2411,23 @@ void MainWindow::updateGuiLoaded()
     // Update the video parameters dialogue
     videoParametersDialog->setVideoParameters(tbcSource.getVideoParameters());
 
-    // Update the chroma decoder configuration dialogue
+    // Update the chroma decoder configuration dialogue. The decoder selection
+    // is absolute user config: when the metadata carries an explicit
+    // chromaDecoder string (set via the config dialog or metadata editor and
+    // possibly saved), pass isInit=true so the dialog keeps that selection.
+    // Only request the dialog's default-selection init (isInit=false) when the
+    // metadata has no chromaDecoder, matching the previous behaviour for
+    // legacy metadata. Passing false unconditionally reset the selection to
+    // the hard default (Transform 2D/3D) on every load and then emitted
+    // chromaDecoderConfigChanged, which wrote the default back into the
+    // in-memory metadata that the export sends to the decoder.
+    const bool metadataHasChromaDecoder =
+        !tbcSource.getVideoParameters().chromaDecoder.trimmed().isEmpty();
     chromaDecoderConfigDialog->setConfiguration(tbcSource.getSystem(), tbcSource.getPalConfiguration(),
                                                 tbcSource.getNtscConfiguration(),
                                                 tbcSource.getMonoConfiguration(),
                                                 tbcSource.getSourceMode(),
-                                                false); // set to false to init the chroma decoder selection
+                                                metadataHasChromaDecoder);
     chromaDecoderConfigDialog->setVideoLevels(tbcSource.getVideoParameters());
 
     // Ensure the busy dialogue is hidden
