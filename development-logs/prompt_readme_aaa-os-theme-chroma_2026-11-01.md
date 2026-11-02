@@ -131,8 +131,32 @@ Iteration 2 (user: fix must apply to ALL chroma decoder modes):
   guard handles it) - also confirms the desktop session is currently dark-themed,
   consistent with the colorScheme=Dark probe.
 
-Pending (cannot be verified without the user / a push):
+## Commit / push / CI (2026-11-01)
+
+- Commits (user-requested, all pushed to main):
+  a907bb0 fix(gui) (20 files, +1145/-138); 4c77df8 ci(macos) pin universal DMG job to
+  macos-15 (macos-latest migrated to macos-26 on 2026-07-15 and the pinned Qt crashes on
+  macOS 26; the arch jobs were already pinned); fa74876 ci(macos) arm64 -> macos-15-xlarge
+  experiment; c8bf838 ci(macos) revert arm64 to standard macos-15 (final state).
+  ci/check_ci_contracts.py passed before every push.
+- Tests run 41343276522 (head 4c77df8): all platforms PASSED except macOS arm64 -
+  CANCELLED at runner assignment on three attempts. Annotations: "The job was not
+  acquired by Runner of type hosted even after multiple attempts" + macOS arm64 capacity
+  warnings -> GitHub-side capacity problem, not the changes (same job succeeded 2026-10-18).
+- Tests run 41358476762 (head fa74876, arm64 on macos-15-xlarge): arm64 job REFUSED with
+  "The job was not started because recent account payments have failed or your spending
+  limit needs to be increased" - the larger pool is blocked by account billing/spending
+  limit. Everything else passed again. Reverted to macos-15 (c8bf838).
+- Tests run 41361018818 (head c8bf838, final): **conclusion=success, ALL jobs green** -
+  CI guardrails; Full Linux build and test parity (incl. aaa-workspace-dir +
+  testchromaconfigdialog); Linux x86_64/arm64; Windows x86_64/arm64; macOS arm64 (runner
+  attached, 25 steps, success); macOS x86_64; universal macOS app/dmg (on the macos-15
+  pin). Upload release assets skipped (no publish, as required). GitHub Actions parity
+  requirement satisfied for a907bb0+c8bf838-lineage.
+
+Pending (cannot be verified without the user):
 - Real-GUI confirmation of the theme follow (OS light/dark flip while tbc-analyse runs).
 - Real-GUI confirmation of the chroma fix (PAL 2D survives reload; export Command log
   shows --chroma-decoder pal2d).
-- GitHub Actions parity (project rule) - requires a push.
+
+DONE: GitHub Actions parity - Tests run 41361018818 (head c8bf838) passed all jobs.
