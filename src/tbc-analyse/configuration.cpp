@@ -144,6 +144,12 @@ void Configuration::writeConfiguration(void)
     configuration->setValue("saveAllAlsoExportRf", settings.rfExport.saveAllAlsoExportRf);
     configuration->endGroup();
 
+    // Theme options (Themes menu persistence)
+    configuration->beginGroup("theme");
+    configuration->setValue("keepChoice", settings.theme.keepChoice);
+    configuration->setValue("mode", settings.theme.mode);
+    configuration->endGroup();
+
     // Sync the settings with disk
     tbcDebugStream() << "Configuration::writeConfiguration(): Writing configuration to disk";
     configuration->sync();
@@ -255,6 +261,17 @@ void Configuration::readConfiguration(void)
     if (settings.rfExport.padBeforeMs < 0) settings.rfExport.padBeforeMs = 0;
     if (settings.rfExport.padAfterMs < 0) settings.rfExport.padAfterMs = 0;
     configuration->endGroup();
+
+    // Theme options (additive keys - older config files fall back to defaults)
+    configuration->beginGroup("theme");
+    settings.theme.keepChoice = configuration->value("keepChoice", false).toBool();
+    settings.theme.mode = configuration->value("mode", QStringLiteral("stock-system")).toString();
+    if (settings.theme.mode != QStringLiteral("stock-dark")
+        && settings.theme.mode != QStringLiteral("stock-light")) {
+        // Anything else (including stock-system and garbage) follows the OS.
+        settings.theme.mode = QStringLiteral("stock-system");
+    }
+    configuration->endGroup();
 }
 
 void Configuration::setDefault(void)
@@ -324,6 +341,10 @@ void Configuration::setDefault(void)
     settings.rfExport.padBeforeMs = 500;
     settings.rfExport.padAfterMs = 500;
     settings.rfExport.saveAllAlsoExportRf = false;
+
+    // Theme options (Themes menu persistence defaults: do not keep, follow OS)
+    settings.theme.keepChoice = false;
+    settings.theme.mode = QStringLiteral("stock-system");
 
     // Write the configuration
     writeConfiguration();
@@ -719,4 +740,25 @@ void Configuration::setExportAdvancedOptions(const ExportAdvancedOptions &option
 ExportAdvancedOptions Configuration::getExportAdvancedOptions(void)
 {
     return settings.exportAdvancedOptions;
+}
+
+// Theme options (Themes menu persistence)
+void Configuration::setKeepThemeChoice(bool keepThemeChoice)
+{
+    settings.theme.keepChoice = keepThemeChoice;
+}
+
+bool Configuration::getKeepThemeChoice(void)
+{
+    return settings.theme.keepChoice;
+}
+
+void Configuration::setThemeMode(QString themeMode)
+{
+    settings.theme.mode = themeMode;
+}
+
+QString Configuration::getThemeMode(void)
+{
+    return settings.theme.mode;
 }

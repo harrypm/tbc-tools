@@ -1777,6 +1777,10 @@ void MainWindow::populateThemesMenu()
         }
         tbc::ui::applyStockThemeFollowingSystemToApp();
         refreshThemeDependentUi();
+        if (configuration.getKeepThemeChoice()) {
+            configuration.setThemeMode(QStringLiteral("stock-system"));
+            configuration.writeConfiguration();
+        }
         // Mirror the user's successful "second press" behavior: re-apply once
         // on a short delay so late-resolving widgets (cached scope renders,
         // scene-backed controls) settle fully in one user click.
@@ -1799,6 +1803,10 @@ void MainWindow::populateThemesMenu()
         }
         tbc::ui::applyStockDarkThemeToApp();
         refreshThemeDependentUi();
+        if (configuration.getKeepThemeChoice()) {
+            configuration.setThemeMode(QStringLiteral("stock-dark"));
+            configuration.writeConfiguration();
+        }
         // Mirror the user's successful "second press" behavior: re-apply once
         // on a short delay so late-resolving widgets (cached scope renders,
         // scene-backed controls) settle fully in one user click.
@@ -1821,6 +1829,10 @@ void MainWindow::populateThemesMenu()
         }
         tbc::ui::applyStockLightThemeToApp();
         refreshThemeDependentUi();
+        if (configuration.getKeepThemeChoice()) {
+            configuration.setThemeMode(QStringLiteral("stock-light"));
+            configuration.writeConfiguration();
+        }
         QTimer::singleShot(24, this, [this, lightAction]() {
             if (!lightAction->isChecked()) {
                 return;
@@ -1830,12 +1842,59 @@ void MainWindow::populateThemesMenu()
         });
     });
 
+    // Keep-theme-choice toggle: when enabled, the selected preset
+    // (System/Dark/Light) is persisted and restored on the next launch; when
+    // disabled the app always starts following the OS light/dark scheme.
+    // Independent of the exclusive preset group.
+    QAction *keepThemeAction = ui->menuThemes->addAction(tr("Keep theme choice"));
+    keepThemeAction->setCheckable(true);
+    keepThemeAction->setData(QStringLiteral("keep-theme-choice"));
+    keepThemeAction->setChecked(configuration.getKeepThemeChoice());
+    keepThemeAction->setToolTip(tr(
+        "Remember the selected theme (System, Dark or Light) between sessions. "
+        "When unchecked, tbc-analyse always starts following the OS light/dark "
+        "setting."));
+    connect(keepThemeAction, &QAction::toggled, this, [this](bool checked) {
+        configuration.setKeepThemeChoice(checked);
+        if (checked) {
+            // Persist the currently active preset (style overrides are not
+            // persisted; only the stock presets carry a stored mode).
+            if (themesActionGroup && themesActionGroup->checkedAction()) {
+                const QString checkedData = themesActionGroup->checkedAction()->data().toString();
+                if (checkedData.startsWith(QStringLiteral("stock-"))) {
+                    configuration.setThemeMode(checkedData);
+                }
+            }
+        } else {
+            // Clear the stored override so the next launch follows the OS.
+            configuration.setThemeMode(QStringLiteral("stock-system"));
+        }
+        configuration.writeConfiguration();
+    });
+
+    // Determine the stock preset matching the ACTIVE theme (applied in main
+    // per the CLI > persisted-choice > follow-system precedence), so the menu
+    // reflects what is actually running rather than always defaulting to
+    // System.
+    QString activeThemeData = QStringLiteral("stock-system");
+    if (auto *themedApp = tbc::ui::themedApplicationInstance()) {
+        if (!themedApp->isFollowingSystemTheme()) {
+            activeThemeData = qApp->property("isDarkTheme").toBool()
+                                  ? QStringLiteral("stock-dark")
+                                  : QStringLiteral("stock-light");
+        }
+    }
+
     ui->menuThemes->addSeparator();
 
     if (availableThemes.isEmpty()) {
         QAction *placeholderAction = ui->menuThemes->addAction(tr("No Qt themes available"));
         placeholderAction->setEnabled(false);
-        systemAction->setChecked(true);
+        for (QAction *action : {systemAction, darkAction, lightAction}) {
+            if (action->data().toString() == activeThemeData) {
+                action->setChecked(true);
+            }
+        }
         return;
     }
 
@@ -1860,10 +1919,15 @@ void MainWindow::populateThemesMenu()
         });
     }
 
-    // System is the stock default; ensure it is checked. This unchecks any Qt
-    // style action the loop above may have auto-checked (the stock preset
-    // owns the active palette; style actions below are advanced overrides).
-    systemAction->setChecked(true);
+    // Ensure the stock preset matching the active theme is checked. This
+    // unchecks any Qt style action the loop above may have auto-checked (the
+    // stock preset owns the active palette; style actions below are advanced
+    // overrides).
+    for (QAction *action : {systemAction, darkAction, lightAction}) {
+        if (action->data().toString() == activeThemeData) {
+            action->setChecked(true);
+        }
+    }
 }
 
 void MainWindow::applyThemeStyle(const QString &styleName)

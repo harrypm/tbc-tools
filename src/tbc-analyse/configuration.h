@@ -115,6 +115,15 @@ public:
     void setSkippedUpdateVersion(QString skippedUpdateVersion);
     QString getSkippedUpdateVersion(void);
 
+    // Get and set methods - theme (Themes menu persistence). Mode strings
+    // match the Themes menu action data: stock-system, stock-dark,
+    // stock-light. When keepChoice is false the stored mode is ignored at
+    // startup (the app follows the OS light/dark scheme).
+    void setKeepThemeChoice(bool keepThemeChoice);
+    bool getKeepThemeChoice(void);
+    void setThemeMode(QString themeMode);
+    QString getThemeMode(void);
+
     // Get and set methods - CUDA plugin registry
     void setCudaPluginInstalledVersion(QString version);
     QString getCudaPluginInstalledVersion(void);
@@ -205,6 +214,13 @@ private:
         bool saveAllAlsoExportRf; // "Also export source RF segment" checkbox in save-all-PNGs
     };
 
+    // Theme options (Themes menu persistence; additive keys - older config
+    // files fall back to defaults)
+    struct Theme {
+        bool keepChoice;          // Keep the user's theme choice between sessions
+        QString mode;             // stock-system, stock-dark or stock-light
+    };
+
     // Overall settings structure
     struct Settings {
         qint32 version;
@@ -214,6 +230,7 @@ private:
         UpdateCheck updateCheck;
         CudaPlugin cudaPlugin;
         RfExport rfExport;
+        Theme theme;
         VbiProcessingOptions vbiProcessing;
         ExportAdvancedOptions exportAdvancedOptions;
     } settings;

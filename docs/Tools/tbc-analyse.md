@@ -14,11 +14,18 @@ The application also presents source and tool-chain metadata (supplied by JSON o
 
 Note: The input file name is optional (you can either specify it from the command line or use the GUI once the application is running).
 
-Dark Mode Is automatic on Linux/MacOS with QT but is currently not on Windows builds this can be forced into said mode with:
+## Theme
 
-    tbc-analyse -style fusion
+tbc-analyse follows the OS-level light/dark colour scheme by default (dark when the OS reports dark or unknown) and switches live when the OS setting changes.
 
-This also applys to the DdD capture app.
+The Themes menu provides:
+
+* System - follow the OS light/dark setting (default)
+* Dark / Light - pin one of the built-in Fusion palettes
+* Keep theme choice - remember the selected preset between sessions; when unchecked, tbc-analyse always starts following the OS setting
+* Qt style overrides (Fusion, Windows, ...) - advanced session-only widget-style overrides; they do not change the palette and are not persisted
+
+The pins are also available from the command line via --force-dark-theme and --light-theme, which take precedence over any persisted choice.
 
 Syntax:
 
@@ -26,11 +33,16 @@ tbc-analyse \<options> \<input TBC file name>
 
 ```
 Options:
-  -h, --help          Displays this help.
+  -h, --help          Displays help on commandline options.
+  --help-all          Displays help, including generic Qt options.
   -v, --version       Displays version information.
-  -d, --debug         Show debug
-  --force-dark-theme  Force dark theme regardless of desktop detection
-  --metadata-only     Load metadata (.db or .json) without TBC image data
+  -d, --debug         Show application debug messages
+  -q, --quiet         Suppress info and warning messages
+  --force-dark-theme  Pin the dark Fusion theme instead of following the system
+                      light/dark setting
+  --light-theme       Pin the light Fusion theme instead of following the
+                      system light/dark setting
+  --metadata-only     Load metadata (.db or .json) without TBC data
 
 Arguments:
   input               Specify input TBC file or metadata file
@@ -195,7 +207,8 @@ These controls are independent. Disabling decode JSON attachment does not disabl
 
 Export decoder selection follows metadata and profile settings, with the following behavior:
 
-* NTSC export accepts `nntransform3d` and `nntsc3d` decoder names.
+* NTSC export accepts `nntransform3d` and `nntsc3d` decoder names, and `ntsc3dnoadapt` round-trips (3D with Adaptive unchecked in the decoder configuration window; the adaptive state is carried by the decoder name).
+* The chroma decoder selection in the Video decoder configuration window is user configuration: a selection stored in the metadata (explicitly set or saved) is preserved when reloading or re-opening the source, instead of reverting to the default (Transform 2D/3D).
 * If metadata video system is `SECAM` or `MESECAM` and no decoder override is set, export defaults to the `secam` FM decoder (SECAM-family sources carry an FM chroma block that the PAL/NTSC QAM decoders cannot read; `mono` would render them black-and-white).
 * SECAM/MESECAM export accepts the `secam` and `secam-predemod` decoder names; chroma gain/phase are passed for them.
 * When export resolves to `mono`, chroma controls are omitted (`--chroma-gain` and `--chroma-phase` are not passed).

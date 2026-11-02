@@ -218,18 +218,33 @@ int main(int argc, char *argv[])
     // Standard logging options
     processStandardDebugOptions(parser);
 
-    // Apply the stock theme: follow the OS light/dark colour scheme by
-    // default (dark when unknown), or pin light/dark via the explicit flags.
-    // This sets the Fusion palette, the isDarkTheme app property, and the
-    // input-widget contrast guard. ThemedApplication re-resolves the system
-    // scheme on OS changes while following (and re-asserts a pinned palette on
-    // any ApplicationPaletteChange, e.g. macOS switchover).
+    // Apply the stock theme. Precedence: explicit CLI flags, then the
+    // persisted user choice (Themes menu -> Keep theme choice), then follow
+    // the OS light/dark colour scheme (dark when unknown). This sets the
+    // Fusion palette, the isDarkTheme app property, and the input-widget
+    // contrast guard. ThemedApplication re-resolves the system scheme on OS
+    // changes while following (and re-asserts a pinned palette on any
+    // ApplicationPaletteChange, e.g. macOS switchover).
     if (parser.isSet("light-theme")) {
         a.applyStockLightTheme();
     } else if (parser.isSet("force-dark-theme")) {
         a.applyStockDarkTheme();
     } else {
-        a.applyStockThemeFollowingSystem();
+        // Read-only configuration access for the persisted theme keys (the
+        // MainWindow's own Configuration instance only reads at construction,
+        // so nothing here can be clobbered later).
+        Configuration startupThemeConfiguration;
+        const QString persistedThemeMode = startupThemeConfiguration.getThemeMode();
+        if (startupThemeConfiguration.getKeepThemeChoice()
+            && persistedThemeMode == QLatin1String("stock-dark")) {
+            a.applyStockDarkTheme();
+        } else if (startupThemeConfiguration.getKeepThemeChoice()
+                   && persistedThemeMode == QLatin1String("stock-light")) {
+            a.applyStockLightTheme();
+        } else {
+            // stock-system (or persistence disabled): follow the OS scheme.
+            a.applyStockThemeFollowingSystem();
+        }
     }
 
     // Get the arguments from the parser
