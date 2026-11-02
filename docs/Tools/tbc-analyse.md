@@ -4,7 +4,7 @@ tbc-analyse is a graphical application originally designed to assist with the an
 
 The primary file-type is TBC (time-base corrected) video files containing the raw NTSC or PAL fields.
 
-TBC files are usually identified by the `.tbc` extension, with an optional chroma companion file named `_chroma.tbc` (suffix) or `chroma_*.tbc` (prefix, as used by vhs-decode).
+TBC files are usually identified by the `.tbc` extension, with an optional chroma companion file named `_chroma.tbc` (suffix) or `chroma_*.tbc` (prefix, as used by vhs-decode). decode-orc Y/C captures use `.tbcy` (luma) and `.tbcc` (chroma); an alternate Y/C naming (`.ytbc`/`.ctbc`) is also accepted. Exports via the Export tab / `tbc-video-export` recognise all of these.
 
 The application also presents source and tool-chain metadata (supplied by JSON or SQLite metadata files) that provide additional details about the TBC file's contents such as VBI data and TV System.
 

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import atexit
+import logging
 import os
+import shutil
+import subprocess
+import tempfile
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -111,11 +116,7 @@ class FileHelper:
             "_tbc_json",
             False,
         ):
-            self._tbc_json = TBCJsonHelper(
-                Path(self._opts.input_tbc_json)
-                if self._opts.input_tbc_json is not None
-                else Path(f"{self.input_name}.tbc.json")
-            )
+            self._tbc_json = TBCJsonHelper(self._resolve_tbc_json_path())
 
         return self._tbc_json
 
@@ -126,6 +127,102 @@ class FileHelper:
         This can be used when tbc-process-vbi generates a new JSON file.
         """
         self._tbc_json = TBCJsonHelper(file_name)
+
+    def _resolve_tbc_json_path(self) -> Path:
+        """Resolve the TBC json path, converting SQLite metadata if needed.
+
+        When the json does not exist but a SQLite .db does (the same path with
+        a .db suffix, or --input-tbc-json pointing directly at a .db), the db
+        is auto-converted to JSON via tbc-metadata-converter so the
+        JSON-based toolchain can consume it (decode-orc captures ship SQLite
+        metadata at the base .tbc name, e.g. foo.tbc.db next to foo.tbcy).
+        """
+        json_path = (
+            Path(self._opts.input_tbc_json)
+            if self._opts.input_tbc_json is not None
+            else Path(f"{self.input_name}.tbc.json")
+        )
+
+        # --input-tbc-json pointing directly at a SQLite .db converts it (the
+        # suffix check must come first: a .db path is_file() too).
+        if json_path.suffix == ".db":
+            if json_path.is_file():
+                return self._convert_sqlite_to_json(json_path, json_path)
+            return json_path
+
+        if json_path.is_file():
+            return json_path
+
+        db_path = json_path.with_suffix(".db")
+        if db_path.is_file():
+            return self._convert_sqlite_to_json(db_path, json_path)
+
+        # No json and no db: return the original path so TBCJsonHelper raises
+        # its usual 'TBC json not found' error.
+        return json_path
+
+    def _convert_sqlite_to_json(self, db_path: Path, preferred_json_path: Path) -> Path:
+        """Convert a SQLite metadata file to JSON using tbc-metadata-converter.
+
+        The conversion writes to a temporary file first, then moves the result
+        next to the source (preferred_json_path) when that location is
+        writable, so subsequent runs reuse it and other JSON-only tools can
+        consume it too. A read-only source directory (or a --input-tbc-json
+        that points at the .db itself) keeps the temporary file, which is
+        removed when the program exits.
+        """
+        temp_file = tempfile.NamedTemporaryFile(
+            prefix="tbc-video-export-converted-", suffix=".tbc.json", delete=False
+        )
+        temp_file.close()
+        temp_path = Path(temp_file.name)
+
+        converter = files.find_binary(
+            "tbc-metadata-converter.exe" if os.name == "nt" else "tbc-metadata-converter"
+        )
+
+        logging.getLogger("console").info(
+            "Only SQLite metadata found (%s); auto-converting to JSON", db_path
+        )
+
+        result = subprocess.run(
+            [
+                str(converter),
+                "--direction",
+                "sqlite-to-json",
+                "--input-sqlite",
+                str(db_path),
+                "--output-json",
+                str(temp_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if result.returncode != 0 or not temp_path.is_file():
+            detail = (result.stderr or result.stdout or "").strip()
+            temp_path.unlink(missing_ok=True)
+            raise exceptions.TBCError(
+                f"Failed to auto-convert SQLite metadata {db_path} to JSON using "
+                f"{converter}."
+                + (f" ({detail})" if detail else "")
+            )
+
+        atexit.register(lambda p=temp_path: p.unlink(missing_ok=True))
+
+        if preferred_json_path != db_path:
+            try:
+                shutil.move(str(temp_path), str(preferred_json_path))
+                logging.getLogger("console").info(
+                    "Converted metadata saved to %s", preferred_json_path
+                )
+                return preferred_json_path
+            except OSError:
+                # Read-only source directory: keep using the temporary file.
+                pass
+
+        return temp_path
 
     @cached_property
     def tbc_luma(self) -> Path:
@@ -213,24 +310,55 @@ class FileHelper:
         """Create a dict containing the absolute path to the TBC files based on type."""
         tbcs: dict[TBCType, Path] = {}
 
-        # input files
-        tbc = f"{self.input_name}.tbc"
-        tbc_chroma = f"{self.input_name}_chroma.tbc"
+        # Luma/combined candidates, most conventional first. Besides the
+        # standard .tbc, recognise the Y/C (S-Video) luma extensions written
+        # by decode-orc and accepted by tbc-analyse: .tbcy and .ytbc. A Y/C
+        # luma file can never be 'combined' - its chroma always lives in a
+        # separate file - so only a plain .tbc without a separate chroma
+        # stream is treated as COMBINED (issue #30).
+        luma_candidates: list[tuple[str, bool]] = [
+            (f"{self.input_name}.tbc", True),
+            (f"{self.input_name}.tbcy", False),
+            (f"{self.input_name}.ytbc", False),
+        ]
 
-        if (tbc_chroma := Path(tbc_chroma)).is_file():
-            tbcs[TBCType.CHROMA] = tbc_chroma
+        # Chroma candidates: the standard _chroma.tbc suffix first, then the
+        # Y/C chroma extensions (.tbcc pairs with .tbcy, .ctbc pairs with
+        # .ytbc - the same pairings tbc-analyse accepts).
+        chroma_candidates: list[str] = [
+            f"{self.input_name}_chroma.tbc",
+            f"{self.input_name}.tbcc",
+            f"{self.input_name}.ctbc",
+        ]
 
-        if (tbc := Path(tbc)).is_file():
-            if TBCType.CHROMA in tbcs:
-                tbcs[TBCType.LUMA] = tbc
+        luma_file = next(
+            (Path(candidate) for candidate, _ in luma_candidates if Path(candidate).is_file()),
+            None,
+        )
+        chroma_file = next(
+            (Path(candidate) for candidate in chroma_candidates if Path(candidate).is_file()),
+            None,
+        )
+
+        if chroma_file is not None:
+            tbcs[TBCType.CHROMA] = chroma_file
+
+        if luma_file is not None:
+            # Only a plain .tbc (candidate marked may_be_combined) without a
+            # separate chroma file is a combined (CVBS) capture.
+            may_be_combined = next(
+                combined for candidate, combined in luma_candidates if candidate == str(luma_file)
+            )
+            if TBCType.CHROMA in tbcs or not may_be_combined:
+                tbcs[TBCType.LUMA] = luma_file
             else:
-                tbcs[TBCType.COMBINED] = tbc
+                tbcs[TBCType.COMBINED] = luma_file
 
         # ensure tbcs exist
         if len(tbcs) == 0:
             raise exceptions.TBCError("TBC not found at location.")
 
-        # if for some reason we found a _chroma.tbc but no .tbc
+        # if for some reason we found a chroma TBC but no luma TBC
         if TBCType.CHROMA in tbcs and TBCType.LUMA not in tbcs:
             raise exceptions.TBCError("Location contains chroma TBC but no luma TBC.")
 

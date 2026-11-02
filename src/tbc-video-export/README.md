@@ -19,6 +19,19 @@ You can find the latest binaries on the [releases](https://github.com/JuniorIsAJ
 pipx install tbc-video-export
 ```
 
+# Input Files
+
+The input is the TBC file (with or without extension); the remaining files are auto-detected from the same directory and stem:
+
+| Type | Recognised luma/combined file | Recognised chroma file |
+|------|-------------------------------|------------------------|
+| CVBS (combined) | `input.tbc` | - |
+| S-Video (Y/C) | `input.tbc` + | `input_chroma.tbc` |
+| S-Video (Y/C, decode-orc) | `input.tbcy` | `input.tbcc` |
+| S-Video (Y/C, alternate) | `input.ytbc` | `input.ctbc` |
+
+Metadata is auto-detected as `<stem>.tbc.json`. When only a SQLite `<stem>.tbc.db` exists (as written by decode-orc), it is auto-converted to JSON on load using `tbc-metadata-converter`, and the converted `.tbc.json` is saved next to the source for reuse (a read-only source directory falls back to a temporary copy). An explicit `--input-tbc-json` may also point directly at a `.db`. A plain `.tbc` without a separate chroma file is exported as combined; `.tbcy`/`.ytbc` luma files are always exported as S-Video, with or without their chroma companion.
+
 # Basic Usage
 
 ### Windows

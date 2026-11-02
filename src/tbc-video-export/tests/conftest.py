@@ -66,6 +66,7 @@ class FileHelperTestCase:  # noqa: D101
     ffmetadata_file: Path
     cc_file: Path
     tbc_types: TBCType
+    chroma_tbc: Path | None = None
 
 
 @dataclass
