@@ -99,8 +99,20 @@ Stated fix: let tbc-video-export recognize tbcy as luma and tbcc as chroma.
 - Docs: tbc-video-export README Input Files section now documents the SQLite
   auto-conversion and the --input-tbc-json .db case.
 
-## Pending
+## Commit / push / CI (2026-11-02)
 
-- Commit/push only when the user asks (suggest referencing "Fixes #30" so the
-  issue auto-closes).
-- GitHub Actions parity for the pushed head.
+- Commit 0682659 (user-requested, references Fixes #30; issue #30 closed at
+  2026-11-02T05:36:50Z). 19 files, +472/-16, includes the new fixtures (note:
+  orc_mixed.tbc needed git add -f - the root .gitignore ignores *.tbc globally
+  with only test-data/ excepted; the existing .tbc fixtures in tests/files are
+  force-added the same way).
+- Tests run 41397377458: first attempt FAILED on macOS x86_64 ONLY - a
+  transient actions/checkout git fetch network failure (curl 56 Recv failure /
+  early EOF, git exit 128, three attempts), not a code/workflow problem.
+  Everything else passed, including Full Linux build and test parity (the 325
+  pytest + 36 ctest). Re-ran the failed job (gh run rerun --failed): macOS
+  x86_64 + universal macOS app/dmg then PASSED; FINAL conclusion=success, all
+  jobs green (Upload release assets correctly skipped, no publish).
+
+DONE: commit pushed; GitHub Actions parity satisfied for head 0682659; issue
+#30 closed.
