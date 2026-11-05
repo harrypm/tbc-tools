@@ -165,6 +165,22 @@ jobs:
           repo_root = pathlib.Path(".")
           version = os.environ["VERSION"].removeprefix("v")
 
+          # vcpkg.json is the single source of truth for the package version
+          # (flake.nix derives packageVersion from it via builtins.fromJSON,
+          # and CMakeLists.txt reads APP_VERSION from it when unset), so the
+          # release bump only has to touch vcpkg.json.
+          vcpkg_path = repo_root / "vcpkg.json"
+          vcpkg_data = json.loads(vcpkg_path.read_text(encoding="utf-8"))
+          vcpkg_data["version"] = version
+          vcpkg_path.write_text(
+              json.dumps(vcpkg_data, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          # flake.nix: if it carries a literal packageVersion, update it too;
+          # otherwise verify it derives the version from vcpkg.json, so a
+          # future restructure fails loudly here instead of silently shipping
+          # releases with a stale version.
           flake_path = repo_root / "flake.nix"
           flake_content = flake_path.read_text(encoding="utf-8")
           updated_flake_content, replacements = re.subn(
@@ -173,17 +189,13 @@ jobs:
               flake_content,
               count=1,
           )
-          if replacements != 1:
-              raise SystemExit("Failed to update packageVersion in flake.nix")
-          flake_path.write_text(updated_flake_content, encoding="utf-8")
-
-          vcpkg_path = repo_root / "vcpkg.json"
-          vcpkg_data = json.loads(vcpkg_path.read_text(encoding="utf-8"))
-          vcpkg_data["version"] = version
-          vcpkg_path.write_text(
-              json.dumps(vcpkg_data, indent=2) + "\n",
-              encoding="utf-8",
-          )
+          if replacements == 1:
+              flake_path.write_text(updated_flake_content, encoding="utf-8")
+          elif "packageVersion = (builtins.fromJSON (builtins.readFile ./vcpkg.json)).version;" not in flake_content:
+              raise SystemExit(
+                  "flake.nix neither carries a literal packageVersion nor derives it "
+                  "from vcpkg.json; update the release workflow version-tagging step."
+              )
           PY
 
       - name: Commit version updates
