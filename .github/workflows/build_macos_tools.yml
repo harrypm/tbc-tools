@@ -760,15 +760,18 @@ jobs:
           if-no-files-found: error
   build-universal-macos:
     name: Build universal macOS app/dmg
-    # Pin to macos-15 like the arch matrix jobs: the macos-latest label
-    # migrated to macos-26 (Tahoe) on 2026-07-15 and the flake.lock-pinned
-    # toolchain does not support macOS 26. This job only merges the two
-    # prebuilt bundles with lipo and creates the DMG, but pinning keeps the
-    # whole macOS pipeline on one known-good major version instead of
-    # tracking whatever macos-latest drifts to next. Re-evaluate together
-    # with the arm64 matrix pin when flake.lock bumps to a Qt that supports
-    # macOS 26.
-    runs-on: macos-15
+    # Run on the macos-15-intel (x86_64) pool: this job is architecture-
+    # agnostic (it only downloads the two prebuilt arch artifacts, merges
+    # them with lipo and creates the DMG), and the macOS 15 arm64 pool had
+    # an extended capacity outage on 2026-11-05 - the job was cancelled at
+    # the ~14-minute runner-acquisition timeout three consecutive times
+    # ("The job was not acquired by Runner of type hosted even after
+    # multiple attempts") while the Intel pool served its build jobs
+    # normally all day. macos-15-intel is the same macOS 15 version and is
+    # scheduled to remain available until August 2027. If the arm64 pool
+    # recovers, this can move back to plain macos-15 for consistency with
+    # the arch matrix jobs.
+    runs-on: macos-15-intel
     needs: build-tbc-tools
     steps:
       - name: Download arm64 app artifact
