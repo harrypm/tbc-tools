@@ -95,13 +95,18 @@ void PluginCatalog::fetchRemote()
         tbcDebugStream() << "PluginCatalog::fetchRemote(): request in flight; ignoring";
         return;
     }
-    // CDN-first, raw-fallback to insulate against raw.githubusercontent.com
-    // rate limiting (HTTP 429) -- same pattern as the arm64 gas-preprocessor
-    // pre-fetch (see AGENTS.md).
+    // raw.githubusercontent.com first, jsDelivr as fallback. jsDelivr refuses
+    // to serve files from repositories larger than 50 MB ("Package size
+    // exceeded the configured limit of 50 MB"), which this repo passed once
+    // test fixtures grew - so the CDN attempt can never succeed and only
+    // wasted a request per dialog open. Keep it as a fallback for the rate
+    // limiting (HTTP 429) case on raw, which is why the CDN was originally
+    // first (same pattern as the arm64 gas-preprocessor pre-fetch, see
+    // AGENTS.md).
     m_fetchUrls.clear();
-    m_fetchUrls << QStringLiteral("https://cdn.jsdelivr.net/gh/%1/%2@main/plugins/catalog.json")
-                      .arg(repositoryOwner, repositoryName);
     m_fetchUrls << QStringLiteral("https://raw.githubusercontent.com/%1/%2/main/plugins/catalog.json")
+                      .arg(repositoryOwner, repositoryName);
+    m_fetchUrls << QStringLiteral("https://cdn.jsdelivr.net/gh/%1/%2@main/plugins/catalog.json")
                       .arg(repositoryOwner, repositoryName);
     m_fetchAttempt = 0;
 

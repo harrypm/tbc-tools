@@ -64,13 +64,16 @@ PluginManagerDialog::PluginManagerDialog(QWidget *parent)
     auto *splitter = new QSplitter(Qt::Horizontal, this);
     mainLayout->addWidget(splitter, 1);
 
-    // Left: plugin selection list.
+    // Left: plugin selection list. The list keeps a generous minimum width
+    // so plugin names are not elided into a narrow column when the dialog is
+    // at its minimum size; the splitter's initial sizes open it wider still.
     auto *leftWidget = new QWidget(this);
     auto *leftLayout = new QVBoxLayout(leftWidget);
     leftLayout->setContentsMargins(0, 0, 0, 0);
     auto *listHeader = new QLabel(tr("Available plugins:"), leftWidget);
     leftLayout->addWidget(listHeader);
     m_pluginList = new QListWidget(leftWidget);
+    m_pluginList->setMinimumWidth(280);
     leftLayout->addWidget(m_pluginList, 1);
     splitter->addWidget(leftWidget);
 
@@ -121,6 +124,9 @@ PluginManagerDialog::PluginManagerDialog(QWidget *parent)
     rightLayout->addStretch();
 
     splitter->addWidget(rightWidget);
+    // Initial split favours the plugin list (~40% at the 720px minimum) so it
+    // opens wide; further dialog growth is shared 1:3 in favour of details.
+    splitter->setSizes({320, 480});
     splitter->setStretchFactor(0, 1);
     splitter->setStretchFactor(1, 3);
 

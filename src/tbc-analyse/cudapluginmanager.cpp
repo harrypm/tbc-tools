@@ -161,6 +161,36 @@ bool CudaPluginManager::isInstalled() const
     return !entries.isEmpty();
 }
 
+QJsonObject CudaPluginManager::selectLatestCudaPluginRelease(const QJsonArray &releases)
+{
+    // The cache repo hosts several plugin streams (cuda-plugin-v*,
+    // cuda-lite-plugin-v*, ...). The repo-wide /releases/latest endpoint
+    // returns whichever release GitHub marks "latest" overall - which is
+    // whichever stream published most recently - so it cannot be used to
+    // resolve the CUDA runtime plugin. List the releases (GitHub returns
+    // them newest-first) and take the first cuda-plugin-v* release that is
+    // neither a draft nor a prerelease.
+    const QString tagPrefix = QStringLiteral("cuda-plugin-v");
+    for (const QJsonValue &value : releases) {
+        if (!value.isObject()) {
+            continue;
+        }
+        const QJsonObject release = value.toObject();
+        const QString tagName = release.value(QStringLiteral("tag_name")).toString();
+        if (!tagName.startsWith(tagPrefix, Qt::CaseInsensitive)) {
+            continue;
+        }
+        if (release.value(QStringLiteral("draft")).toBool(false)) {
+            continue;
+        }
+        if (release.value(QStringLiteral("prerelease")).toBool(false)) {
+            continue;
+        }
+        return release;
+    }
+    return QJsonObject();
+}
+
 void CudaPluginManager::checkForUpdate()
 {
     if (m_requestInFlight) {
@@ -168,7 +198,11 @@ void CudaPluginManager::checkForUpdate()
         return;
     }
 
-    const QString apiUrl = QStringLiteral("https://api.github.com/repos/%1/%2/releases/latest")
+    // List the releases (newest-first) rather than /releases/latest: the cache
+    // repo also hosts other plugin streams (cuda-lite-plugin-v*), and the
+    // repo-wide "latest" marker follows whichever stream published most
+    // recently - selectLatestCudaPluginRelease() filters by tag prefix instead.
+    const QString apiUrl = QStringLiteral("https://api.github.com/repos/%1/%2/releases?per_page=100")
         .arg(cacheRepositoryOwner, cacheRepositoryName);
 
     QNetworkRequest request{QUrl(apiUrl)};
@@ -184,18 +218,10 @@ void CudaPluginManager::checkForUpdate()
     m_networkManager->get(request);
 }
 
-bool CudaPluginManager::resolveAssetsFromReleaseJson(const QByteArray &payload, QString &error)
+bool CudaPluginManager::resolveAssetsFromRelease(const QJsonObject &release, QString &error)
 {
-    QJsonParseError parseError;
-    const QJsonDocument doc = QJsonDocument::fromJson(payload, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        error = QStringLiteral("Could not parse release JSON: %1").arg(parseError.errorString());
-        return false;
-    }
-
-    const QJsonObject obj = doc.object();
-    m_latestReleaseTag = obj.value(QStringLiteral("tag_name")).toString();
-    m_latestReleaseUrl = obj.value(QStringLiteral("html_url")).toString();
+    m_latestReleaseTag = release.value(QStringLiteral("tag_name")).toString();
+    m_latestReleaseUrl = release.value(QStringLiteral("html_url")).toString();
     if (m_latestReleaseTag.isEmpty()) {
         error = QStringLiteral("Release JSON did not include a tag_name.");
         return false;
@@ -205,6 +231,7 @@ bool CudaPluginManager::resolveAssetsFromReleaseJson(const QByteArray &payload, 
     m_latestVersion.remove(QRegularExpression(QStringLiteral("^cuda-plugin-v?"),
                                                QRegularExpression::CaseInsensitiveOption));
 
+    const QJsonObject obj = release;
     const QString platform = currentPlatform();
     const QString arch = currentArch();
     const QString manifestSuffix = QStringLiteral("-manifest.json");
@@ -268,8 +295,7 @@ void CudaPluginManager::handleReleaseReply(QNetworkReply *reply)
     }
 
     // Check HTTP status after transport succeeded so we can distinguish
-    // server responses from network/TLS failures. The /releases/latest
-    // endpoint returns 404 when the repo has no published releases yet.
+    // server responses from network/TLS failures.
     if (statusCode == 404) {
         emit releaseCheckFailed(
             tr("No CUDA plugin release has been published yet on %1/%2. "
@@ -298,8 +324,31 @@ void CudaPluginManager::handleReleaseReply(QNetworkReply *reply)
         return;
     }
 
+    // The releases listing is a JSON array (newest-first). Select the newest
+    // cuda-plugin-v* release - the repo also hosts other plugin streams
+    // (cuda-lite-plugin-v*), whose releases can be newer and would hijack a
+    // repo-wide "latest" lookup.
+    const QByteArray payload = reply->readAll();
+    QJsonParseError parseError;
+    const QJsonDocument doc = QJsonDocument::fromJson(payload, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isArray()) {
+        emit releaseCheckFailed(
+            tr("Could not parse the releases listing: %1").arg(parseError.errorString()));
+        return;
+    }
+
+    const QJsonObject release = selectLatestCudaPluginRelease(doc.array());
+    if (release.isEmpty()) {
+        emit releaseCheckFailed(
+            tr("No CUDA plugin release has been published yet on %1/%2. "
+               "A maintainer needs to run the \"Publish CUDA plugin\" workflow "
+               "to publish a cuda-plugin-vX release before the plugin can be installed.")
+                .arg(cacheRepositoryOwner, cacheRepositoryName));
+        return;
+    }
+
     QString error;
-    if (!resolveAssetsFromReleaseJson(reply->readAll(), error)) {
+    if (!resolveAssetsFromRelease(release, error)) {
         emit releaseCheckFailed(error);
         return;
     }
