@@ -350,6 +350,27 @@ int main(int argc, char *argv[])
                                       QCoreApplication::translate("main", "number"));
     parser.addOption(secamClickNrOption);
 
+    // Options to calibrate the SECAM colour-difference components separately
+    QCommandLineOption secamDbGainOption(QStringList() << "secam-db-gain",
+                                      QCoreApplication::translate("main", "SECAM: D'B (B-Y) gain, on top of --chroma-gain (default 1.0)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamDbGainOption);
+
+    QCommandLineOption secamDrGainOption(QStringList() << "secam-dr-gain",
+                                      QCoreApplication::translate("main", "SECAM: D'R (R-Y) gain, on top of --chroma-gain (default 1.0)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamDrGainOption);
+
+    QCommandLineOption secamDbOffsetOption(QStringList() << "secam-db-offset",
+                                      QCoreApplication::translate("main", "SECAM: B-Y offset, as a fraction of the luma range (default 0)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamDbOffsetOption);
+
+    QCommandLineOption secamDrOffsetOption(QStringList() << "secam-dr-offset",
+                                      QCoreApplication::translate("main", "SECAM: R-Y offset, as a fraction of the luma range (default 0)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamDrOffsetOption);
+
     // -- Positional arguments --
 
     // Positional argument to specify input video file
@@ -459,6 +480,32 @@ int main(int argc, char *argv[])
             return -1;
         }
         secamConfig.clickNrLevel = value;
+    }
+
+    if (parser.isSet(secamDbGainOption)) {
+        const double value = parser.value(secamDbGainOption).toDouble();
+        if (value < 0.0) {
+            qCritical("SECAM D'B gain must not be less than 0");
+            return -1;
+        }
+        secamConfig.dbGain = value;
+    }
+
+    if (parser.isSet(secamDrGainOption)) {
+        const double value = parser.value(secamDrGainOption).toDouble();
+        if (value < 0.0) {
+            qCritical("SECAM D'R gain must not be less than 0");
+            return -1;
+        }
+        secamConfig.drGain = value;
+    }
+
+    if (parser.isSet(secamDbOffsetOption)) {
+        secamConfig.dbOffset = parser.value(secamDbOffsetOption).toDouble();
+    }
+
+    if (parser.isSet(secamDrOffsetOption)) {
+        secamConfig.drOffset = parser.value(secamDrOffsetOption).toDouble();
     }
 
     bool bwMode = parser.isSet(setBwModeOption);
