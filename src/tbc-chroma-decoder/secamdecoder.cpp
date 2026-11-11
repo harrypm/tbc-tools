@@ -349,6 +349,11 @@ bool SecamDecoder::configure(const TbcMetaData::VideoParameters &videoParameters
     for (qint32 k = 0; k < blockSize; k++) {
         const double f = (k <= blockSize / 2 ? k : k - blockSize) * sampleRate / blockSize;
         maskDeemphasis[k] = inverseLf(f);
+        if (secamConfig.lfExtraBreak > 0.0) {
+            const std::complex<double> num(1.0, f / (secamConfig.lfExtraRatio * secamConfig.lfExtraBreak));
+            const std::complex<double> den(1.0, f / secamConfig.lfExtraBreak);
+            maskDeemphasis[k] *= num / den;
+        }
         // Colour-difference bandwidth filter: the discriminator's output is
         // per-sample and carries every in-band disturbance (tape noise, the
         // luma pull near colour edges) across the whole demod baseband,

@@ -94,6 +94,13 @@ public:
         double drGain = 1.0;
         double dbOffset = 0.0;
         double drOffset = 0.0;
+        // Extra LF shelf de-emphasis on top of the standard one, for tapes
+        // whose decoded colour still carries some LF pre-correction (the
+        // colour overshoots after every colour edge, then settles over a few
+        // microseconds: a halo). Same form as the standard network,
+        // H(f) = (1 + jf/(ratio*break)) / (1 + jf/break). 0 disables.
+        double lfExtraBreak = 0.0;
+        double lfExtraRatio = 3.0;
         // Original first active field line before any full-frame widening.
         // Rows below this are V-interval (bottles/test lines) and must
         // render neutral in full-frame mode even though they carry carrier;
