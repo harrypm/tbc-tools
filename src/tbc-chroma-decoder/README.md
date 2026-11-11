@@ -67,6 +67,8 @@ The `secam` decoder FM-demodulates the restored studio SECAM chroma block (FM re
 - `--secam-right-edge-fix <samples>`: SECAM: fade the colour over the last `<samples>` samples of each line toward the line's own colour just before them (end-of-line transient; default 0 = off; 64 on VHS)
 - `--secam-luma-guide <file>`: SECAM: luma TBC of the same capture (for a split vhs-decode / tape-decode output, the `.tbc` next to the `_chroma.tbc`), used as the guide of a guided filter that snaps the soft colour-difference edges onto the luma edges (luma-guided CTI). Enables the stage
 - `--secam-guide-rx <samples>`, `--secam-guide-ry <lines>`, `--secam-guide-eps <number>`: SECAM: guided-filter window radii (default 16 samples / 3 frame lines) and regularisation on the 0..1 luma scale (default 1e-4)
+- `--secam-bleed-measure <prefix>`: SECAM: measure the tape's colour-bleed responses (one per colour-difference component) from the colour steps at clean luma edges, one frame in five, and write `<prefix>_db.txt` / `<prefix>_dr.txt` (needs `--secam-luma-guide`; decode a few minutes of picture with the same other options)
+- `--secam-bleed-db <file>`, `--secam-bleed-dr <file>`: SECAM: colour-bleed reconstruction from the measured responses: per line, the colour is deconvolved by the response under a luma-edge-aware smoothness prior, then each point takes the colour of its own luma region (edge-aware 2D recolouring). Needs `--secam-luma-guide`; ~110 ms per frame and per thread
 - `--secam-first-line-is-red <auto|true|false>`: SECAM pre-demod: force first active line identity (auto uses per-field `secamFirstLineIsRed` metadata; true/red = D'R first; false/blue = D'B first; default auto)
 
 #### Transform Decoder Options

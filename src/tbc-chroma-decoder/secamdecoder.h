@@ -30,6 +30,7 @@
 #include <QAtomicInt>
 #include <QThread>
 #include <QDebug>
+#include <QMutex>
 
 #include <complex>
 #include <vector>
@@ -41,6 +42,7 @@
 #include "sourcevideo.h"
 
 #include "decoder.h"
+#include "secambleed.h"
 #include "sourcefield.h"
 
 class DecoderPool;
@@ -114,6 +116,13 @@ public:
         qint32 guideRadiusX = 0;
         qint32 guideRadiusY = 3;
         double guideEps = 1e-4;
+        // Colour-bleed reconstruction from the tape's measured responses
+        // (secambleed.h), after the guided filter; needs the luma guide.
+        // Disabled while no response is loaded.
+        SecamBleed::Params bleed;
+        // Measure the responses instead (one frame in kBleedMeasureStride);
+        // written by writeBleedResponses() at the end. Needs the luma guide.
+        bool bleedMeasure = false;
         // Original first active field line before any full-frame widening.
         // Rows below this are V-interval (bottles/test lines) and must
         // render neutral in full-frame mode even though they carry carrier;
@@ -135,6 +144,11 @@ public:
                     qint32 startIndex,
                     qint32 endIndex,
                     QVector<ComponentFrame>& componentFrames);
+
+    // With bleedMeasure: writes the measured D'B / D'R responses to
+    // <prefix>_db.txt and <prefix>_dr.txt. Returns false (and prints why)
+    // on failure.
+    bool writeBleedResponses(const QString &prefix);
 
 private:
     // Per-call working buffers for one field's demodulation. Everything the
@@ -249,6 +263,11 @@ private:
     void freeFftwState();
 
     SecamConfiguration secamConfig;
+
+    // Colour step profiles collected for the bleed measurement
+    QMutex bleedMutex;
+    std::vector<float> bleedStepsDb;
+    std::vector<float> bleedStepsDr;
 };
 
 class SecamThread : public DecoderThread
