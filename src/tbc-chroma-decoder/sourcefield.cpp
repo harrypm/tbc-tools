@@ -109,6 +109,11 @@ void SourceField::loadFields(SourceVideo &sourceVideo, TbcMetaData &metaData,
 
         const quint16 black = videoParameters.black16bIre;
 
+        fields[i].fieldNumber = useBlankFrame ? -1 : firstFieldNumber;
+        fields[i + 1].fieldNumber = useBlankFrame ? -1 : secondFieldNumber;
+        fields[i].guide.clear();
+        fields[i + 1].guide.clear();
+
         if (useBlankFrame) {
             // Fill both fields with black
             fields[i].data.fill(black, sourceVideo.getFieldLength());

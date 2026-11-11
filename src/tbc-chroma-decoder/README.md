@@ -65,6 +65,8 @@ The `secam` decoder FM-demodulates the restored studio SECAM chroma block (FM re
 - `--secam-top-fix <lines>`: SECAM: the first `<lines>` frame lines of the active picture take the chroma of the first good line of the same field (the first lines of a field have no previous line of the other component; default 0 = off; 8 on VHS)
 - `--secam-repair-lines <from:count>`: SECAM: head-switching lines -- `count` frame lines starting `from` lines above the end of the active picture get their chroma interpolated within each field from the good lines around them (default off; `14:8` on VHS PAL-geometry TBCs)
 - `--secam-right-edge-fix <samples>`: SECAM: fade the colour over the last `<samples>` samples of each line toward the line's own colour just before them (end-of-line transient; default 0 = off; 64 on VHS)
+- `--secam-luma-guide <file>`: SECAM: luma TBC of the same capture (for a split vhs-decode / tape-decode output, the `.tbc` next to the `_chroma.tbc`), used as the guide of a guided filter that snaps the soft colour-difference edges onto the luma edges (luma-guided CTI). Enables the stage
+- `--secam-guide-rx <samples>`, `--secam-guide-ry <lines>`, `--secam-guide-eps <number>`: SECAM: guided-filter window radii (default 16 samples / 3 frame lines) and regularisation on the 0..1 luma scale (default 1e-4)
 - `--secam-first-line-is-red <auto|true|false>`: SECAM pre-demod: force first active line identity (auto uses per-field `secamFirstLineIsRed` metadata; true/red = D'R first; false/blue = D'B first; default auto)
 
 #### Transform Decoder Options

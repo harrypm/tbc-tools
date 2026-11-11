@@ -107,6 +107,13 @@ public:
         qint32 repairFromBottom = 0;
         qint32 repairCount = 0;
         qint32 rightEdgeFix = 0;
+        // Luma-guided chroma reconstruction (guided filter, He, Sun & Tang):
+        // needs a luma TBC as guide (DecoderPool::setGuideFile). Window radii
+        // in samples / frame lines; eps on the normalised (0..1) luma scale.
+        // guideRadiusX = 0 disables the stage.
+        qint32 guideRadiusX = 0;
+        qint32 guideRadiusY = 3;
+        double guideEps = 1e-4;
         // Original first active field line before any full-frame widening.
         // Rows below this are V-interval (bottles/test lines) and must
         // render neutral in full-frame mode even though they carry carrier;
