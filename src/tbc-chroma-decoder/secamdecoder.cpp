@@ -224,6 +224,66 @@ void fillChannel(std::vector<double> &buffer, const std::vector<bool> &has,
     }
 }
 
+// Box mean over a clamped (shrinking) window, from a 2D prefix-sum table.
+// `src` is h x w row-major; returns the h x w mean image.
+void boxMean(const std::vector<double> &src, qint32 w, qint32 h, qint32 rx, qint32 ry,
+             std::vector<double> &out)
+{
+    std::vector<double> sums(static_cast<size_t>(w + 1) * (h + 1), 0.0);
+    for (qint32 y = 0; y < h; y++) {
+        double run = 0.0;
+        for (qint32 x = 0; x < w; x++) {
+            run += src[static_cast<size_t>(y) * w + x];
+            sums[static_cast<size_t>(y + 1) * (w + 1) + x + 1] = sums[static_cast<size_t>(y) * (w + 1) + x + 1] + run;
+        }
+    }
+    out.resize(static_cast<size_t>(w) * h);
+    for (qint32 y = 0; y < h; y++) {
+        const qint32 y0 = std::max(0, y - ry), y1 = std::min(h - 1, y + ry);
+        for (qint32 x = 0; x < w; x++) {
+            const qint32 x0 = std::max(0, x - rx), x1 = std::min(w - 1, x + rx);
+            const double sum = sums[static_cast<size_t>(y1 + 1) * (w + 1) + x1 + 1]
+                             - sums[static_cast<size_t>(y0) * (w + 1) + x1 + 1]
+                             - sums[static_cast<size_t>(y1 + 1) * (w + 1) + x0]
+                             + sums[static_cast<size_t>(y0) * (w + 1) + x0];
+            out[static_cast<size_t>(y) * w + x] = sum / static_cast<double>((x1 - x0 + 1) * (y1 - y0 + 1));
+        }
+    }
+}
+
+// Guided filter (He, Sun & Tang, "Guided Image Filtering", ECCV 2010 /
+// TPAMI 2013): within each window the output is an affine function of the
+// guide I, q = a*I + b, with a, b the least-squares fit of p on I
+// regularised by eps; the per-window coefficients are then averaged. Where
+// the window holds a luma edge, the colour difference p follows it; in flat
+// luma it is just smoothed. This is the software counterpart of the chroma
+// transient improvement (CTI) stage of SECAM receivers: colour-under plus
+// the SECAM bandwidth leave the colour difference ~1-2 us soft, while the
+// luma keeps its edges. O(1) per sample whatever the radii.
+void guidedFilter(const std::vector<double> &I, std::vector<double> &p, qint32 w, qint32 h,
+                  qint32 rx, qint32 ry, double eps)
+{
+    const size_t n = static_cast<size_t>(w) * h;
+    std::vector<double> meanI, meanP, meanIP, meanII, tmp(n);
+    boxMean(I, w, h, rx, ry, meanI);
+    boxMean(p, w, h, rx, ry, meanP);
+    for (size_t i = 0; i < n; i++) tmp[i] = I[i] * p[i];
+    boxMean(tmp, w, h, rx, ry, meanIP);
+    for (size_t i = 0; i < n; i++) tmp[i] = I[i] * I[i];
+    boxMean(tmp, w, h, rx, ry, meanII);
+    std::vector<double> a(n), b(n);
+    for (size_t i = 0; i < n; i++) {
+        const double varI = meanII[i] - meanI[i] * meanI[i];
+        const double covIP = meanIP[i] - meanI[i] * meanP[i];
+        a[i] = covIP / (varI + eps);
+        b[i] = meanP[i] - a[i] * meanI[i];
+    }
+    std::vector<double> meanA, meanB;
+    boxMean(a, w, h, rx, ry, meanA);
+    boxMean(b, w, h, rx, ry, meanB);
+    for (size_t i = 0; i < n; i++) p[i] = meanA[i] * I[i] + meanB[i];
+}
+
 } // namespace
 
 void SecamDecoder::FieldWork::init(qint32 fftBlockSize, qint32 fieldHeight, qint32 fieldWidth)
@@ -1420,6 +1480,45 @@ void SecamDecoder::decodeFrames(const QVector<SourceField>& inputFields,
                 for (qint32 x = activeStart; x < activeEnd; x++) {
                     u[x] = uSource[x];
                     v[x] = vSource[x];
+                }
+            }
+        }
+
+        // Luma-guided chroma reconstruction over the active picture, on the
+        // whole frame (both fields interleaved, so ry counts frame lines).
+        if (secamConfig.guideRadiusX > 0
+            && !inputFields[fieldIndex].guide.isEmpty() && !inputFields[fieldIndex + 1].guide.isEmpty()) {
+            const qint32 x0 = std::max(0, videoParameters.activeVideoStart);
+            const qint32 x1 = std::min(fieldWidth, videoParameters.activeVideoEnd);
+            const qint32 y0 = std::max(0, videoParameters.firstActiveFrameLine - 1);
+            const qint32 y1 = std::min(frameHeight, videoParameters.lastActiveFrameLine);
+            const qint32 w = x1 - x0, h = y1 - y0;
+            if (w > 0 && h > 0) {
+                const double black = videoParameters.black16bIre;
+                std::vector<double> guide(static_cast<size_t>(w) * h), u(guide.size()), v(guide.size());
+                for (qint32 yy = 0; yy < h; yy++) {
+                    const qint32 y = y0 + yy;
+                    const SourceVideo::Data &g = inputFields[fieldIndex + (y % 2)].guide;
+                    const quint16 *guideLine = g.data() + static_cast<size_t>(y / 2) * fieldWidth;
+                    const double *uLine = componentFrames[frameIndex].u(y);
+                    const double *vLine = componentFrames[frameIndex].v(y);
+                    for (qint32 xx = 0; xx < w; xx++) {
+                        const size_t i = static_cast<size_t>(yy) * w + xx;
+                        guide[i] = (guideLine[x0 + xx] - black) / yRange;
+                        u[i] = uLine[x0 + xx];
+                        v[i] = vLine[x0 + xx];
+                    }
+                }
+                guidedFilter(guide, u, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
+                guidedFilter(guide, v, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
+                for (qint32 yy = 0; yy < h; yy++) {
+                    double *uLine = componentFrames[frameIndex].u(y0 + yy);
+                    double *vLine = componentFrames[frameIndex].v(y0 + yy);
+                    for (qint32 xx = 0; xx < w; xx++) {
+                        const size_t i = static_cast<size_t>(yy) * w + xx;
+                        uLine[x0 + xx] = u[i];
+                        vLine[x0 + xx] = v[i];
+                    }
                 }
             }
         }
