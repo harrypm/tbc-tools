@@ -350,6 +350,17 @@ int main(int argc, char *argv[])
                                       QCoreApplication::translate("main", "number"));
     parser.addOption(secamClickNrOption);
 
+    // Options for an extra SECAM LF shelf de-emphasis
+    QCommandLineOption secamLfExtraBreakOption(QStringList() << "secam-lf-extra-break",
+                                      QCoreApplication::translate("main", "SECAM: extra LF shelf de-emphasis break frequency in Hz, on top of the standard one (default 0 = off)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamLfExtraBreakOption);
+
+    QCommandLineOption secamLfExtraRatioOption(QStringList() << "secam-lf-extra-ratio",
+                                      QCoreApplication::translate("main", "SECAM: extra LF shelf ratio, high-frequency attenuation = 1/ratio (default 3, as the standard network)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamLfExtraRatioOption);
+
     // -- Positional arguments --
 
     // Positional argument to specify input video file
@@ -459,6 +470,24 @@ int main(int argc, char *argv[])
             return -1;
         }
         secamConfig.clickNrLevel = value;
+    }
+
+    if (parser.isSet(secamLfExtraBreakOption)) {
+        const double value = parser.value(secamLfExtraBreakOption).toDouble();
+        if (value < 0.0) {
+            qCritical("SECAM extra LF shelf break frequency cannot be negative");
+            return -1;
+        }
+        secamConfig.lfExtraBreak = value;
+    }
+
+    if (parser.isSet(secamLfExtraRatioOption)) {
+        const double value = parser.value(secamLfExtraRatioOption).toDouble();
+        if (value < 1.0) {
+            qCritical("SECAM extra LF shelf ratio must be at least 1");
+            return -1;
+        }
+        secamConfig.lfExtraRatio = value;
     }
 
     bool bwMode = parser.isSet(setBwModeOption);
