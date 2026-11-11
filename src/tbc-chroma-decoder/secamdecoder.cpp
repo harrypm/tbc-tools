@@ -139,6 +139,11 @@ constexpr double kRecentreThresholdHz = 10000.0;
 // sources always measure a real porch pair.)
 constexpr double kCalibrationMaxCarrierOffsetHz = 350000.0;
 
+// Bleed measurement: one frame in this many is analysed, and at most this
+// many step profiles (160 floats each) are kept per component.
+constexpr qint32 kBleedMeasureStride = 5;
+constexpr size_t kBleedMeasureMaxSteps = 100000;
+
 // Maximum frequency deviation per unit of colour difference, in D'B/D'R
 // units (the transmitter clips the pre-corrected signal to these, so
 // demodulated excursions beyond them are never legitimate signal).
@@ -1387,7 +1392,9 @@ void SecamDecoder::decodeFrames(const QVector<SourceField>& inputFields,
 
         // Luma-guided chroma reconstruction over the active picture, on the
         // whole frame (both fields interleaved, so ry counts frame lines).
-        if (secamConfig.guideRadiusX > 0
+        const bool measureFrame = secamConfig.bleedMeasure
+            && (inputFields[fieldIndex].fieldNumber / 2) % kBleedMeasureStride == 0;
+        if ((secamConfig.guideRadiusX > 0 || secamConfig.bleed.enabled() || measureFrame)
             && !inputFields[fieldIndex].guide.isEmpty() && !inputFields[fieldIndex + 1].guide.isEmpty()) {
             const qint32 x0 = std::max(0, videoParameters.activeVideoStart);
             const qint32 x1 = std::min(fieldWidth, videoParameters.activeVideoEnd);
@@ -1410,8 +1417,40 @@ void SecamDecoder::decodeFrames(const QVector<SourceField>& inputFields,
                         v[i] = vLine[x0 + xx];
                     }
                 }
-                guidedFilter(guide, u, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
-                guidedFilter(guide, v, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
+                if (secamConfig.guideRadiusX > 0) {
+                    guidedFilter(guide, u, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
+                    guidedFilter(guide, v, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
+                }
+                if (secamConfig.bleed.enabled() || measureFrame) {
+                    // The bleed stage works in normalised Cb / Cr (+-0.5 full
+                    // scale), the units its responses are measured in: U and V
+                    // carry the composite scale factors 0.4921 / 0.8773 of
+                    // (B'-Y') / (R'-Y'), and Cb / Cr divide those by 2 (1 - Kb)
+                    // and 2 (1 - Kr).
+                    constexpr double kCb = 2.0 * (1.0 - 0.114) * 0.49211104112248356;
+                    constexpr double kCr = 2.0 * (1.0 - 0.299) * 0.87728321993817867;
+                    for (size_t i = 0; i < u.size(); i++) {
+                        u[i] /= yRange * kCb;
+                        v[i] /= yRange * kCr;
+                    }
+                    if (measureFrame) {
+                        std::vector<float> stepsDb, stepsDr;
+                        SecamBleed::collectSteps(guide, u, w, h, stepsDb);
+                        SecamBleed::collectSteps(guide, v, w, h, stepsDr);
+                        QMutexLocker locker(&bleedMutex);
+                        if (bleedStepsDb.size() < kBleedMeasureMaxSteps * 160)
+                            bleedStepsDb.insert(bleedStepsDb.end(), stepsDb.begin(), stepsDb.end());
+                        if (bleedStepsDr.size() < kBleedMeasureMaxSteps * 160)
+                            bleedStepsDr.insert(bleedStepsDr.end(), stepsDr.begin(), stepsDr.end());
+                    }
+                    if (secamConfig.bleed.enabled()) {
+                        SecamBleed::reconstruct(guide, u, v, w, h, secamConfig.bleed);
+                    }
+                    for (size_t i = 0; i < u.size(); i++) {
+                        u[i] *= yRange * kCb;
+                        v[i] *= yRange * kCr;
+                    }
+                }
                 for (qint32 yy = 0; yy < h; yy++) {
                     double *uLine = componentFrames[frameIndex].u(y0 + yy);
                     double *vLine = componentFrames[frameIndex].v(y0 + yy);
@@ -1424,6 +1463,29 @@ void SecamDecoder::decodeFrames(const QVector<SourceField>& inputFields,
             }
         }
     }
+}
+
+bool SecamDecoder::writeBleedResponses(const QString &prefix)
+{
+    const std::pair<std::vector<float> *, const char *> components[] = {
+        {&bleedStepsDb, "_db.txt"}, {&bleedStepsDr, "_dr.txt"}};
+    for (const auto &component : components) {
+        const size_t count = component.first->size() / 160;
+        const std::vector<double> response = SecamBleed::responseFromSteps(*component.first);
+        const QString path = prefix + component.second;
+        if (response.empty()) {
+            qCritical().noquote() << "SECAM bleed measurement: too few clean colour edges for" << path
+                                  << "(" << count << "found; decode more frames)";
+            return false;
+        }
+        std::string error;
+        if (!SecamBleed::writeKernel(path.toStdString(), response, error)) {
+            qCritical().noquote() << QString::fromStdString(error);
+            return false;
+        }
+        qInfo().noquote() << "SECAM bleed response:" << path << "-" << count << "edges," << response.size() << "taps";
+    }
+    return true;
 }
 
 SecamThread::SecamThread(QAtomicInt &_abort, DecoderPool &_decoderPool,

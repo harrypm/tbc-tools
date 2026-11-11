@@ -135,6 +135,7 @@ set(lddecode_chroma_sources
     outputwriter.cpp
     palcolour.cpp
     secamdecoder.cpp
+    secambleed.cpp
     secampredemoddecoder.cpp
     sourcefield.cpp
     transformpal.cpp
@@ -182,6 +183,7 @@ add_executable(tbc-chroma-decoder
     ntscdecoder.cpp
     paldecoder.cpp
     secamdecoder.cpp
+    secambleed.cpp
     secampredemoddecoder.cpp
 )
 

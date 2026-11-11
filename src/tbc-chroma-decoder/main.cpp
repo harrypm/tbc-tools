@@ -371,6 +371,22 @@ int main(int argc, char *argv[])
                                       QCoreApplication::translate("main", "number"));
     parser.addOption(secamGuideEpsOption);
 
+    // Options for the SECAM colour-bleed measurement and reconstruction
+    QCommandLineOption secamBleedMeasureOption(QStringList() << "secam-bleed-measure",
+                                      QCoreApplication::translate("main", "SECAM: measure the tape's colour-bleed responses (needs --secam-luma-guide) and write them to <prefix>_db.txt / <prefix>_dr.txt"),
+                                      QCoreApplication::translate("main", "prefix"));
+    parser.addOption(secamBleedMeasureOption);
+
+    QCommandLineOption secamBleedDbOption(QStringList() << "secam-bleed-db",
+                                      QCoreApplication::translate("main", "SECAM: measured D'B colour-bleed response (from --secam-bleed-measure); with --secam-bleed-dr, enables the colour-bleed reconstruction (needs --secam-luma-guide)"),
+                                      QCoreApplication::translate("main", "file"));
+    parser.addOption(secamBleedDbOption);
+
+    QCommandLineOption secamBleedDrOption(QStringList() << "secam-bleed-dr",
+                                      QCoreApplication::translate("main", "SECAM: measured D'R colour-bleed response (from --secam-bleed-measure)"),
+                                      QCoreApplication::translate("main", "file"));
+    parser.addOption(secamBleedDrOption);
+
     // -- Positional arguments --
 
     // Positional argument to specify input video file
@@ -517,6 +533,34 @@ int main(int argc, char *argv[])
 
     if (secamConfig.guideRadiusX > 0 && secamLumaGuideFile.isEmpty()) {
         qCritical("--secam-guide-rx needs --secam-luma-guide");
+        return -1;
+    }
+
+    if (parser.isSet(secamBleedDbOption) != parser.isSet(secamBleedDrOption)) {
+        qCritical("--secam-bleed-db and --secam-bleed-dr must be given together");
+        return -1;
+    }
+
+    if (parser.isSet(secamBleedDbOption)) {
+        std::string error;
+        secamConfig.bleed.kernelDb = SecamBleed::readKernel(parser.value(secamBleedDbOption).toStdString(), error);
+        if (error.empty()) {
+            secamConfig.bleed.kernelDr = SecamBleed::readKernel(parser.value(secamBleedDrOption).toStdString(), error);
+        }
+        if (!error.empty()) {
+            qCritical().noquote() << QString::fromStdString(error);
+            return -1;
+        }
+    }
+
+    QString secamBleedMeasurePrefix;
+    if (parser.isSet(secamBleedMeasureOption)) {
+        secamBleedMeasurePrefix = parser.value(secamBleedMeasureOption);
+        secamConfig.bleedMeasure = true;
+    }
+
+    if ((secamConfig.bleed.enabled() || secamConfig.bleedMeasure) && secamLumaGuideFile.isEmpty()) {
+        qCritical("The SECAM colour-bleed measurement and reconstruction need --secam-luma-guide");
         return -1;
     }
 
@@ -840,6 +884,17 @@ int main(int argc, char *argv[])
     }
     if (!decoderPool.process()) {
         return -1;
+    }
+
+    if (!secamBleedMeasurePrefix.isEmpty()) {
+        auto *secamDecoder = dynamic_cast<SecamDecoder *>(decoder.get());
+        if (secamDecoder == nullptr) {
+            qCritical("--secam-bleed-measure needs the secam decoder");
+            return -1;
+        }
+        if (!secamDecoder->writeBleedResponses(secamBleedMeasurePrefix)) {
+            return -1;
+        }
     }
 
     // Quit with success
