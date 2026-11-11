@@ -63,6 +63,7 @@ The `secam` decoder FM-demodulates the restored studio SECAM chroma block (FM re
 - `--secam-click-nr <number>`: SECAM: FM click ("SECAM fire") concealment level (0 bypasses; default 1.0, higher = more aggressive)
 - `--secam-db-gain <number>`, `--secam-dr-gain <number>`: SECAM: separate D'B (B-Y) / D'R (R-Y) gains, on top of `--chroma-gain` (default 1.0). A colour-under tape chain does not preserve the two FM channels equally; measured against the Blu-ray of two films released on SECAM VHS, D'R needs ~1.2x the D'B gain
 - `--secam-db-offset <number>`, `--secam-dr-offset <number>`: SECAM: constant B-Y / R-Y offsets, as a fraction of the luma range (default 0), to put the tape's neutrals back on grey
+- `--secam-lf-extra-break <Hz>`, `--secam-lf-extra-ratio <number>`: SECAM: extra LF shelf de-emphasis on top of the standard one, `H(f) = (1 + jf/(ratio*break)) / (1 + jf/break)` (default off; ratio default 3). For tapes whose colour overshoots after colour edges and settles slowly (halo); 50000 / 3 removes the overshoot on two SECAM VHS film releases. Tape-dependent: check the colour step response before using it
 - `--secam-first-line-is-red <auto|true|false>`: SECAM pre-demod: force first active line identity (auto uses per-field `secamFirstLineIsRed` metadata; true/red = D'R first; false/blue = D'B first; default auto)
 
 #### Transform Decoder Options
