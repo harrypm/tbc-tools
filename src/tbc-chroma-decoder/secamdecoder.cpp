@@ -145,8 +145,21 @@ constexpr double kRowRestMaxDevHz = 30000.0;
 
 // Bleed measurement: one frame in this many is analysed, and at most this
 // many step profiles (160 floats each) are kept per component.
-constexpr qint32 kBleedMeasureStride = 5;
 constexpr size_t kBleedMeasureMaxSteps = 100000;
+// Step-profile window for the LF shelf measurement (samples each side of the
+// luma edge, and samples averaged for each end level): shorter than the
+// bleed's, so that enough clean edges are found on busy pictures.
+constexpr int kLfStepPre = 60;
+constexpr int kLfStepPost = 60;
+constexpr int kLfStepPlateau = 12;
+// Picture-border detection (lfMeasure): lines searched at the top and bottom
+// of the picture, how far a line must stand out from the median line, the
+// right-edge columns examined and the colour shift that marks them damaged.
+constexpr qint32 kBorderTopLines = 16;
+constexpr qint32 kBorderBottomLines = 24;
+constexpr double kBorderLineFactor = 2.5;
+constexpr qint32 kEdgeColumns = 128;
+constexpr double kEdgeShift = 0.05;
 
 // Maximum frequency deviation per unit of colour difference, in D'B/D'R
 // units (the transmitter clips the pre-corrected signal to these, so
@@ -410,14 +423,18 @@ bool SecamDecoder::configure(const TbcMetaData::VideoParameters &videoParameters
     // Exact LF pre-correction inverse, offset-independent: built once here
     // and shared read-only by all decoder threads.
     maskDeemphasis.assign(blockSize, {0.0, 0.0});
+    maskDeemphasisDr.assign(blockSize, {0.0, 0.0});
+    const double ratioDb = secamConfig.lfExtraRatioDb > 0.0 ? secamConfig.lfExtraRatioDb : secamConfig.lfExtraRatio;
+    const double ratioDr = secamConfig.lfExtraRatioDr > 0.0 ? secamConfig.lfExtraRatioDr : secamConfig.lfExtraRatio;
     maskColourLpf.assign(blockSize, 0.0);
     for (qint32 k = 0; k < blockSize; k++) {
         const double f = (k <= blockSize / 2 ? k : k - blockSize) * sampleRate / blockSize;
         maskDeemphasis[k] = inverseLf(f);
+        maskDeemphasisDr[k] = maskDeemphasis[k];
         if (secamConfig.lfExtraBreak > 0.0) {
-            const std::complex<double> num(1.0, f / (secamConfig.lfExtraRatio * secamConfig.lfExtraBreak));
             const std::complex<double> den(1.0, f / secamConfig.lfExtraBreak);
-            maskDeemphasis[k] *= num / den;
+            maskDeemphasis[k] *= std::complex<double>(1.0, f / (ratioDb * secamConfig.lfExtraBreak)) / den;
+            maskDeemphasisDr[k] *= std::complex<double>(1.0, f / (ratioDr * secamConfig.lfExtraBreak)) / den;
         }
         // Colour-difference bandwidth filter: the discriminator's output is
         // per-sample and carries every in-band disturbance (tape noise, the
@@ -678,8 +695,9 @@ void SecamDecoder::discriminateRow(const std::complex<double> *analyticData, qin
 
 // Apply the exact LF de-emphasis mask to one row of the deviation signal
 // (overlap-save over the flat per-field buffer, like the analytic filter).
-void SecamDecoder::filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint32 row) const
+void SecamDecoder::filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint32 row, bool isRed) const
 {
+    const std::vector<std::complex<double>> &mask = isRed ? maskDeemphasisDr : maskDeemphasis;
     const qint32 width = secamConfig.videoParameters.fieldWidth;
     const qint32 base = row * width;
 
@@ -694,7 +712,7 @@ void SecamDecoder::filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint3
     const double scale = 1.0 / blockSize;
     for (qint32 k = 0; k < blockSize; k++) {
         const std::complex<double> s(work.fftFreq[k][0], work.fftFreq[k][1]);
-        const std::complex<double> v = s * maskDeemphasis[k] * maskColourLpf[k];
+        const std::complex<double> v = s * mask[k] * maskColourLpf[k];
         work.fftWork[k][0] = v.real();
         work.fftWork[k][1] = v.imag();
     }
@@ -1307,7 +1325,7 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
             for (qint32 x = 0; x < fieldWidth; x++) dst[x] = 0.0;
             continue;
         }
-        filterRowDeemphasis(work, numSamples, row);
+        filterRowDeemphasis(work, numSamples, row, isRed);
         const double unit = isRed ? 1.0 / kDrScale : 1.0 / kDbScale;
         const double *deemphLine = &work.deemph[static_cast<size_t>(row) * fieldWidth];
         for (qint32 x = 0; x < fieldWidth; x++) {
@@ -1489,8 +1507,8 @@ void SecamDecoder::decodeFrames(const QVector<SourceField>& inputFields,
 
         // Luma-guided chroma reconstruction over the active picture, on the
         // whole frame (both fields interleaved, so ry counts frame lines).
-        const bool measureFrame = secamConfig.bleedMeasure
-            && (inputFields[fieldIndex].fieldNumber / 2) % kBleedMeasureStride == 0;
+        const bool measureFrame = (secamConfig.bleedMeasure || secamConfig.lfMeasure)
+            && (inputFields[fieldIndex].fieldNumber / 2) % std::max(1, secamConfig.measureStride) == 0;
         if ((secamConfig.guideRadiusX > 0 || secamConfig.bleed.enabled() || measureFrame)
             && !inputFields[fieldIndex].guide.isEmpty() && !inputFields[fieldIndex + 1].guide.isEmpty()) {
             const qint32 x0 = std::max(0, videoParameters.activeVideoStart);
@@ -1514,23 +1532,88 @@ void SecamDecoder::decodeFrames(const QVector<SourceField>& inputFields,
                         v[i] = vLine[x0 + xx];
                     }
                 }
+                // The bleed stage and the step measurements work in normalised
+                // Cb / Cr (+-0.5 full scale): U and V carry the composite scale
+                // factors 0.4921 / 0.8773 of (B'-Y') / (R'-Y'), and Cb / Cr
+                // divide those by 2 (1 - Kb) and 2 (1 - Kr).
+                constexpr double kCb = 2.0 * (1.0 - 0.114) * 0.49211104112248356;
+                constexpr double kCr = 2.0 * (1.0 - 0.299) * 0.87728321993817867;
+                // Border detection reads the chroma as decoded; the LF steps
+                // read it after the guided filter.
+                std::vector<double> unRaw, vnRaw;
+                if (measureFrame && secamConfig.lfMeasure) {
+                    unRaw.resize(u.size()); vnRaw.resize(v.size());
+                    for (size_t i = 0; i < u.size(); i++) {
+                        unRaw[i] = u[i] / (yRange * kCb);
+                        vnRaw[i] = v[i] / (yRange * kCr);
+                    }
+                }
                 if (secamConfig.guideRadiusX > 0) {
                     guidedFilter(guide, u, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
                     guidedFilter(guide, v, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
                 }
-                if (secamConfig.bleed.enabled() || measureFrame) {
-                    // The bleed stage works in normalised Cb / Cr (+-0.5 full
-                    // scale), the units its responses are measured in: U and V
-                    // carry the composite scale factors 0.4921 / 0.8773 of
-                    // (B'-Y') / (R'-Y'), and Cb / Cr divide those by 2 (1 - Kb)
-                    // and 2 (1 - Kr).
-                    constexpr double kCb = 2.0 * (1.0 - 0.114) * 0.49211104112248356;
-                    constexpr double kCr = 2.0 * (1.0 - 0.299) * 0.87728321993817867;
+                if (measureFrame && secamConfig.lfMeasure) {
+                    std::vector<double> un(u.size()), vn(v.size());
+                    for (size_t i = 0; i < u.size(); i++) {
+                        un[i] = u[i] / (yRange * kCb);
+                        vn[i] = v[i] / (yRange * kCr);
+                    }
+                    // Line anomaly: how far each line is from its same-field
+                    // neighbours (second difference, one-sided at the ends),
+                    // median over the line, D'B + D'R.
+                    std::vector<float> rows(h, 0.0f);
+                    std::vector<double> e(w);
+                    for (const std::vector<double> *plane : {&unRaw, &vnRaw}) {
+                        for (qint32 yy = 0; yy < h; yy++) {
+                            const double *line = plane->data() + static_cast<size_t>(yy) * w;
+                            const auto at = [&](qint32 r) { return plane->data() + static_cast<size_t>(r) * w; };
+                            for (qint32 xx = 0; xx < w; xx++) {
+                                if (yy >= 2 && yy + 2 < h) e[xx] = std::abs(line[xx] - 0.5 * (at(yy - 2)[xx] + at(yy + 2)[xx]));
+                                else if (yy < 2) e[xx] = (yy + 2 < h) ? std::abs(line[xx] - at(yy + 2)[xx]) : 0.0;
+                                else e[xx] = std::abs(line[xx] - at(yy - 2)[xx]);
+                            }
+                            std::nth_element(e.begin(), e.begin() + w / 2, e.end());
+                            rows[yy] += static_cast<float>(e[w / 2]);
+                        }
+                    }
+                    // Right edge: colour shift of each of the last kEdgeColumns
+                    // samples against the 20 before them, median over the lines.
+                    std::vector<float> edgeDb, edgeDr;
+                    if (w > kEdgeColumns + 20 && h > 2 * kBorderBottomLines) {
+                        for (const auto &[plane, out] : {std::pair{&unRaw, &edgeDb}, std::pair{&vnRaw, &edgeDr}}) {
+                            std::vector<double> shift(h - 2 * kBorderBottomLines);
+                            for (qint32 k = 0; k < kEdgeColumns; k++) {
+                                for (qint32 yy = kBorderBottomLines; yy < h - kBorderBottomLines; yy++) {
+                                    const double *line = plane->data() + static_cast<size_t>(yy) * w;
+                                    double ref = 0.0;
+                                    for (qint32 xx = w - kEdgeColumns - 20; xx < w - kEdgeColumns; xx++) ref += line[xx];
+                                    shift[yy - kBorderBottomLines] = line[w - kEdgeColumns + k] - ref / 20.0;
+                                }
+                                std::nth_element(shift.begin(), shift.begin() + shift.size() / 2, shift.end());
+                                out->push_back(static_cast<float>(shift[shift.size() / 2]));
+                            }
+                        }
+                    }
+                    std::vector<float> stepsDb, stepsDr;
+                    SecamBleed::collectSteps(guide, un, w, h, stepsDb, kLfStepPre, kLfStepPost, kLfStepPlateau);
+                    SecamBleed::collectSteps(guide, vn, w, h, stepsDr, kLfStepPre, kLfStepPost, kLfStepPlateau);
+                    QMutexLocker locker(&bleedMutex);
+                    if (lfStepsDb.size() < kBleedMeasureMaxSteps * (kLfStepPre + kLfStepPost))
+                        lfStepsDb.insert(lfStepsDb.end(), stepsDb.begin(), stepsDb.end());
+                    if (lfStepsDr.size() < kBleedMeasureMaxSteps * (kLfStepPre + kLfStepPost))
+                        lfStepsDr.insert(lfStepsDr.end(), stepsDr.begin(), stepsDr.end());
+                    borderRows.push_back(std::move(rows));
+                    if (!edgeDb.empty()) {
+                        borderEdgeDb.push_back(std::move(edgeDb));
+                        borderEdgeDr.push_back(std::move(edgeDr));
+                    }
+                }
+                if (secamConfig.bleed.enabled() || (measureFrame && secamConfig.bleedMeasure)) {
                     for (size_t i = 0; i < u.size(); i++) {
                         u[i] /= yRange * kCb;
                         v[i] /= yRange * kCr;
                     }
-                    if (measureFrame) {
+                    if (measureFrame && secamConfig.bleedMeasure) {
                         std::vector<float> stepsDb, stepsDr;
                         SecamBleed::collectSteps(guide, u, w, h, stepsDb);
                         SecamBleed::collectSteps(guide, v, w, h, stepsDr);
@@ -1581,6 +1664,82 @@ bool SecamDecoder::writeBleedResponses(const QString &prefix)
             return false;
         }
         qInfo().noquote() << "SECAM bleed response:" << path << "-" << count << "edges," << response.size() << "taps";
+    }
+    return true;
+}
+
+double SecamDecoder::lfMeasuredRatio(bool red, double breakHz)
+{
+    QMutexLocker locker(&bleedMutex);
+    return SecamBleed::lfShelfRatio(red ? lfStepsDr : lfStepsDb, kLfStepPre, kLfStepPost,
+                                    secamConfig.videoParameters.sampleRate, breakHz);
+}
+
+void SecamDecoder::bordersMeasured(qint32 &topFix, qint32 &repairFromBottom, qint32 &repairCount, qint32 &rightEdgeFix)
+{
+    QMutexLocker locker(&bleedMutex);
+    topFix = repairFromBottom = repairCount = rightEdgeFix = 0;
+    if (borderRows.empty()) return;
+    // Median over the measured frames, per line / per column
+    const auto medianOver = [](const std::vector<std::vector<float>> &frames, size_t i) {
+        std::vector<float> v;
+        for (const auto &f : frames) if (i < f.size()) v.push_back(f[i]);
+        std::nth_element(v.begin(), v.begin() + v.size() / 2, v.end());
+        return static_cast<double>(v[v.size() / 2]);
+    };
+    const qint32 h = static_cast<qint32>(borderRows.front().size());
+    if (h < 2 * kBorderBottomLines + kBorderTopLines) return;
+    std::vector<double> rows(h);
+    for (qint32 y = 0; y < h; y++) rows[y] = medianOver(borderRows, y);
+    std::vector<double> middle(rows.begin() + kBorderTopLines, rows.end() - kBorderBottomLines);
+    std::nth_element(middle.begin(), middle.begin() + middle.size() / 2, middle.end());
+    const double limit = kBorderLineFactor * middle[middle.size() / 2];
+
+    // Top: the damaged lines from the first one down (a single good line
+    // inside the run does not end it)
+    qint32 lastBad = -1;
+    for (qint32 y = 0; y < kBorderTopLines; y++) {
+        if (rows[y] > limit) lastBad = y;
+        else if (y > lastBad + 1) break;
+    }
+    // The repair rewrites the line above the active picture and topFix more
+    if (lastBad >= 0) topFix = lastBad + 1;
+
+    // Bottom: the span from the first to the last damaged line
+    qint32 first = -1, last = -1;
+    for (qint32 y = h - kBorderBottomLines; y < h; y++) {
+        if (rows[y] > limit) {
+            if (first < 0) first = y;
+            last = y;
+        }
+    }
+    if (first >= 0) {
+        repairFromBottom = h - first;
+        repairCount = last - first + 1;
+    }
+
+    // Right edge: the columns, counted from the line end, whose colour is
+    // shifted, plus a quarter for the transition
+    if (!borderEdgeDb.empty()) {
+        qint32 damaged = 0;
+        for (qint32 k = kEdgeColumns - 1; k >= 0; k--) {
+            const double shift = std::abs(medianOver(borderEdgeDb, k)) + std::abs(medianOver(borderEdgeDr, k));
+            if (shift <= kEdgeShift) break;
+            damaged++;
+        }
+        if (damaged > 0) rightEdgeFix = std::min(kEdgeColumns, damaged + damaged / 4);
+    }
+}
+
+bool SecamDecoder::bleedMeasuredResponses(SecamBleed::Params &params)
+{
+    QMutexLocker locker(&bleedMutex);
+    params.kernelDb = SecamBleed::responseFromSteps(bleedStepsDb);
+    params.kernelDr = SecamBleed::responseFromSteps(bleedStepsDr);
+    if (!params.enabled()) {
+        qCritical().noquote() << "SECAM bleed measurement: too few clean colour edges ("
+                              << bleedStepsDb.size() / 160 << "/" << bleedStepsDr.size() / 160 << "found)";
+        return false;
     }
     return true;
 }

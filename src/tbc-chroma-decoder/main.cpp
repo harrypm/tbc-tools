@@ -32,6 +32,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QThread>
+#include <QTemporaryDir>
 #include <fstream>
 #include <memory>
 
@@ -361,6 +362,16 @@ int main(int argc, char *argv[])
                                       QCoreApplication::translate("main", "number"));
     parser.addOption(secamLfExtraRatioOption);
 
+    QCommandLineOption secamLfExtraRatioDbOption(QStringList() << "secam-lf-extra-ratio-db",
+                                      QCoreApplication::translate("main", "SECAM: extra LF shelf ratio for D'B lines only (default: --secam-lf-extra-ratio)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamLfExtraRatioDbOption);
+
+    QCommandLineOption secamLfExtraRatioDrOption(QStringList() << "secam-lf-extra-ratio-dr",
+                                      QCoreApplication::translate("main", "SECAM: extra LF shelf ratio for D'R lines only (default: --secam-lf-extra-ratio)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamLfExtraRatioDrOption);
+
     // Options for the SECAM picture-border chroma repairs
     QCommandLineOption secamTopFixOption(QStringList() << "secam-top-fix",
                                       QCoreApplication::translate("main", "SECAM: frame lines at the top of the active picture whose chroma is copied from the first good line of the same field (default 0 = off)"),
@@ -399,6 +410,10 @@ int main(int argc, char *argv[])
     parser.addOption(secamGuideEpsOption);
 
     // Options for the SECAM colour-bleed measurement and reconstruction
+    QCommandLineOption secamAutoOption(QStringList() << "secam-auto",
+                                      QCoreApplication::translate("main", "SECAM: measure the tape before decoding (needs --secam-luma-guide) and set the extra LF shelf and the colour-bleed reconstruction from it; also enables the luma guide"));
+    parser.addOption(secamAutoOption);
+
     QCommandLineOption secamBleedMeasureOption(QStringList() << "secam-bleed-measure",
                                       QCoreApplication::translate("main", "SECAM: measure the tape's colour-bleed responses (needs --secam-luma-guide) and write them to <prefix>_db.txt / <prefix>_dr.txt"),
                                       QCoreApplication::translate("main", "prefix"));
@@ -543,6 +558,18 @@ int main(int argc, char *argv[])
         secamConfig.lfExtraRatio = value;
     }
 
+    for (const auto &[option, target] : {std::pair{&secamLfExtraRatioDbOption, &secamConfig.lfExtraRatioDb},
+                                         std::pair{&secamLfExtraRatioDrOption, &secamConfig.lfExtraRatioDr}}) {
+        if (parser.isSet(*option)) {
+            const double value = parser.value(*option).toDouble();
+            if (value < 1.0) {
+                qCritical("SECAM extra LF shelf ratio must be at least 1");
+                return -1;
+            }
+            *target = value;
+        }
+    }
+
     if (parser.isSet(secamTopFixOption)) {
         const qint32 value = parser.value(secamTopFixOption).toInt();
         if (value < 0) {
@@ -633,6 +660,12 @@ int main(int argc, char *argv[])
     if (parser.isSet(secamBleedMeasureOption)) {
         secamBleedMeasurePrefix = parser.value(secamBleedMeasureOption);
         secamConfig.bleedMeasure = true;
+    }
+
+    const bool secamAuto = parser.isSet(secamAutoOption);
+    if (secamAuto && secamLumaGuideFile.isEmpty()) {
+        qCritical("--secam-auto needs --secam-luma-guide");
+        return -1;
     }
 
     if ((secamConfig.bleed.enabled() || secamConfig.bleedMeasure) && secamLumaGuideFile.isEmpty()) {
@@ -953,6 +986,104 @@ int main(int argc, char *argv[])
         outputConfig.fullFrameDecode = true;
     }
     
+    // --secam-auto: measure the tape on short chunks spread over the requested
+    // range (output discarded), then decode with what was measured.
+    if (secamAuto) {
+        if (decoderName != "secam") {
+            qCritical("--secam-auto needs the secam decoder");
+            return -1;
+        }
+        QTemporaryDir measureDir;
+        if (!measureDir.isValid()) {
+            qCritical("--secam-auto: cannot create a temporary directory");
+            return -1;
+        }
+        const qint32 first = startFrame == -1 ? 1 : startFrame;
+        const qint32 count = length == -1 ? metaData.getNumberOfFrames() - (first - 1) : length;
+        // Up to kMeasureFrames frames, in chunks of kChunkFrames spread evenly
+        // (all of them on a short capture)
+        constexpr qint32 kMeasureFrames = 600;
+        constexpr qint32 kChunkFrames = 10;
+        const qint32 kChunks = kMeasureFrames / kChunkFrames;
+        const auto measure = [&](const SecamDecoder::SecamConfiguration &config) -> std::unique_ptr<SecamDecoder> {
+            auto measurer = std::make_unique<SecamDecoder>(config);
+            const qint32 chunks = std::max(1, std::min(kChunks, count / kChunkFrames));
+            for (qint32 k = 0; k < chunks; k++) {
+                const qint32 chunkStart = first + static_cast<qint32>((static_cast<qint64>(count - kChunkFrames) * (2 * k + 1)) / (2 * chunks));
+                OutputWriter::Configuration measureOutput = outputConfig;
+                DecoderPool pool(*measurer, inputFileName, metaData, measureOutput, measureDir.filePath("measure"),
+                                 std::max(first, chunkStart), std::min(kChunkFrames, count), maxThreads);
+                pool.setGuideFile(secamLumaGuideFile);
+                if (!pool.process()) return nullptr;
+            }
+            return measurer;
+        };
+
+        // 1. The extra LF shelf, from the colour steps of the decode without it
+        //    (after the guided filter, which sharpens the steps the same way
+        //    with or without the shelf).
+        constexpr double kAutoLfBreak = 50000.0;
+        SecamDecoder::SecamConfiguration lfConfig = secamConfig;
+        lfConfig.lfExtraBreak = 0.0;
+        lfConfig.bleed = SecamBleed::Params();
+        lfConfig.lfMeasure = true;
+        lfConfig.topFix = lfConfig.repairFromBottom = lfConfig.repairCount = lfConfig.rightEdgeFix = 0;
+        lfConfig.measureStride = 1;
+        std::unique_ptr<SecamDecoder> lfMeasurer = measure(lfConfig);
+        if (!lfMeasurer) return -1;
+        const bool lfGiven = parser.isSet(secamLfExtraBreakOption) || parser.isSet(secamLfExtraRatioOption)
+                             || parser.isSet(secamLfExtraRatioDbOption) || parser.isSet(secamLfExtraRatioDrOption);
+        const double ratioDb = lfMeasurer->lfMeasuredRatio(false, kAutoLfBreak);
+        const double ratioDr = lfMeasurer->lfMeasuredRatio(true, kAutoLfBreak);
+        if (lfGiven) {
+            qInfo("SECAM auto: extra LF shelf given on the command line, not measured");
+        } else if (ratioDb > 0.0 && ratioDr > 0.0) {
+            secamConfig.lfExtraBreak = kAutoLfBreak;
+            secamConfig.lfExtraRatioDb = ratioDb;
+            secamConfig.lfExtraRatioDr = ratioDr;
+            qInfo().noquote() << "SECAM auto: extra LF shelf" << kAutoLfBreak << "Hz, ratio D'B" << ratioDb << "D'R" << ratioDr;
+        } else {
+            qInfo("SECAM auto: too few clean colour edges for the LF shelf, left off");
+        }
+
+        // The picture-border repairs, from the same plain decode (an option
+        // given on the command line wins).
+        {
+            qint32 topFix = 0, repairFrom = 0, repairCount = 0, rightEdge = 0;
+            lfMeasurer->bordersMeasured(topFix, repairFrom, repairCount, rightEdge);
+            if (!parser.isSet(secamTopFixOption)) secamConfig.topFix = topFix;
+            if (!parser.isSet(secamRepairLinesOption)) {
+                secamConfig.repairFromBottom = repairFrom;
+                secamConfig.repairCount = repairCount;
+            }
+            if (!parser.isSet(secamRightEdgeFixOption)) secamConfig.rightEdgeFix = rightEdge;
+            qInfo().noquote() << "SECAM auto: top fix" << secamConfig.topFix << "lines, head-switching repair"
+                              << secamConfig.repairFromBottom << ":" << secamConfig.repairCount
+                              << ", right edge fix" << secamConfig.rightEdgeFix << "samples";
+        }
+
+        // 2. The colour-bleed responses, on the decode with the shelf and the guide
+        //    (unless given on the command line).
+        if (parser.isSet(secamBleedDbOption) || parser.isSet(secamBleedDrOption)) {
+            qInfo("SECAM auto: colour-bleed responses given on the command line, not measured");
+        } else {
+            SecamDecoder::SecamConfiguration bleedConfig = secamConfig;
+            bleedConfig.bleed = SecamBleed::Params();
+            bleedConfig.bleedMeasure = true;
+            bleedConfig.measureStride = 1;
+            std::unique_ptr<SecamDecoder> bleedMeasurer = measure(bleedConfig);
+            if (!bleedMeasurer) return -1;
+            SecamBleed::Params measured = secamConfig.bleed;
+            if (bleedMeasurer->bleedMeasuredResponses(measured)) {
+                secamConfig.bleed = measured;
+                qInfo().noquote() << "SECAM auto: colour-bleed responses" << measured.kernelDb.size() << "/" << measured.kernelDr.size() << "taps";
+            } else {
+                qInfo("SECAM auto: colour-bleed reconstruction left off");
+            }
+        }
+        decoder = std::make_unique<SecamDecoder>(secamConfig);
+    }
+
     // Perform the processing
     DecoderPool decoderPool(*decoder, inputFileName, metaData, outputConfig, outputFileName, startFrame, length, maxThreads);
     if (!secamLumaGuideFile.isEmpty()) {

@@ -65,15 +65,24 @@ struct Params {
     double spatial = 60.0;          // step 2: geodesic reach (samples)
     double range = 0.06;            // step 2: luma step that stops the reach
     double rampScale = 0.003;       // step 2: colour slope (per sample) of an unreliable point
+    double maxChange = 0.02;        // largest change of a sample's colour (trust region; 0 = none)
 
     bool enabled() const { return !kernelDb.empty() && !kernelDr.empty(); }
 };
 
-// Appends to `steps` the normalised colour step profiles (160 samples each,
-// 0 before the luma edge, 1 after) found at the clean luma edges of a w x h
-// frame. c: one colour difference.
+// Appends to `steps` the normalised colour step profiles (pre + post samples
+// each, 0 before the luma edge, 1 after; each end level is the mean of
+// `plateau` samples) found at the clean luma edges of a w x h frame.
+// c: one colour difference. responseFromSteps expects the defaults.
 void collectSteps(const std::vector<double> &Y, const std::vector<double> &c, int w, int h,
-                  std::vector<float> &steps);
+                  std::vector<float> &steps, int pre = 80, int post = 80, int plateau = 15);
+
+// Ratio of the extra LF shelf (1 + jf/(ratio*break)) / (1 + jf/break) that
+// best turns the median of the step profiles (collected without the shelf,
+// with the given pre / post) into a clean step: no overshoot, no lead before
+// the luma edge, settled on both sides. 0 if there are too few profiles.
+// Reorders `steps`.
+double lfShelfRatio(std::vector<float> &steps, int pre, int post, double sampleRate, double breakHz);
 
 // Median of the step profiles -> response (derivative, clipped at 0, trimmed
 // to its useful support, sum 1). Empty if there are too few profiles.

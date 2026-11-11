@@ -274,7 +274,6 @@ void recolour(const std::vector<double> &Y, std::vector<double> &cb, std::vector
 // Step-profile geometry and selection (see collectSteps).
 constexpr int kStepPre = 80;           // samples before the luma edge
 constexpr int kStepPost = 80;          // samples after it
-constexpr int kStepPlateau = 15;       // samples averaged for each colour plateau
 constexpr double kStepLumaEdge = 0.05; // minimum luma step across 3 samples (0..1 scale)
 constexpr double kStepLumaCalm = 0.025;// maximum luma std on each side of the edge
 constexpr double kStepColour = 0.04;   // minimum colour change across the edge (Cb/Cr units)
@@ -292,36 +291,36 @@ double sampleStd(const double *v, int n)
 } // namespace
 
 void collectSteps(const std::vector<double> &Y, const std::vector<double> &c, int w, int h,
-                  std::vector<float> &steps)
+                  std::vector<float> &steps, int pre, int post, int plateau)
 {
-    const int length = kStepPre + kStepPost;
+    const int length = pre + post;
     std::vector<double> ys(w), g(w, 0.0);
     for (int y = 0; y < h; y++) {
         const double *lum = &Y[static_cast<size_t>(y) * w];
         const double *col = &c[static_cast<size_t>(y) * w];
         boxLine(lum, ys.data(), w, 3);
         for (int x = 1; x + 1 < w; x++) g[x] = std::abs(ys[x + 1] - ys[x - 1]) / 2.0;
-        for (int x = kStepPre + 20; x < w - kStepPost - 20; x++) {
+        for (int x = pre + 20; x < w - post - 20; x++) {
             // one point per edge: a local maximum of the luma gradient over the threshold
             if (g[x] <= kStepLumaEdge || g[x] < g[x - 1] || g[x] < g[x + 1]) continue;
-            if (sampleStd(lum + x - kStepPre, kStepPre - 4) > kStepLumaCalm
-                || sampleStd(lum + x + 5, kStepPost - 5) > kStepLumaCalm) continue;
-            const double before = std::accumulate(col + x - kStepPre, col + x - kStepPre + kStepPlateau, 0.0) / kStepPlateau;
-            const double after = std::accumulate(col + x + kStepPost - kStepPlateau, col + x + kStepPost, 0.0) / kStepPlateau;
+            if (sampleStd(lum + x - pre, pre - 4) > kStepLumaCalm
+                || sampleStd(lum + x + 5, post - 5) > kStepLumaCalm) continue;
+            const double before = std::accumulate(col + x - pre, col + x - pre + plateau, 0.0) / plateau;
+            const double after = std::accumulate(col + x + post - plateau, col + x + post, 0.0) / plateau;
             const double amplitude = after - before;
             if (std::abs(amplitude) < kStepColour) continue;
             for (int i = 0; i < length; i++)
-                steps.push_back(static_cast<float>((col[x - kStepPre + i] - before) / amplitude));
+                steps.push_back(static_cast<float>((col[x - pre + i] - before) / amplitude));
         }
     }
 }
 
-std::vector<double> responseFromSteps(std::vector<float> &steps)
+namespace {
+
+// Median of the step profiles (each `length` samples), sample by sample.
+std::vector<double> medianProfile(std::vector<float> &steps, int length)
 {
-    const int length = kStepPre + kStepPost;
     const size_t count = steps.size() / length;
-    if (count < 20) return {};
-    // Median step response, sample by sample
     std::vector<double> s(length);
     std::vector<float> column(count);
     for (int i = 0; i < length; i++) {
@@ -332,6 +331,18 @@ std::vector<double> responseFromSteps(std::vector<float> &steps)
         if (count % 2 == 0) v = 0.5 * (v + *std::max_element(column.begin(), column.begin() + mid));
         s[i] = v;
     }
+    return s;
+}
+
+} // namespace
+
+std::vector<double> responseFromSteps(std::vector<float> &steps)
+{
+    const int length = kStepPre + kStepPost;
+    const size_t count = steps.size() / length;
+    if (count < 20) return {};
+    // Median step response, sample by sample
+    const std::vector<double> s = medianProfile(steps, length);
     // Light smoothing (Gaussian, sigma 1 sample), then the derivative: the response
     std::vector<double> smooth(length);
     for (int i = 0; i < length; i++) {
@@ -363,6 +374,50 @@ std::vector<double> responseFromSteps(std::vector<float> &steps)
     return trimmed;
 }
 
+double lfShelfRatio(std::vector<float> &steps, int pre, int post, double sampleRate, double breakHz)
+{
+    const int length = pre + post;
+    if (steps.size() / length < 50) return 0.0;
+    const std::vector<double> s = medianProfile(steps, length);
+    // The shelf is causal and first order: run it as an IIR (bilinear transform) over the
+    // profile, held flat at both ends, then renormalise to the profile's own end levels.
+    constexpr int kPad = 400;
+    constexpr int kEnds = 15;
+    constexpr int kGuard = 8;
+    const double w = 2.0 * M_PI * breakHz, k2 = 2.0 * sampleRate;
+    double bestRatio = 1.0, bestCost = 0.0;
+    std::vector<double> y(length + 2 * kPad);
+    for (int step = 0; step <= 20; step++) {
+        const double ratio = 1.0 + 0.25 * step;
+        const double a = k2 / (ratio * w), b = k2 / w;
+        double xPrev = s.front(), yPrev = s.front();
+        for (int n = 0; n < length + 2 * kPad; n++) {
+            const double x = s[std::clamp(n - kPad, 0, length - 1)];
+            yPrev = ((1.0 + a) * x + (1.0 - a) * xPrev - (1.0 - b) * yPrev) / (1.0 + b);
+            xPrev = x;
+            y[n] = yPrev;
+        }
+        const double *p = y.data() + kPad;
+        double lo = 0.0, hi = 0.0;
+        for (int i = 0; i < kEnds; i++) { lo += p[i]; hi += p[length - 1 - i]; }
+        lo /= kEnds; hi /= kEnds;
+        if (std::abs(hi - lo) < 1e-9) continue;
+        double over = 0.0, under = 0.0, settle = 0.0, lead = 0.0;
+        int nSettle = 0, nLead = 0;
+        for (int i = 0; i < length; i++) {
+            const double v = (p[i] - lo) / (hi - lo);
+            const int x = i - pre;
+            if (x >= 0) over = std::max(over, v - 1.0);
+            else under = std::max(under, -v);
+            if (x >= kGuard) { settle += std::abs(v - 1.0); nSettle++; }
+            if (x <= -kGuard) { lead += std::abs(v); nLead++; }
+        }
+        const double cost = over + under + settle / nSettle + lead / nLead;
+        if (step == 0 || cost < bestCost) { bestCost = cost; bestRatio = ratio; }
+    }
+    return bestRatio;
+}
+
 bool writeKernel(const std::string &path, const std::vector<double> &kernel, std::string &error)
 {
     FILE *f = std::fopen(path.c_str(), "w");
@@ -391,9 +446,19 @@ void reconstruct(const std::vector<double> &Y, std::vector<double> &cb, std::vec
                  int w, int h, const Params &p)
 {
     if (!p.enabled() || w < 8 || h < 2) return;
+    const std::vector<double> cb0 = cb, cr0 = cr;
     deconvolve(Y, cb, w, h, p.kernelDb, p);
     deconvolve(Y, cr, w, h, p.kernelDr, p);
     recolour(Y, cb, cr, w, h, p);
+    // Trust region: where the luma edges are soft (motion blur, dark areas)
+    // the recolouring can carry a colour too far; a bleed correction is a
+    // small shift, so cap it.
+    if (p.maxChange > 0.0) {
+        for (size_t i = 0; i < cb.size(); i++) {
+            cb[i] = cb0[i] + std::clamp(cb[i] - cb0[i], -p.maxChange, p.maxChange);
+            cr[i] = cr0[i] + std::clamp(cr[i] - cr0[i], -p.maxChange, p.maxChange);
+        }
+    }
 }
 
 } // namespace SecamBleed
