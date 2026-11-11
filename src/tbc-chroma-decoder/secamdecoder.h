@@ -84,6 +84,16 @@ public:
         // FM click ("SECAM fire") concealment level. 0 bypasses the stage;
         // 1.0 is the default. Higher = more aggressive detection.
         double clickNrLevel = 1.0;
+        // Per-component calibration of the colour-difference signals, applied
+        // after de-emphasis: D'B and D'R travel on two FM channels with
+        // different deviations (and, on tape, through a colour-under chain
+        // that does not preserve them equally), so their gains are set
+        // separately. Offsets are in (B'-Y') / (R'-Y') units, as a fraction of
+        // the luma range. Both are scaled by chromaGain like the signal.
+        double dbGain = 1.0;
+        double drGain = 1.0;
+        double dbOffset = 0.0;
+        double drOffset = 0.0;
         // Original first active field line before any full-frame widening.
         // Rows below this are V-interval (bottles/test lines) and must
         // render neutral in full-frame mode even though they carry carrier;

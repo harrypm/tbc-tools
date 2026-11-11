@@ -1230,9 +1230,11 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
         }
         filterRowDeemphasis(work, numSamples, row);
         const double unit = isRed ? 1.0 / kDrScale : 1.0 / kDbScale;
+        const double componentGain = isRed ? secamConfig.drGain : secamConfig.dbGain;
+        const double componentOffset = isRed ? secamConfig.drOffset : secamConfig.dbOffset;
         const double *deemphLine = &work.deemph[static_cast<size_t>(row) * fieldWidth];
         for (qint32 x = 0; x < fieldWidth; x++) {
-            dst[x] = deemphLine[x] * unit * secamConfig.chromaGain;
+            dst[x] = (deemphLine[x] * unit * componentGain + componentOffset) * secamConfig.chromaGain;
         }
     }
 
