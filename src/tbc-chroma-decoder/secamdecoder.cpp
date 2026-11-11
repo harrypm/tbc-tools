@@ -1340,6 +1340,89 @@ void SecamDecoder::decodeFrames(const QVector<SourceField>& inputFields,
                 outU[x] = (dbRot * yRange) / DB_TO_U_SCALE;
             }
         }
+
+        ComponentFrame &frame = componentFrames[frameIndex];
+        const qint32 activeStart = std::max(0, videoParameters.activeVideoStart);
+        const qint32 activeEnd = std::min(fieldWidth, videoParameters.activeVideoEnd);
+
+        // End of line: fade U/V over the last rightEdgeFix samples (up to a few
+        // samples past the active area, where the transient ends) toward the
+        // mean of the kRightEdgeRefSamples samples just before the zone.
+        if (secamConfig.rightEdgeFix > 0) {
+            constexpr qint32 kRightEdgeRefSamples = 16;
+            const qint32 zoneEnd = std::min(fieldWidth, videoParameters.activeVideoEnd + 6);
+            const qint32 length = std::min(secamConfig.rightEdgeFix, zoneEnd / 2);
+            const qint32 zoneStart = zoneEnd - length;
+            for (qint32 y = 0; y < frameHeight; y++) {
+                double *u = frame.u(y);
+                double *v = frame.v(y);
+                double refU = 0.0, refV = 0.0;
+                for (qint32 x = zoneStart - kRightEdgeRefSamples; x < zoneStart; x++) {
+                    refU += u[x];
+                    refV += v[x];
+                }
+                refU /= kRightEdgeRefSamples;
+                refV /= kRightEdgeRefSamples;
+                for (qint32 x = zoneStart; x < fieldWidth; x++) {
+                    const double t = x >= zoneEnd ? 1.0 : 0.5 - 0.5 * std::cos(M_PI * (x - zoneStart) / length);
+                    u[x] = (1.0 - t) * u[x] + t * refU;
+                    v[x] = (1.0 - t) * v[x] + t * refV;
+                }
+            }
+        }
+
+        // Head-switching lines: linear interpolation, within each field,
+        // between the nearest good lines above and below the damaged span (or
+        // a copy of the line above when the span reaches the picture end).
+        if (secamConfig.repairCount > 0 && secamConfig.repairFromBottom > 0) {
+            const qint32 pictureEnd = std::min(frameHeight, videoParameters.lastActiveFrameLine);
+            const qint32 spanStart = pictureEnd - secamConfig.repairFromBottom;
+            const qint32 spanEnd = std::min(pictureEnd, spanStart + secamConfig.repairCount);
+            for (qint32 y = std::max(0, spanStart); y < spanEnd; y++) {
+                qint32 above = y - 2;
+                while (above >= spanStart) above -= 2;
+                qint32 below = y + 2;
+                while (below < spanEnd) below += 2;
+                if (above < 0) continue;
+                double *u = frame.u(y);
+                double *v = frame.v(y);
+                const double *uAbove = frame.u(above);
+                const double *vAbove = frame.v(above);
+                if (below >= pictureEnd) {
+                    for (qint32 x = activeStart; x < activeEnd; x++) {
+                        u[x] = uAbove[x];
+                        v[x] = vAbove[x];
+                    }
+                    continue;
+                }
+                const double t = static_cast<double>(y - above) / (below - above);
+                const double *uBelow = frame.u(below);
+                const double *vBelow = frame.v(below);
+                for (qint32 x = activeStart; x < activeEnd; x++) {
+                    u[x] = (1.0 - t) * uAbove[x] + t * uBelow[x];
+                    v[x] = (1.0 - t) * vAbove[x] + t * vBelow[x];
+                }
+            }
+        }
+
+        // First lines of the picture: copy the chroma of the first good line
+        // of the same field.
+        if (secamConfig.topFix > 0) {
+            const qint32 top = std::max(0, videoParameters.firstActiveFrameLine - 1);
+            const qint32 good = videoParameters.firstActiveFrameLine + secamConfig.topFix;
+            for (qint32 y = top; y < good && y < frameHeight; y++) {
+                const qint32 source = good + ((y - good) % 2 != 0 ? 1 : 0);
+                if (source >= frameHeight) break;
+                const double *uSource = frame.u(source);
+                const double *vSource = frame.v(source);
+                double *u = frame.u(y);
+                double *v = frame.v(y);
+                for (qint32 x = activeStart; x < activeEnd; x++) {
+                    u[x] = uSource[x];
+                    v[x] = vSource[x];
+                }
+            }
+        }
     }
 }
 

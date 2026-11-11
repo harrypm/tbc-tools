@@ -382,6 +382,22 @@ int main(int argc, char *argv[])
                                       QCoreApplication::translate("main", "number"));
     parser.addOption(secamLfExtraRatioOption);
 
+    // Options for the SECAM picture-border chroma repairs
+    QCommandLineOption secamTopFixOption(QStringList() << "secam-top-fix",
+                                      QCoreApplication::translate("main", "SECAM: frame lines at the top of the active picture whose chroma is copied from the first good line of the same field (default 0 = off)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamTopFixOption);
+
+    QCommandLineOption secamRepairLinesOption(QStringList() << "secam-repair-lines",
+                                      QCoreApplication::translate("main", "SECAM: head-switching repair FROM:COUNT -- COUNT frame lines starting FROM lines above the end of the active picture get their chroma interpolated per field from the good lines around (default off)"),
+                                      QCoreApplication::translate("main", "from:count"));
+    parser.addOption(secamRepairLinesOption);
+
+    QCommandLineOption secamRightEdgeFixOption(QStringList() << "secam-right-edge-fix",
+                                      QCoreApplication::translate("main", "SECAM: fade the colour over the last N samples of the line toward the picture (end-of-line transient; default 0 = off)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamRightEdgeFixOption);
+
     // -- Positional arguments --
 
     // Positional argument to specify input video file
@@ -535,6 +551,37 @@ int main(int argc, char *argv[])
             return -1;
         }
         secamConfig.lfExtraRatio = value;
+    }
+
+    if (parser.isSet(secamTopFixOption)) {
+        const qint32 value = parser.value(secamTopFixOption).toInt();
+        if (value < 0) {
+            qCritical("SECAM top fix line count cannot be negative");
+            return -1;
+        }
+        secamConfig.topFix = value;
+    }
+
+    if (parser.isSet(secamRepairLinesOption)) {
+        const QStringList values = parser.value(secamRepairLinesOption).split(':');
+        bool fromOk = false, countOk = false;
+        const qint32 from = values.size() == 2 ? values[0].toInt(&fromOk) : 0;
+        const qint32 count = values.size() == 2 ? values[1].toInt(&countOk) : 0;
+        if (!fromOk || !countOk || from <= 0 || count <= 0 || count > from) {
+            qCritical("SECAM repair lines must be FROM:COUNT with 0 < COUNT <= FROM");
+            return -1;
+        }
+        secamConfig.repairFromBottom = from;
+        secamConfig.repairCount = count;
+    }
+
+    if (parser.isSet(secamRightEdgeFixOption)) {
+        const qint32 value = parser.value(secamRightEdgeFixOption).toInt();
+        if (value < 0) {
+            qCritical("SECAM right edge fix length cannot be negative");
+            return -1;
+        }
+        secamConfig.rightEdgeFix = value;
     }
 
     bool bwMode = parser.isSet(setBwModeOption);
