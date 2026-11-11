@@ -138,6 +138,10 @@ constexpr double kRecentreThresholdHz = 10000.0;
 // 200 kHz MAX_REF_DEV_HZ clamp; libchromadec has no equivalent because its
 // sources always measure a real porch pair.)
 constexpr double kCalibrationMaxCarrierOffsetHz = 350000.0;
+// Per-line rest refinement: largest distance of one line's porch reading from
+// the field's measured carrier that can still be the rest carrier. Once the
+// field pair is calibrated, a real rest only moves by wow/flutter (a few kHz).
+constexpr double kRowRestMaxDevHz = 30000.0;
 
 // Maximum frequency deviation per unit of colour difference, in D'B/D'R
 // units (the transmitter clips the pre-corrected signal to these, so
@@ -1016,8 +1020,13 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
     std::vector<char> rowRestUsable(fieldHeight, 0);
     for (qint32 row = 0; row < fieldHeight; row++) {
         const double fieldZero = work.lineIsRed[row] ? work.for_ : work.fob;
-        const bool usable = row >= chromaFirstLine && work.rowValid[row]
-            && std::abs(work.porchFreq[row] - fieldZero) <= kCalibrationMaxCarrierOffsetHz;
+        // fieldZero already carries the measured carrier pair, so a porch read
+        // further than kRowRestMaxDevHz from it is not the rest carrier: VHS
+        // fields whose restored porch is corrupt read ~+-100 kHz there, and
+        // trusting them tints the whole field magenta. When the field's own
+        // pair failed to calibrate, its porch reads are not trusted at all.
+        const bool usable = row >= chromaFirstLine && work.rowValid[row] && work.calibrated
+            && std::abs(work.porchFreq[row] - fieldZero) <= kRowRestMaxDevHz;
         rowRestUsable[row] = usable ? 1 : 0;
         rowZero[row] = usable ? work.porchFreq[row] : fieldZero;
     }
