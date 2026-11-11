@@ -91,6 +91,22 @@ public:
         // H(f) = (1 + jf/(ratio*break)) / (1 + jf/break). 0 disables.
         double lfExtraBreak = 0.0;
         double lfExtraRatio = 3.0;
+        // Chroma repairs where the SECAM / VHS chain is known to leave no
+        // valid colour (all 0 = off, the default):
+        // - topFix: frame lines at the top of the active picture whose chroma
+        //   is copied from the first good line of the same field. The first
+        //   SECAM lines of a field have no previous line of the other
+        //   component for the one-line hold.
+        // - repairFromBottom / repairCount: head-switching lines. Frame lines
+        //   [lastActiveFrameLine - repairFromBottom, + repairCount) get their
+        //   chroma interpolated per field from the good lines above and below.
+        // - rightEdgeFix: over the last N samples of the line, fade the colour
+        //   toward the line's own value just before that zone (end-of-line
+        //   settling transient of the recorder's colour-under divider).
+        qint32 topFix = 0;
+        qint32 repairFromBottom = 0;
+        qint32 repairCount = 0;
+        qint32 rightEdgeFix = 0;
         // Original first active field line before any full-frame widening.
         // Rows below this are V-interval (bottles/test lines) and must
         // render neutral in full-frame mode even though they carry carrier;
