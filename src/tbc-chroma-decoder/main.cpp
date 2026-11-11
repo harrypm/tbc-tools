@@ -350,6 +350,27 @@ int main(int argc, char *argv[])
                                       QCoreApplication::translate("main", "number"));
     parser.addOption(secamClickNrOption);
 
+    // Options for the SECAM luma-guided chroma reconstruction
+    QCommandLineOption secamLumaGuideOption(QStringList() << "secam-luma-guide",
+                                      QCoreApplication::translate("main", "SECAM: luma TBC of the same capture, used to guide the chroma edges (luma-guided CTI; enables the stage)"),
+                                      QCoreApplication::translate("main", "file"));
+    parser.addOption(secamLumaGuideOption);
+
+    QCommandLineOption secamGuideRxOption(QStringList() << "secam-guide-rx",
+                                      QCoreApplication::translate("main", "SECAM: luma guide horizontal window radius in samples (default 16; 0 disables)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamGuideRxOption);
+
+    QCommandLineOption secamGuideRyOption(QStringList() << "secam-guide-ry",
+                                      QCoreApplication::translate("main", "SECAM: luma guide vertical window radius in frame lines (default 3)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamGuideRyOption);
+
+    QCommandLineOption secamGuideEpsOption(QStringList() << "secam-guide-eps",
+                                      QCoreApplication::translate("main", "SECAM: luma guide regularisation, on the 0..1 luma scale (default 1e-4)"),
+                                      QCoreApplication::translate("main", "number"));
+    parser.addOption(secamGuideEpsOption);
+
     // -- Positional arguments --
 
     // Positional argument to specify input video file
@@ -459,6 +480,44 @@ int main(int argc, char *argv[])
             return -1;
         }
         secamConfig.clickNrLevel = value;
+    }
+
+    QString secamLumaGuideFile;
+    if (parser.isSet(secamLumaGuideOption)) {
+        secamLumaGuideFile = parser.value(secamLumaGuideOption);
+        secamConfig.guideRadiusX = 16;
+    }
+
+    if (parser.isSet(secamGuideRxOption)) {
+        const qint32 value = parser.value(secamGuideRxOption).toInt();
+        if (value < 0) {
+            qCritical("SECAM luma guide radius cannot be negative");
+            return -1;
+        }
+        secamConfig.guideRadiusX = value;
+    }
+
+    if (parser.isSet(secamGuideRyOption)) {
+        const qint32 value = parser.value(secamGuideRyOption).toInt();
+        if (value < 0) {
+            qCritical("SECAM luma guide radius cannot be negative");
+            return -1;
+        }
+        secamConfig.guideRadiusY = value;
+    }
+
+    if (parser.isSet(secamGuideEpsOption)) {
+        const double value = parser.value(secamGuideEpsOption).toDouble();
+        if (value <= 0.0) {
+            qCritical("SECAM luma guide regularisation must be greater than 0");
+            return -1;
+        }
+        secamConfig.guideEps = value;
+    }
+
+    if (secamConfig.guideRadiusX > 0 && secamLumaGuideFile.isEmpty()) {
+        qCritical("--secam-guide-rx needs --secam-luma-guide");
+        return -1;
     }
 
     bool bwMode = parser.isSet(setBwModeOption);
@@ -776,6 +835,9 @@ int main(int argc, char *argv[])
     
     // Perform the processing
     DecoderPool decoderPool(*decoder, inputFileName, metaData, outputConfig, outputFileName, startFrame, length, maxThreads);
+    if (!secamLumaGuideFile.isEmpty()) {
+        decoderPool.setGuideFile(secamLumaGuideFile);
+    }
     if (!decoderPool.process()) {
         return -1;
     }

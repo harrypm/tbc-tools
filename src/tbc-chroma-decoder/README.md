@@ -61,6 +61,8 @@ The `secam` decoder FM-demodulates the restored studio SECAM chroma block (FM re
 
 #### SECAM-Specific Options
 - `--secam-click-nr <number>`: SECAM: FM click ("SECAM fire") concealment level (0 bypasses; default 1.0, higher = more aggressive)
+- `--secam-luma-guide <file>`: SECAM: luma TBC of the same capture (for a split vhs-decode / tape-decode output, the `.tbc` next to the `_chroma.tbc`), used as the guide of a guided filter that snaps the soft colour-difference edges onto the luma edges (luma-guided CTI). Enables the stage
+- `--secam-guide-rx <samples>`, `--secam-guide-ry <lines>`, `--secam-guide-eps <number>`: SECAM: guided-filter window radii (default 16 samples / 3 frame lines) and regularisation on the 0..1 luma scale (default 1e-4)
 - `--secam-first-line-is-red <auto|true|false>`: SECAM pre-demod: force first active line identity (auto uses per-field `secamFirstLineIsRed` metadata; true/red = D'R first; false/blue = D'B first; default auto)
 
 #### Transform Decoder Options

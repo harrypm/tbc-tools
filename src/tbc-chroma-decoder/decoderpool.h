@@ -52,6 +52,9 @@ public:
     // Returns true on success; on failure, prints a message and returns false.
     bool process();
 
+    // Optional luma TBC used as an edge guide by decoders that support it (SECAM)
+    void setGuideFile(const QString &fileName) { guideFileName = fileName; }
+
     // For worker threads: get the configured OutputWriter
     OutputWriter &getOutputWriter() {
         return outputWriter;
@@ -110,6 +113,9 @@ private:
     qint32 lastFrameNumber;
     TbcMetaData &metaData;
     SourceVideo sourceVideo;
+    QString guideFileName;
+    SourceVideo guideVideo;
+    bool guideOpen = false;
 
     // Output stream information (all guarded by outputMutex while threads are running)
     QMutex outputMutex;
