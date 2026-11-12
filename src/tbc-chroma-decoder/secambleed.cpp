@@ -27,8 +27,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <fstream>
+#include <iomanip>
+#include <locale>
 #include <numeric>
 
 namespace SecamBleed {
@@ -420,11 +421,13 @@ double lfShelfRatio(std::vector<float> &steps, int pre, int post, double sampleR
 
 bool writeKernel(const std::string &path, const std::vector<double> &kernel, std::string &error)
 {
-    FILE *f = std::fopen(path.c_str(), "w");
-    if (!f) { error = "cannot write " + path; return false; }
-    for (double v : kernel) std::fprintf(f, "%.8f\n", v);
-    std::fclose(f);
-    return true;
+    // Always '.' as decimal separator (the C locale follows the user's under Qt)
+    std::ofstream out(path);
+    if (!out) { error = "cannot write " + path; return false; }
+    out.imbue(std::locale::classic());
+    out << std::fixed << std::setprecision(8);
+    for (double v : kernel) out << v << '\n';
+    return static_cast<bool>(out);
 }
 
 std::vector<double> readKernel(const std::string &path, std::string &error)
@@ -432,6 +435,7 @@ std::vector<double> readKernel(const std::string &path, std::string &error)
     std::ifstream in(path);
     std::vector<double> h;
     if (!in) { error = "cannot open " + path; return {}; }
+    in.imbue(std::locale::classic());
     double v;
     while (in >> v) h.push_back(v);
     if (h.size() < 3 || h.size() % 2 == 0) { error = path + ": need an odd number (>= 3) of taps"; return {}; }
