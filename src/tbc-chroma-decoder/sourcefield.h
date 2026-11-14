@@ -32,6 +32,10 @@
 struct SourceField {
     TbcMetaData::Field field;
     SourceVideo::Data data;
+    // Optional luma-guide field (same field from a separate luma TBC), empty if unused
+    SourceVideo::Data guide;
+    // Field number in the source file (1-based), -1 for synthesized blank fields
+    qint32 fieldNumber = -1;
 
     // Load a sequence of frames from the input files.
     //

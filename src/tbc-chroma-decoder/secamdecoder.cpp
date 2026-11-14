@@ -138,6 +138,28 @@ constexpr double kRecentreThresholdHz = 10000.0;
 // 200 kHz MAX_REF_DEV_HZ clamp; libchromadec has no equivalent because its
 // sources always measure a real porch pair.)
 constexpr double kCalibrationMaxCarrierOffsetHz = 350000.0;
+// Per-line rest refinement: largest distance of one line's porch reading from
+// the field's measured carrier that can still be the rest carrier. Once the
+// field pair is calibrated, a real rest only moves by wow/flutter (a few kHz).
+constexpr double kRowRestMaxDevHz = 30000.0;
+
+// Bleed measurement: one frame in this many is analysed, and at most this
+// many step profiles (160 floats each) are kept per component.
+constexpr size_t kBleedMeasureMaxSteps = 100000;
+// Step-profile window for the LF shelf measurement (samples each side of the
+// luma edge, and samples averaged for each end level): shorter than the
+// bleed's, so that enough clean edges are found on busy pictures.
+constexpr int kLfStepPre = 60;
+constexpr int kLfStepPost = 60;
+constexpr int kLfStepPlateau = 12;
+// Picture-border detection (lfMeasure): lines searched at the top and bottom
+// of the picture, how far a line must stand out from the median line, the
+// right-edge columns examined and the colour shift that marks them damaged.
+constexpr qint32 kBorderTopLines = 16;
+constexpr qint32 kBorderBottomLines = 24;
+constexpr double kBorderLineFactor = 2.5;
+constexpr qint32 kEdgeColumns = 128;
+constexpr double kEdgeShift = 0.05;
 
 // Maximum frequency deviation per unit of colour difference, in D'B/D'R
 // units (the transmitter clips the pre-corrected signal to these, so
@@ -218,6 +240,66 @@ void fillChannel(std::vector<double> &buffer, const std::vector<bool> &has,
             for (qint32 x = 0; x < fieldWidth; x++) dst[x] = 0.0;
         }
     }
+}
+
+// Box mean over a clamped (shrinking) window, from a 2D prefix-sum table.
+// `src` is h x w row-major; returns the h x w mean image.
+void boxMean(const std::vector<double> &src, qint32 w, qint32 h, qint32 rx, qint32 ry,
+             std::vector<double> &out)
+{
+    std::vector<double> sums(static_cast<size_t>(w + 1) * (h + 1), 0.0);
+    for (qint32 y = 0; y < h; y++) {
+        double run = 0.0;
+        for (qint32 x = 0; x < w; x++) {
+            run += src[static_cast<size_t>(y) * w + x];
+            sums[static_cast<size_t>(y + 1) * (w + 1) + x + 1] = sums[static_cast<size_t>(y) * (w + 1) + x + 1] + run;
+        }
+    }
+    out.resize(static_cast<size_t>(w) * h);
+    for (qint32 y = 0; y < h; y++) {
+        const qint32 y0 = std::max(0, y - ry), y1 = std::min(h - 1, y + ry);
+        for (qint32 x = 0; x < w; x++) {
+            const qint32 x0 = std::max(0, x - rx), x1 = std::min(w - 1, x + rx);
+            const double sum = sums[static_cast<size_t>(y1 + 1) * (w + 1) + x1 + 1]
+                             - sums[static_cast<size_t>(y0) * (w + 1) + x1 + 1]
+                             - sums[static_cast<size_t>(y1 + 1) * (w + 1) + x0]
+                             + sums[static_cast<size_t>(y0) * (w + 1) + x0];
+            out[static_cast<size_t>(y) * w + x] = sum / static_cast<double>((x1 - x0 + 1) * (y1 - y0 + 1));
+        }
+    }
+}
+
+// Guided filter (He, Sun & Tang, "Guided Image Filtering", ECCV 2010 /
+// TPAMI 2013): within each window the output is an affine function of the
+// guide I, q = a*I + b, with a, b the least-squares fit of p on I
+// regularised by eps; the per-window coefficients are then averaged. Where
+// the window holds a luma edge, the colour difference p follows it; in flat
+// luma it is just smoothed. This is the software counterpart of the chroma
+// transient improvement (CTI) stage of SECAM receivers: colour-under plus
+// the SECAM bandwidth leave the colour difference ~1-2 us soft, while the
+// luma keeps its edges. O(1) per sample whatever the radii.
+void guidedFilter(const std::vector<double> &I, std::vector<double> &p, qint32 w, qint32 h,
+                  qint32 rx, qint32 ry, double eps)
+{
+    const size_t n = static_cast<size_t>(w) * h;
+    std::vector<double> meanI, meanP, meanIP, meanII, tmp(n);
+    boxMean(I, w, h, rx, ry, meanI);
+    boxMean(p, w, h, rx, ry, meanP);
+    for (size_t i = 0; i < n; i++) tmp[i] = I[i] * p[i];
+    boxMean(tmp, w, h, rx, ry, meanIP);
+    for (size_t i = 0; i < n; i++) tmp[i] = I[i] * I[i];
+    boxMean(tmp, w, h, rx, ry, meanII);
+    std::vector<double> a(n), b(n);
+    for (size_t i = 0; i < n; i++) {
+        const double varI = meanII[i] - meanI[i] * meanI[i];
+        const double covIP = meanIP[i] - meanI[i] * meanP[i];
+        a[i] = covIP / (varI + eps);
+        b[i] = meanP[i] - a[i] * meanI[i];
+    }
+    std::vector<double> meanA, meanB;
+    boxMean(a, w, h, rx, ry, meanA);
+    boxMean(b, w, h, rx, ry, meanB);
+    for (size_t i = 0; i < n; i++) p[i] = meanA[i] * I[i] + meanB[i];
 }
 
 } // namespace
@@ -341,10 +423,19 @@ bool SecamDecoder::configure(const TbcMetaData::VideoParameters &videoParameters
     // Exact LF pre-correction inverse, offset-independent: built once here
     // and shared read-only by all decoder threads.
     maskDeemphasis.assign(blockSize, {0.0, 0.0});
+    maskDeemphasisDr.assign(blockSize, {0.0, 0.0});
+    const double ratioDb = secamConfig.lfExtraRatioDb > 0.0 ? secamConfig.lfExtraRatioDb : secamConfig.lfExtraRatio;
+    const double ratioDr = secamConfig.lfExtraRatioDr > 0.0 ? secamConfig.lfExtraRatioDr : secamConfig.lfExtraRatio;
     maskColourLpf.assign(blockSize, 0.0);
     for (qint32 k = 0; k < blockSize; k++) {
         const double f = (k <= blockSize / 2 ? k : k - blockSize) * sampleRate / blockSize;
         maskDeemphasis[k] = inverseLf(f);
+        maskDeemphasisDr[k] = maskDeemphasis[k];
+        if (secamConfig.lfExtraBreak > 0.0) {
+            const std::complex<double> den(1.0, f / secamConfig.lfExtraBreak);
+            maskDeemphasis[k] *= std::complex<double>(1.0, f / (ratioDb * secamConfig.lfExtraBreak)) / den;
+            maskDeemphasisDr[k] *= std::complex<double>(1.0, f / (ratioDr * secamConfig.lfExtraBreak)) / den;
+        }
         // Colour-difference bandwidth filter: the discriminator's output is
         // per-sample and carries every in-band disturbance (tape noise, the
         // luma pull near colour edges) across the whole demod baseband,
@@ -604,8 +695,9 @@ void SecamDecoder::discriminateRow(const std::complex<double> *analyticData, qin
 
 // Apply the exact LF de-emphasis mask to one row of the deviation signal
 // (overlap-save over the flat per-field buffer, like the analytic filter).
-void SecamDecoder::filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint32 row) const
+void SecamDecoder::filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint32 row, bool isRed) const
 {
+    const std::vector<std::complex<double>> &mask = isRed ? maskDeemphasisDr : maskDeemphasis;
     const qint32 width = secamConfig.videoParameters.fieldWidth;
     const qint32 base = row * width;
 
@@ -620,7 +712,7 @@ void SecamDecoder::filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint3
     const double scale = 1.0 / blockSize;
     for (qint32 k = 0; k < blockSize; k++) {
         const std::complex<double> s(work.fftFreq[k][0], work.fftFreq[k][1]);
-        const std::complex<double> v = s * maskDeemphasis[k] * maskColourLpf[k];
+        const std::complex<double> v = s * mask[k] * maskColourLpf[k];
         work.fftWork[k][0] = v.real();
         work.fftWork[k][1] = v.imag();
     }
@@ -1016,8 +1108,13 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
     std::vector<char> rowRestUsable(fieldHeight, 0);
     for (qint32 row = 0; row < fieldHeight; row++) {
         const double fieldZero = work.lineIsRed[row] ? work.for_ : work.fob;
-        const bool usable = row >= chromaFirstLine && work.rowValid[row]
-            && std::abs(work.porchFreq[row] - fieldZero) <= kCalibrationMaxCarrierOffsetHz;
+        // fieldZero already carries the measured carrier pair, so a porch read
+        // further than kRowRestMaxDevHz from it is not the rest carrier: VHS
+        // fields whose restored porch is corrupt read ~+-100 kHz there, and
+        // trusting them tints the whole field magenta. When the field's own
+        // pair failed to calibrate, its porch reads are not trusted at all.
+        const bool usable = row >= chromaFirstLine && work.rowValid[row] && work.calibrated
+            && std::abs(work.porchFreq[row] - fieldZero) <= kRowRestMaxDevHz;
         rowRestUsable[row] = usable ? 1 : 0;
         rowZero[row] = usable ? work.porchFreq[row] : fieldZero;
     }
@@ -1228,7 +1325,7 @@ void SecamDecoder::decodeField(const SourceVideo::Data &data, FieldWork &work) c
             for (qint32 x = 0; x < fieldWidth; x++) dst[x] = 0.0;
             continue;
         }
-        filterRowDeemphasis(work, numSamples, row);
+        filterRowDeemphasis(work, numSamples, row, isRed);
         const double unit = isRed ? 1.0 / kDrScale : 1.0 / kDbScale;
         const double *deemphLine = &work.deemph[static_cast<size_t>(row) * fieldWidth];
         for (qint32 x = 0; x < fieldWidth; x++) {
@@ -1324,7 +1421,327 @@ void SecamDecoder::decodeFrames(const QVector<SourceField>& inputFields,
                 outU[x] = (dbRot * yRange) / DB_TO_U_SCALE;
             }
         }
+
+        ComponentFrame &frame = componentFrames[frameIndex];
+        const qint32 activeStart = std::max(0, videoParameters.activeVideoStart);
+        const qint32 activeEnd = std::min(fieldWidth, videoParameters.activeVideoEnd);
+
+        // End of line: fade U/V over the last rightEdgeFix samples (up to a few
+        // samples past the active area, where the transient ends) toward the
+        // mean of the kRightEdgeRefSamples samples just before the zone.
+        if (secamConfig.rightEdgeFix > 0) {
+            constexpr qint32 kRightEdgeRefSamples = 16;
+            const qint32 zoneEnd = std::min(fieldWidth, videoParameters.activeVideoEnd + 6);
+            const qint32 length = std::min(secamConfig.rightEdgeFix, zoneEnd / 2);
+            const qint32 zoneStart = zoneEnd - length;
+            for (qint32 y = 0; y < frameHeight; y++) {
+                double *u = frame.u(y);
+                double *v = frame.v(y);
+                double refU = 0.0, refV = 0.0;
+                for (qint32 x = zoneStart - kRightEdgeRefSamples; x < zoneStart; x++) {
+                    refU += u[x];
+                    refV += v[x];
+                }
+                refU /= kRightEdgeRefSamples;
+                refV /= kRightEdgeRefSamples;
+                for (qint32 x = zoneStart; x < fieldWidth; x++) {
+                    const double t = x >= zoneEnd ? 1.0 : 0.5 - 0.5 * std::cos(M_PI * (x - zoneStart) / length);
+                    u[x] = (1.0 - t) * u[x] + t * refU;
+                    v[x] = (1.0 - t) * v[x] + t * refV;
+                }
+            }
+        }
+
+        // Head-switching lines: linear interpolation, within each field,
+        // between the nearest good lines above and below the damaged span (or
+        // a copy of the line above when the span reaches the picture end).
+        if (secamConfig.repairCount > 0 && secamConfig.repairFromBottom > 0) {
+            const qint32 pictureEnd = std::min(frameHeight, videoParameters.lastActiveFrameLine);
+            const qint32 spanStart = pictureEnd - secamConfig.repairFromBottom;
+            const qint32 spanEnd = std::min(pictureEnd, spanStart + secamConfig.repairCount);
+            for (qint32 y = std::max(0, spanStart); y < spanEnd; y++) {
+                qint32 above = y - 2;
+                while (above >= spanStart) above -= 2;
+                qint32 below = y + 2;
+                while (below < spanEnd) below += 2;
+                if (above < 0) continue;
+                double *u = frame.u(y);
+                double *v = frame.v(y);
+                const double *uAbove = frame.u(above);
+                const double *vAbove = frame.v(above);
+                if (below >= pictureEnd) {
+                    for (qint32 x = activeStart; x < activeEnd; x++) {
+                        u[x] = uAbove[x];
+                        v[x] = vAbove[x];
+                    }
+                    continue;
+                }
+                const double t = static_cast<double>(y - above) / (below - above);
+                const double *uBelow = frame.u(below);
+                const double *vBelow = frame.v(below);
+                for (qint32 x = activeStart; x < activeEnd; x++) {
+                    u[x] = (1.0 - t) * uAbove[x] + t * uBelow[x];
+                    v[x] = (1.0 - t) * vAbove[x] + t * vBelow[x];
+                }
+            }
+        }
+
+        // First lines of the picture: copy the chroma of the first good line
+        // of the same field.
+        if (secamConfig.topFix > 0) {
+            const qint32 top = std::max(0, videoParameters.firstActiveFrameLine - 1);
+            const qint32 good = videoParameters.firstActiveFrameLine + secamConfig.topFix;
+            for (qint32 y = top; y < good && y < frameHeight; y++) {
+                const qint32 source = good + ((y - good) % 2 != 0 ? 1 : 0);
+                if (source >= frameHeight) break;
+                const double *uSource = frame.u(source);
+                const double *vSource = frame.v(source);
+                double *u = frame.u(y);
+                double *v = frame.v(y);
+                for (qint32 x = activeStart; x < activeEnd; x++) {
+                    u[x] = uSource[x];
+                    v[x] = vSource[x];
+                }
+            }
+        }
+
+        // Luma-guided chroma reconstruction over the active picture, on the
+        // whole frame (both fields interleaved, so ry counts frame lines).
+        const bool measureFrame = (secamConfig.bleedMeasure || secamConfig.lfMeasure)
+            && (inputFields[fieldIndex].fieldNumber / 2) % std::max(1, secamConfig.measureStride) == 0;
+        if ((secamConfig.guideRadiusX > 0 || secamConfig.bleed.enabled() || measureFrame)
+            && !inputFields[fieldIndex].guide.isEmpty() && !inputFields[fieldIndex + 1].guide.isEmpty()) {
+            const qint32 x0 = std::max(0, videoParameters.activeVideoStart);
+            const qint32 x1 = std::min(fieldWidth, videoParameters.activeVideoEnd);
+            const qint32 y0 = std::max(0, videoParameters.firstActiveFrameLine - 1);
+            const qint32 y1 = std::min(frameHeight, videoParameters.lastActiveFrameLine);
+            const qint32 w = x1 - x0, h = y1 - y0;
+            if (w > 0 && h > 0) {
+                const double black = videoParameters.black16bIre;
+                std::vector<double> guide(static_cast<size_t>(w) * h), u(guide.size()), v(guide.size());
+                for (qint32 yy = 0; yy < h; yy++) {
+                    const qint32 y = y0 + yy;
+                    const SourceVideo::Data &g = inputFields[fieldIndex + (y % 2)].guide;
+                    const quint16 *guideLine = g.data() + static_cast<size_t>(y / 2) * fieldWidth;
+                    const double *uLine = componentFrames[frameIndex].u(y);
+                    const double *vLine = componentFrames[frameIndex].v(y);
+                    for (qint32 xx = 0; xx < w; xx++) {
+                        const size_t i = static_cast<size_t>(yy) * w + xx;
+                        guide[i] = (guideLine[x0 + xx] - black) / yRange;
+                        u[i] = uLine[x0 + xx];
+                        v[i] = vLine[x0 + xx];
+                    }
+                }
+                // The bleed stage and the step measurements work in normalised
+                // Cb / Cr (+-0.5 full scale): U and V carry the composite scale
+                // factors 0.4921 / 0.8773 of (B'-Y') / (R'-Y'), and Cb / Cr
+                // divide those by 2 (1 - Kb) and 2 (1 - Kr).
+                constexpr double kCb = 2.0 * (1.0 - 0.114) * 0.49211104112248356;
+                constexpr double kCr = 2.0 * (1.0 - 0.299) * 0.87728321993817867;
+                // Border detection reads the chroma as decoded; the LF steps
+                // read it after the guided filter.
+                std::vector<double> unRaw, vnRaw;
+                if (measureFrame && secamConfig.lfMeasure) {
+                    unRaw.resize(u.size()); vnRaw.resize(v.size());
+                    for (size_t i = 0; i < u.size(); i++) {
+                        unRaw[i] = u[i] / (yRange * kCb);
+                        vnRaw[i] = v[i] / (yRange * kCr);
+                    }
+                }
+                if (secamConfig.guideRadiusX > 0) {
+                    guidedFilter(guide, u, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
+                    guidedFilter(guide, v, w, h, secamConfig.guideRadiusX, secamConfig.guideRadiusY, secamConfig.guideEps);
+                }
+                if (measureFrame && secamConfig.lfMeasure) {
+                    std::vector<double> un(u.size()), vn(v.size());
+                    for (size_t i = 0; i < u.size(); i++) {
+                        un[i] = u[i] / (yRange * kCb);
+                        vn[i] = v[i] / (yRange * kCr);
+                    }
+                    // Line anomaly: how far each line is from its same-field
+                    // neighbours (second difference, one-sided at the ends),
+                    // median over the line, D'B + D'R.
+                    std::vector<float> rows(h, 0.0f);
+                    std::vector<double> e(w);
+                    for (const std::vector<double> *plane : {&unRaw, &vnRaw}) {
+                        for (qint32 yy = 0; yy < h; yy++) {
+                            const double *line = plane->data() + static_cast<size_t>(yy) * w;
+                            const auto at = [&](qint32 r) { return plane->data() + static_cast<size_t>(r) * w; };
+                            for (qint32 xx = 0; xx < w; xx++) {
+                                if (yy >= 2 && yy + 2 < h) e[xx] = std::abs(line[xx] - 0.5 * (at(yy - 2)[xx] + at(yy + 2)[xx]));
+                                else if (yy < 2) e[xx] = (yy + 2 < h) ? std::abs(line[xx] - at(yy + 2)[xx]) : 0.0;
+                                else e[xx] = std::abs(line[xx] - at(yy - 2)[xx]);
+                            }
+                            std::nth_element(e.begin(), e.begin() + w / 2, e.end());
+                            rows[yy] += static_cast<float>(e[w / 2]);
+                        }
+                    }
+                    // Right edge: colour shift of each of the last kEdgeColumns
+                    // samples against the 20 before them, median over the lines.
+                    std::vector<float> edgeDb, edgeDr;
+                    if (w > kEdgeColumns + 20 && h > 2 * kBorderBottomLines) {
+                        for (const auto &[plane, out] : {std::pair{&unRaw, &edgeDb}, std::pair{&vnRaw, &edgeDr}}) {
+                            std::vector<double> shift(h - 2 * kBorderBottomLines);
+                            for (qint32 k = 0; k < kEdgeColumns; k++) {
+                                for (qint32 yy = kBorderBottomLines; yy < h - kBorderBottomLines; yy++) {
+                                    const double *line = plane->data() + static_cast<size_t>(yy) * w;
+                                    double ref = 0.0;
+                                    for (qint32 xx = w - kEdgeColumns - 20; xx < w - kEdgeColumns; xx++) ref += line[xx];
+                                    shift[yy - kBorderBottomLines] = line[w - kEdgeColumns + k] - ref / 20.0;
+                                }
+                                std::nth_element(shift.begin(), shift.begin() + shift.size() / 2, shift.end());
+                                out->push_back(static_cast<float>(shift[shift.size() / 2]));
+                            }
+                        }
+                    }
+                    std::vector<float> stepsDb, stepsDr;
+                    SecamBleed::collectSteps(guide, un, w, h, stepsDb, kLfStepPre, kLfStepPost, kLfStepPlateau);
+                    SecamBleed::collectSteps(guide, vn, w, h, stepsDr, kLfStepPre, kLfStepPost, kLfStepPlateau);
+                    QMutexLocker locker(&bleedMutex);
+                    if (lfStepsDb.size() < kBleedMeasureMaxSteps * (kLfStepPre + kLfStepPost))
+                        lfStepsDb.insert(lfStepsDb.end(), stepsDb.begin(), stepsDb.end());
+                    if (lfStepsDr.size() < kBleedMeasureMaxSteps * (kLfStepPre + kLfStepPost))
+                        lfStepsDr.insert(lfStepsDr.end(), stepsDr.begin(), stepsDr.end());
+                    borderRows.push_back(std::move(rows));
+                    if (!edgeDb.empty()) {
+                        borderEdgeDb.push_back(std::move(edgeDb));
+                        borderEdgeDr.push_back(std::move(edgeDr));
+                    }
+                }
+                if (secamConfig.bleed.enabled() || (measureFrame && secamConfig.bleedMeasure)) {
+                    for (size_t i = 0; i < u.size(); i++) {
+                        u[i] /= yRange * kCb;
+                        v[i] /= yRange * kCr;
+                    }
+                    if (measureFrame && secamConfig.bleedMeasure) {
+                        std::vector<float> stepsDb, stepsDr;
+                        SecamBleed::collectSteps(guide, u, w, h, stepsDb);
+                        SecamBleed::collectSteps(guide, v, w, h, stepsDr);
+                        QMutexLocker locker(&bleedMutex);
+                        if (bleedStepsDb.size() < kBleedMeasureMaxSteps * 160)
+                            bleedStepsDb.insert(bleedStepsDb.end(), stepsDb.begin(), stepsDb.end());
+                        if (bleedStepsDr.size() < kBleedMeasureMaxSteps * 160)
+                            bleedStepsDr.insert(bleedStepsDr.end(), stepsDr.begin(), stepsDr.end());
+                    }
+                    if (secamConfig.bleed.enabled()) {
+                        SecamBleed::reconstruct(guide, u, v, w, h, secamConfig.bleed);
+                    }
+                    for (size_t i = 0; i < u.size(); i++) {
+                        u[i] *= yRange * kCb;
+                        v[i] *= yRange * kCr;
+                    }
+                }
+                for (qint32 yy = 0; yy < h; yy++) {
+                    double *uLine = componentFrames[frameIndex].u(y0 + yy);
+                    double *vLine = componentFrames[frameIndex].v(y0 + yy);
+                    for (qint32 xx = 0; xx < w; xx++) {
+                        const size_t i = static_cast<size_t>(yy) * w + xx;
+                        uLine[x0 + xx] = u[i];
+                        vLine[x0 + xx] = v[i];
+                    }
+                }
+            }
+        }
     }
+}
+
+bool SecamDecoder::writeBleedResponses(const QString &prefix)
+{
+    const std::pair<std::vector<float> *, const char *> components[] = {
+        {&bleedStepsDb, "_db.txt"}, {&bleedStepsDr, "_dr.txt"}};
+    for (const auto &component : components) {
+        const size_t count = component.first->size() / 160;
+        const std::vector<double> response = SecamBleed::responseFromSteps(*component.first);
+        const QString path = prefix + component.second;
+        if (response.empty()) {
+            qCritical().noquote() << "SECAM bleed measurement: too few clean colour edges for" << path
+                                  << "(" << count << "found; decode more frames)";
+            return false;
+        }
+        std::string error;
+        if (!SecamBleed::writeKernel(path.toStdString(), response, error)) {
+            qCritical().noquote() << QString::fromStdString(error);
+            return false;
+        }
+        qInfo().noquote() << "SECAM bleed response:" << path << "-" << count << "edges," << response.size() << "taps";
+    }
+    return true;
+}
+
+double SecamDecoder::lfMeasuredRatio(bool red, double breakHz)
+{
+    QMutexLocker locker(&bleedMutex);
+    return SecamBleed::lfShelfRatio(red ? lfStepsDr : lfStepsDb, kLfStepPre, kLfStepPost,
+                                    secamConfig.videoParameters.sampleRate, breakHz);
+}
+
+void SecamDecoder::bordersMeasured(qint32 &topFix, qint32 &repairFromBottom, qint32 &repairCount, qint32 &rightEdgeFix)
+{
+    QMutexLocker locker(&bleedMutex);
+    topFix = repairFromBottom = repairCount = rightEdgeFix = 0;
+    if (borderRows.empty()) return;
+    // Median over the measured frames, per line / per column
+    const auto medianOver = [](const std::vector<std::vector<float>> &frames, size_t i) {
+        std::vector<float> v;
+        for (const auto &f : frames) if (i < f.size()) v.push_back(f[i]);
+        std::nth_element(v.begin(), v.begin() + v.size() / 2, v.end());
+        return static_cast<double>(v[v.size() / 2]);
+    };
+    const qint32 h = static_cast<qint32>(borderRows.front().size());
+    if (h < 2 * kBorderBottomLines + kBorderTopLines) return;
+    std::vector<double> rows(h);
+    for (qint32 y = 0; y < h; y++) rows[y] = medianOver(borderRows, y);
+    std::vector<double> middle(rows.begin() + kBorderTopLines, rows.end() - kBorderBottomLines);
+    std::nth_element(middle.begin(), middle.begin() + middle.size() / 2, middle.end());
+    const double limit = kBorderLineFactor * middle[middle.size() / 2];
+
+    // Top: the damaged lines from the first one down (a single good line
+    // inside the run does not end it)
+    qint32 lastBad = -1;
+    for (qint32 y = 0; y < kBorderTopLines; y++) {
+        if (rows[y] > limit) lastBad = y;
+        else if (y > lastBad + 1) break;
+    }
+    // The repair rewrites the line above the active picture and topFix more
+    if (lastBad >= 0) topFix = lastBad + 1;
+
+    // Bottom: the span from the first to the last damaged line
+    qint32 first = -1, last = -1;
+    for (qint32 y = h - kBorderBottomLines; y < h; y++) {
+        if (rows[y] > limit) {
+            if (first < 0) first = y;
+            last = y;
+        }
+    }
+    if (first >= 0) {
+        repairFromBottom = h - first;
+        repairCount = last - first + 1;
+    }
+
+    // Right edge: the columns, counted from the line end, whose colour is
+    // shifted, plus a quarter for the transition
+    if (!borderEdgeDb.empty()) {
+        qint32 damaged = 0;
+        for (qint32 k = kEdgeColumns - 1; k >= 0; k--) {
+            const double shift = std::abs(medianOver(borderEdgeDb, k)) + std::abs(medianOver(borderEdgeDr, k));
+            if (shift <= kEdgeShift) break;
+            damaged++;
+        }
+        if (damaged > 0) rightEdgeFix = std::min(kEdgeColumns, damaged + damaged / 4);
+    }
+}
+
+bool SecamDecoder::bleedMeasuredResponses(SecamBleed::Params &params)
+{
+    QMutexLocker locker(&bleedMutex);
+    params.kernelDb = SecamBleed::responseFromSteps(bleedStepsDb);
+    params.kernelDr = SecamBleed::responseFromSteps(bleedStepsDr);
+    if (!params.enabled()) {
+        qCritical().noquote() << "SECAM bleed measurement: too few clean colour edges ("
+                              << bleedStepsDb.size() / 160 << "/" << bleedStepsDr.size() / 160 << "found)";
+        return false;
+    }
+    return true;
 }
 
 SecamThread::SecamThread(QAtomicInt &_abort, DecoderPool &_decoderPool,

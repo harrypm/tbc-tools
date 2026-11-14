@@ -30,6 +30,7 @@
 #include <QAtomicInt>
 #include <QThread>
 #include <QDebug>
+#include <QMutex>
 
 #include <complex>
 #include <vector>
@@ -41,6 +42,7 @@
 #include "sourcevideo.h"
 
 #include "decoder.h"
+#include "secambleed.h"
 #include "sourcefield.h"
 
 class DecoderPool;
@@ -84,6 +86,51 @@ public:
         // FM click ("SECAM fire") concealment level. 0 bypasses the stage;
         // 1.0 is the default. Higher = more aggressive detection.
         double clickNrLevel = 1.0;
+        // Extra LF shelf de-emphasis on top of the standard one, for tapes
+        // whose decoded colour still carries some LF pre-correction (the
+        // colour overshoots after every colour edge, then settles over a few
+        // microseconds: a halo). Same form as the standard network,
+        // H(f) = (1 + jf/(ratio*break)) / (1 + jf/break). 0 disables.
+        double lfExtraBreak = 0.0;
+        double lfExtraRatio = 3.0;
+        // Per-component ratios (D'B / D'R lines); 0 = use lfExtraRatio.
+        double lfExtraRatioDb = 0.0;
+        double lfExtraRatioDr = 0.0;
+        // Chroma repairs where the SECAM / VHS chain is known to leave no
+        // valid colour (all 0 = off, the default):
+        // - topFix: frame lines at the top of the active picture whose chroma
+        //   is copied from the first good line of the same field. The first
+        //   SECAM lines of a field have no previous line of the other
+        //   component for the one-line hold.
+        // - repairFromBottom / repairCount: head-switching lines. Frame lines
+        //   [lastActiveFrameLine - repairFromBottom, + repairCount) get their
+        //   chroma interpolated per field from the good lines above and below.
+        // - rightEdgeFix: over the last N samples of the line, fade the colour
+        //   toward the line's own value just before that zone (end-of-line
+        //   settling transient of the recorder's colour-under divider).
+        qint32 topFix = 0;
+        qint32 repairFromBottom = 0;
+        qint32 repairCount = 0;
+        qint32 rightEdgeFix = 0;
+        // Luma-guided chroma reconstruction (guided filter, He, Sun & Tang):
+        // needs a luma TBC as guide (DecoderPool::setGuideFile). Window radii
+        // in samples / frame lines; eps on the normalised (0..1) luma scale.
+        // guideRadiusX = 0 disables the stage.
+        qint32 guideRadiusX = 0;
+        qint32 guideRadiusY = 3;
+        double guideEps = 1e-4;
+        // Colour-bleed reconstruction from the tape's measured responses
+        // (secambleed.h), after the guided filter; needs the luma guide.
+        // Disabled while no response is loaded.
+        SecamBleed::Params bleed;
+        // Measure the responses instead (one frame in kBleedMeasureStride);
+        // written by writeBleedResponses() at the end. Needs the luma guide.
+        bool bleedMeasure = false;
+        // Collect the colour step profiles that set the extra LF shelf
+        // (lfMeasuredRatio), on the chroma after the guided filter.
+        bool lfMeasure = false;
+        // Measure one frame in measureStride (bleedMeasure / lfMeasure).
+        qint32 measureStride = 5;
         // Original first active field line before any full-frame widening.
         // Rows below this are V-interval (bottles/test lines) and must
         // render neutral in full-frame mode even though they carry carrier;
@@ -105,6 +152,25 @@ public:
                     qint32 startIndex,
                     qint32 endIndex,
                     QVector<ComponentFrame>& componentFrames);
+
+    // With bleedMeasure: writes the measured D'B / D'R responses to
+    // <prefix>_db.txt and <prefix>_dr.txt. Returns false (and prints why)
+    // on failure.
+    bool writeBleedResponses(const QString &prefix);
+
+    // With lfMeasure: the extra LF shelf ratio (at breakHz) measured for the
+    // D'B or D'R lines, 0 if too few clean colour edges were found.
+    double lfMeasuredRatio(bool red, double breakHz);
+
+    // With bleedMeasure: the measured responses, as the bleed stage takes them.
+    // False (and a message) if too few clean colour edges were found.
+    bool bleedMeasuredResponses(SecamBleed::Params &params);
+
+    // With lfMeasure: the picture-border repairs the tape needs (topFix,
+    // repairFromBottom / repairCount, rightEdgeFix), from the lines that stand
+    // out from their same-field neighbours at the top and bottom of the
+    // picture and the colour shift along the right edge. 0 where none is needed.
+    void bordersMeasured(qint32 &topFix, qint32 &repairFromBottom, qint32 &repairCount, qint32 &rightEdgeFix);
 
 private:
     // Per-call working buffers for one field's demodulation. Everything the
@@ -193,7 +259,7 @@ private:
                          qint32 row, double *fInstRow, FieldWork &work) const;
 
     /// Apply the exact LF de-emphasis mask to one row of the deviation signal
-    void filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint32 row) const;
+    void filterRowDeemphasis(FieldWork &work, qint32 numSamples, qint32 row, bool isRed) const;
 
     /// (Re)build maskChroma/maskBand and mixFrequency for work.carrierOffset
     /// and work.useNarrowBand
@@ -211,7 +277,8 @@ private:
     fftw_complex *planScratchIn = nullptr;   // plan-time arrays only
     fftw_complex *planScratchOut = nullptr;
     std::vector<double> diffTaps;            // maximally-flat central difference
-    std::vector<std::complex<double>> maskDeemphasis; // exact LF inverse, offset-independent
+    std::vector<std::complex<double>> maskDeemphasis;   // exact LF inverse, offset-independent (D'B lines)
+    std::vector<std::complex<double>> maskDeemphasisDr; // same for D'R lines (differs only with lfExtraRatioDr)
     std::vector<double> maskColourLpf;               // colour-difference bandwidth filter
     qint32 porchStart = 0;                   // back-porch measurement window
     qint32 porchEnd = 0;
@@ -219,6 +286,18 @@ private:
     void freeFftwState();
 
     SecamConfiguration secamConfig;
+
+    // Colour step profiles collected for the bleed measurement
+    QMutex bleedMutex;
+    std::vector<float> bleedStepsDb;
+    std::vector<float> bleedStepsDr;
+    std::vector<float> lfStepsDb;
+    std::vector<float> lfStepsDr;
+    // Per measured frame: line anomaly (one value per active frame line) and
+    // the D'B / D'R shift of the last kEdgeColumns samples of the line.
+    std::vector<std::vector<float>> borderRows;
+    std::vector<std::vector<float>> borderEdgeDb;
+    std::vector<std::vector<float>> borderEdgeDr;
 };
 
 class SecamThread : public DecoderThread
