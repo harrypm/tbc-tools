@@ -225,6 +225,7 @@ int main(int argc, char *argv[])
     // contrast guard. ThemedApplication re-resolves the system scheme on OS
     // changes while following (and re-asserts a pinned palette on any
     // ApplicationPaletteChange, e.g. macOS switchover).
+    Configuration startupThemeConfiguration;
     if (parser.isSet("light-theme")) {
         a.applyStockLightTheme();
     } else if (parser.isSet("force-dark-theme")) {
@@ -233,7 +234,6 @@ int main(int argc, char *argv[])
         // Read-only configuration access for the persisted theme keys (the
         // MainWindow's own Configuration instance only reads at construction,
         // so nothing here can be clobbered later).
-        Configuration startupThemeConfiguration;
         const QString persistedThemeMode = startupThemeConfiguration.getThemeMode();
         if (startupThemeConfiguration.getKeepThemeChoice()
             && persistedThemeMode == QLatin1String("stock-dark")) {
@@ -244,6 +244,18 @@ int main(int argc, char *argv[])
         } else {
             // stock-system (or persistence disabled): follow the OS scheme.
             a.applyStockThemeFollowingSystem();
+        }
+    }
+
+    // Persisted Qt widget style override (Themes menu style actions, stored
+    // regardless of theme type when Keep theme choice is on). Applied after
+    // the palette so the style rides on top of whichever palette was chosen;
+    // unknown/unavailable names (e.g. a platform without that style) are
+    // ignored so startup never fails on a stale stored style.
+    if (startupThemeConfiguration.getKeepThemeChoice()) {
+        const QString persistedThemeStyle = startupThemeConfiguration.getThemeStyle();
+        if (!persistedThemeStyle.isEmpty()) {
+            tbc::ui::setApplicationStyle(persistedThemeStyle);
         }
     }
 

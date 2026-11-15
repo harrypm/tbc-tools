@@ -1778,7 +1778,9 @@ void MainWindow::populateThemesMenu()
         tbc::ui::applyStockThemeFollowingSystemToApp();
         refreshThemeDependentUi();
         if (configuration.getKeepThemeChoice()) {
+            // Presets run on Fusion, so they replace any stored style override
             configuration.setThemeMode(QStringLiteral("stock-system"));
+            configuration.setThemeStyle(QString());
             configuration.writeConfiguration();
         }
         // Mirror the user's successful "second press" behavior: re-apply once
@@ -1804,7 +1806,9 @@ void MainWindow::populateThemesMenu()
         tbc::ui::applyStockDarkThemeToApp();
         refreshThemeDependentUi();
         if (configuration.getKeepThemeChoice()) {
+            // Presets run on Fusion, so they replace any stored style override
             configuration.setThemeMode(QStringLiteral("stock-dark"));
+            configuration.setThemeStyle(QString());
             configuration.writeConfiguration();
         }
         // Mirror the user's successful "second press" behavior: re-apply once
@@ -1830,7 +1834,9 @@ void MainWindow::populateThemesMenu()
         tbc::ui::applyStockLightThemeToApp();
         refreshThemeDependentUi();
         if (configuration.getKeepThemeChoice()) {
+            // Presets run on Fusion, so they replace any stored style override
             configuration.setThemeMode(QStringLiteral("stock-light"));
+            configuration.setThemeStyle(QString());
             configuration.writeConfiguration();
         }
         QTimer::singleShot(24, this, [this, lightAction]() {
@@ -1842,32 +1848,44 @@ void MainWindow::populateThemesMenu()
         });
     });
 
-    // Keep-theme-choice toggle: when enabled, the selected preset
-    // (System/Dark/Light) is persisted and restored on the next launch; when
-    // disabled the app always starts following the OS light/dark scheme.
-    // Independent of the exclusive preset group.
+    // Keep-theme-choice toggle: when enabled, the selected theme is
+    // persisted and restored on the next launch - regardless of type: the
+    // stock presets (System/Dark/Light) store their mode, and Qt style
+    // overrides (Fusion, Windows, ...) store the style name. When disabled
+    // the app always starts following the OS light/dark scheme with no
+    // style override. Independent of the exclusive preset group.
+    // The palette mode actually running (System follows the OS; Dark/Light
+    // are pinned), and the style override (empty when running on Fusion,
+    // which is the presets' own style)
+    const auto activePaletteMode = []() {
+        auto *themedApp = tbc::ui::themedApplicationInstance();
+        if (!themedApp || themedApp->isFollowingSystemTheme()) return QStringLiteral("stock-system");
+        return qApp->property("isDarkTheme").toBool() ? QStringLiteral("stock-dark") : QStringLiteral("stock-light");
+    };
+    const auto activeStyleOverride = []() {
+        const QString styleName = tbc::ui::applicationStyleName();
+        return styleName.compare(QStringLiteral("Fusion"), Qt::CaseInsensitive) == 0 ? QString() : styleName;
+    };
+
     QAction *keepThemeAction = ui->menuThemes->addAction(tr("Keep theme choice"));
     keepThemeAction->setCheckable(true);
     keepThemeAction->setData(QStringLiteral("keep-theme-choice"));
     keepThemeAction->setChecked(configuration.getKeepThemeChoice());
     keepThemeAction->setToolTip(tr(
-        "Remember the selected theme (System, Dark or Light) between sessions. "
-        "When unchecked, tbc-analyse always starts following the OS light/dark "
-        "setting."));
-    connect(keepThemeAction, &QAction::toggled, this, [this](bool checked) {
+        "Remember the selected theme (System, Dark, Light or a Qt style) "
+        "between sessions. When unchecked, tbc-analyse always starts "
+        "following the OS light/dark setting."));
+    connect(keepThemeAction, &QAction::toggled, this, [this, activePaletteMode, activeStyleOverride](bool checked) {
         configuration.setKeepThemeChoice(checked);
         if (checked) {
-            // Persist the currently active preset (style overrides are not
-            // persisted; only the stock presets carry a stored mode).
-            if (themesActionGroup && themesActionGroup->checkedAction()) {
-                const QString checkedData = themesActionGroup->checkedAction()->data().toString();
-                if (checkedData.startsWith(QStringLiteral("stock-"))) {
-                    configuration.setThemeMode(checkedData);
-                }
-            }
+            // Persist what is running: the palette mode and the style
+            // override (none when on Fusion) are stored independently
+            configuration.setThemeMode(activePaletteMode());
+            configuration.setThemeStyle(activeStyleOverride());
         } else {
-            // Clear the stored override so the next launch follows the OS.
+            // Clear the stored overrides so the next launch follows the OS.
             configuration.setThemeMode(QStringLiteral("stock-system"));
+            configuration.setThemeStyle(QString());
         }
         configuration.writeConfiguration();
     });
@@ -1898,7 +1916,7 @@ void MainWindow::populateThemesMenu()
         return;
     }
 
-    const QString currentStyleName = QApplication::style() ? QApplication::style()->objectName() : QString();
+    const QString currentStyleName = tbc::ui::applicationStyleName();
 
     for (const QString &styleName : availableThemes) {
         QAction *themeAction = ui->menuThemes->addAction(styleName);
@@ -1911,46 +1929,41 @@ void MainWindow::populateThemesMenu()
             themeAction->setChecked(true);
         }
 
-        connect(themeAction, &QAction::triggered, this, [this, themeAction](bool checked) {
+        connect(themeAction, &QAction::triggered, this, [this, themeAction, activePaletteMode, activeStyleOverride](bool checked) {
             if (!checked) {
                 return;
             }
             applyThemeStyle(themeAction->data().toString());
+            // Persist the style regardless of type when Keep theme choice is
+            // on; the palette mode stays as it is (styles don't change it)
+            if (configuration.getKeepThemeChoice()) {
+                configuration.setThemeMode(activePaletteMode());
+                configuration.setThemeStyle(activeStyleOverride());
+                configuration.writeConfiguration();
+            }
         });
     }
 
-    // Ensure the stock preset matching the active theme is checked. This
-    // unchecks any Qt style action the loop above may have auto-checked (the
-    // stock preset owns the active palette; style actions below are advanced
-    // overrides).
-    for (QAction *action : {systemAction, darkAction, lightAction}) {
-        if (action->data().toString() == activeThemeData) {
-            action->setChecked(true);
+    // Tick what is actually running: a style override when one is active,
+    // otherwise the preset. Fusion is the presets' own style, so the loop
+    // above ticking "Fusion" must not hide the preset.
+    if (activeStyleOverride().isEmpty()) {
+        for (QAction *action : {systemAction, darkAction, lightAction}) {
+            if (action->data().toString() == activeThemeData) {
+                action->setChecked(true);
+            }
         }
     }
 }
 
 void MainWindow::applyThemeStyle(const QString &styleName)
 {
-    if (styleName.isEmpty()) {
+    if (styleName.isEmpty() || !tbc::ui::setApplicationStyle(styleName)) {
         return;
     }
-
-    const QString currentStyleName = QApplication::style() ? QApplication::style()->objectName() : QString();
-    if (!currentStyleName.isEmpty() &&
-        styleName.compare(currentStyleName, Qt::CaseInsensitive) == 0) {
-        return;
-    }
-
-    QStyle *style = QStyleFactory::create(styleName);
-    if (!style) {
-        return;
-    }
-
-    QApplication::setStyle(style);
     buttonPalette = QApplication::palette();
 
-    const QString activeStyleName = QApplication::style() ? QApplication::style()->objectName() : styleName;
+    const QString activeStyleName = tbc::ui::applicationStyleName();
     if (themesActionGroup) {
         for (QAction *action : themesActionGroup->actions()) {
             action->setChecked(action->data().toString().compare(activeStyleName, Qt::CaseInsensitive) == 0);
