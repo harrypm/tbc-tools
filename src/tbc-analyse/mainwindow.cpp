@@ -575,8 +575,12 @@ QString resolveMetadataFilenameForSource(const QString &sourceFilename,
 
 double frameRateForSystem(VideoSystem system)
 {
+    // ITU-R BT.1700 Annex 1: 625-line systems (PAL, SECAM) run at 25 frames/s;
+    // 525-line systems (NTSC, PAL-M) at 30000/1001.
     switch (system) {
     case PAL:
+    case SECAM:
+    case MESECAM:
         return 25.0;
     case PAL_M:
     case NTSC:
@@ -589,6 +593,8 @@ int nominalFrameRateForSystem(VideoSystem system)
 {
     switch (system) {
     case PAL:
+    case SECAM:
+    case MESECAM:
         return 25;
     case PAL_M:
     case NTSC:
@@ -3938,57 +3944,57 @@ void MainWindow::updatePositionEditorValue(qint32 currentNumber)
     }
 }
 
-bool MainWindow::playbackUseFastMode() const
-{
-    if (!tbcSource.getIsSourceLoaded()) {
-        return false;
-    }
-
-    if (!tbcSource.getChromaDecoder()) {
-        return true;
-    }
-
-    return tbcSource.getSourceMode() == TbcSource::LUMA_SOURCE;
-}
-
 QString MainWindow::playbackStartToolTip() const
 {
-    const bool isPalSystem = (tbcSource.getIsSourceLoaded() && tbcSource.getSystem() == PAL);
-    if (playbackUseFastMode()) {
-        const QString fastFpsText = isPalSystem ? QStringLiteral("50.00") : QStringLiteral("59.94");
-        return tr("Play at %1 fps (luma/source mode)").arg(fastFpsText);
+    const double fps = timecodeFrameRate();
+    if (tbcSource.getIsSourceLoaded() && tbcSource.getFieldViewEnabled()) {
+        return tr("Play at %1 fields/s").arg(QString::number(fps * 2.0, 'f', 2));
     }
-
-    const QString fpsText = isPalSystem ? QStringLiteral("25.00") : QStringLiteral("29.97");
-    return tr("Play at %1 fps").arg(fpsText);
+    return tr("Play at %1 fps").arg(QString::number(fps, 'f', 2));
 }
 
+// Real-time period of one playback step: a frame in frame view (25 or
+// 29.97 fps), a field in field view (50 or 59.94 fields/s, every field shown).
 double MainWindow::playbackFrameIntervalMs() const
 {
-    if (tbcSource.getIsSourceLoaded() && tbcSource.getSystem() == PAL) {
-        return 1000.0 / 25.0;
-    }
-    return 1000.0 * 1001.0 / 30000.0;
+    const double frameMs = 1000.0 / timecodeFrameRate();
+    return tbcSource.getFieldViewEnabled() ? (frameMs / 2.0) : frameMs;
 }
 
+// Schedule the next step against the playback clock rather than "one period
+// after this step finished": rendering a frame takes time, and waiting a full
+// period after it would stretch every frame by the render time.  If rendering
+// falls more than two periods behind, the deadline resyncs to now instead of
+// bursting through the backlog.
 void MainWindow::scheduleNextPlaybackTick()
 {
     if (!playbackRunning || !playbackTimer) {
         return;
     }
-    double intervalMs = playbackFrameIntervalMs();
-    if (playbackUseFastMode()) {
-        intervalMs *= 0.5;
-    }
-    playbackTickCarryMs += intervalMs;
-    const int timerIntervalMs = qMax(1, static_cast<int>(qFloor(playbackTickCarryMs)));
-    playbackTickCarryMs -= static_cast<double>(timerIntervalMs);
-    playbackTimer->start(timerIntervalMs);
+    // Playback follows the wall clock (as the monitored audio does): the next
+    // tick is when the frame after the shown one is due
+    const qint32 shownNumber = tbcSource.getFieldViewEnabled() ? currentFieldNumber : currentFrameNumber;
+    const double dueMs = (shownNumber - playbackStartNumber + 1) * playbackFrameIntervalMs();
+    const double nowMs = static_cast<double>(playbackClock.nsecsElapsed()) / 1.0e6;
+    playbackTimer->start(qMax(0, static_cast<int>(std::lround(dueMs - nowMs))));
 }
 
 void MainWindow::setPlaybackRunning(bool running)
 {
     playbackRunning = running && tbcSource.getIsSourceLoaded();
+    tbcSource.setPlaybackPrefetch(playbackRunning);
+    if (exportDialog) {
+        if (playbackRunning) {
+            // Monitored audio starts at the shown frame/field's time
+            const double fps = timecodeFrameRate();
+            const double startSeconds = tbcSource.getFieldViewEnabled()
+                                            ? (currentFieldNumber - 1) / (fps * 2.0)
+                                            : (currentFrameNumber - 1) / fps;
+            exportDialog->startAudioMonitor(startSeconds);
+        } else {
+            exportDialog->stopAudioMonitor();
+        }
+    }
     if (playbackTimer && !playbackRunning) {
         playbackTimer->stop();
     }
@@ -4003,7 +4009,8 @@ void MainWindow::setPlaybackRunning(bool running)
     }
 
     if (playbackRunning) {
-        playbackTickCarryMs = 0.0;
+        playbackClock.start();
+        playbackStartNumber = tbcSource.getFieldViewEnabled() ? currentFieldNumber : currentFrameNumber;
         ensureSvgButtonIcon(ui->playPushButton, QStringLiteral(":/icons/Graphics/stop-playback.svg"));
         ui->playPushButton->setToolTip(tr("Stop playback"));
         scheduleNextPlaybackTick();
@@ -4021,9 +4028,13 @@ void MainWindow::stepPlayback()
         return;
     }
 
+    // Show the frame the clock is at; when rendering falls behind this skips
+    // frames rather than letting video drift from the audio
+    const double elapsedMs = static_cast<double>(playbackClock.nsecsElapsed()) / 1.0e6;
+    const qint32 dueNumber = playbackStartNumber + static_cast<qint32>(elapsedMs / playbackFrameIntervalMs());
     qint32 currentNumber = currentFrameNumber;
     if (tbcSource.getFieldViewEnabled()) {
-        const qint32 nextField = currentFieldNumber + 2;
+        const qint32 nextField = qMax(currentFieldNumber + 1, dueNumber);
         if (nextField > tbcSource.getNumberOfFields()) {
             setPlaybackRunning(false);
             return;
@@ -4031,7 +4042,7 @@ void MainWindow::stepPlayback()
         setCurrentField(nextField);
         currentNumber = currentFieldNumber;
     } else {
-        const qint32 nextFrame = currentFrameNumber + 1;
+        const qint32 nextFrame = qMax(currentFrameNumber + 1, dueNumber);
         if (nextFrame > tbcSource.getNumberOfFrames()) {
             setPlaybackRunning(false);
             return;

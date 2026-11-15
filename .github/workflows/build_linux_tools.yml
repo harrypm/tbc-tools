@@ -134,6 +134,10 @@ jobs:
           fi
           cp -a "$FFMPEG_BIN" AppDir/usr/bin/ffmpeg
           cp -a "$FFPROBE_BIN" AppDir/usr/bin/ffprobe
+          # ffplay plays the Export tab's monitored audio tracks (optional)
+          for ffout in ffmpeg-result ffmpeg-result-*; do
+            if [ -f "$ffout/bin/ffplay" ]; then cp -a "$ffout/bin/ffplay" AppDir/usr/bin/ffplay; break; fi
+          done
           chmod -R u+w AppDir/usr/bin
           normalize_bin_script_shebangs() {
             local bin_dir="$1"
@@ -695,6 +699,10 @@ jobs:
           fi
           cp -a "$FFMPEG_BIN" release/bin/ffmpeg
           cp -a "$FFPROBE_BIN" release/bin/ffprobe
+          # ffplay plays the Export tab's monitored audio tracks (optional)
+          for ffout in ffmpeg-result ffmpeg-result-*; do
+            if [ -f "$ffout/bin/ffplay" ]; then cp -a "$ffout/bin/ffplay" release/bin/ffplay; break; fi
+          done
           chmod -R u+w release/bin
           normalize_bin_script_shebangs() {
             local bin_dir="$1"

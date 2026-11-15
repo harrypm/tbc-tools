@@ -23,6 +23,7 @@
 #include <QRegularExpression>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QCheckBox>
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QtMath>
@@ -1323,6 +1324,20 @@ ExportDialog::ExportDialog(QWidget *parent) :
     ui->setupUi(this);
 
     ui->inputLineEdit->setReadOnly(true);
+
+    // Ticking a track, or loading a different file into one, while playing
+    // restarts the monitor at the current position with the new set of files
+    const auto restartAudioMonitor = [this]() {
+        if (!audioMonitorClock.isValid()) return;
+        startAudioMonitor(audioMonitorStartSeconds + audioMonitorClock.nsecsElapsed() / 1e9);
+    };
+    for (QCheckBox *monitorCheckBox : {ui->audio1MonitorCheckBox, ui->audio2MonitorCheckBox,
+                                       ui->audio3MonitorCheckBox, ui->audio4MonitorCheckBox}) {
+        connect(monitorCheckBox, &QCheckBox::toggled, this, restartAudioMonitor);
+    }
+    for (QLineEdit *trackLineEdit : {ui->audio1LineEdit, ui->audio2LineEdit, ui->audio3LineEdit, ui->audio4LineEdit}) {
+        connect(trackLineEdit, &QLineEdit::textChanged, this, restartAudioMonitor);
+    }
     ui->profileComboBox->setEditable(false);
     if (ui->profileLabel) {
         ui->profileLabel->setText(tr("Encoding"));
@@ -1819,6 +1834,7 @@ ExportDialog::ExportDialog(QWidget *parent) :
 
 ExportDialog::~ExportDialog()
 {
+    stopAudioMonitor();
     cleanupTemporaryMetadataSnapshot();
     delete ui;
 }
@@ -1924,6 +1940,8 @@ QTableWidget *ExportDialog::processStatsTableForFeed(const QString &feedTag) con
 
 void ExportDialog::setSource(TbcSource *source)
 {
+    // A new source starts audio monitoring from a clean state
+    stopAudioMonitor();
     tbcSource = source;
     updateFromSource();
     refreshResolutionOptions();
@@ -4283,15 +4301,15 @@ QString ExportDialog::resolveVideoExportPath() const
     return QString();
 }
 
-QString ExportDialog::resolveFfmpegPath() const
+QString ExportDialog::resolveFfmpegPath(const QString &toolName) const
 {
     const QStringList candidateDirs = defaultExecutableSearchDirs(currentInputFile);
 
     QStringList candidateNames;
 #if defined(Q_OS_WIN)
-    candidateNames << QStringLiteral("ffmpeg.exe") << QStringLiteral("ffmpeg");
+    candidateNames << toolName + QStringLiteral(".exe") << toolName;
 #else
-    candidateNames << QStringLiteral("ffmpeg");
+    candidateNames << toolName;
 #endif
 
     for (const QString &dir : candidateDirs) {
@@ -4304,12 +4322,86 @@ QString ExportDialog::resolveFfmpegPath() const
         }
     }
 
-    const QString fromPath = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+    const QString fromPath = QStandardPaths::findExecutable(toolName);
     if (!fromPath.isEmpty()) {
         return fromPath;
     }
 
     return QString();
+}
+
+void ExportDialog::startAudioMonitor(double startSeconds)
+{
+    stopAudioMonitor();
+
+    // The clock runs while playback does, even with nothing ticked, so a
+    // track ticked later starts at the right place
+    audioMonitorStartSeconds = qMax(0.0, startSeconds);
+    audioMonitorClock.start();
+
+    const QCheckBox *monitorCheckBoxes[] = {ui->audio1MonitorCheckBox, ui->audio2MonitorCheckBox,
+                                            ui->audio3MonitorCheckBox, ui->audio4MonitorCheckBox};
+    const QLineEdit *trackLineEdits[] = {ui->audio1LineEdit, ui->audio2LineEdit,
+                                         ui->audio3LineEdit, ui->audio4LineEdit};
+    QStringList tracks;
+    for (int i = 0; i < 4; ++i) {
+        const QString track = normalizeAudioTrackPathInput(trackLineEdits[i]->text());
+        if (monitorCheckBoxes[i]->isChecked() && !track.isEmpty() && QFileInfo(track).isFile()) tracks << track;
+    }
+    if (tracks.isEmpty()) return;
+
+    const QString ffmpegPath = resolveFfmpegPath();
+    const QString ffplayPath = resolveFfmpegPath(QStringLiteral("ffplay"));
+    if (ffmpegPath.isEmpty() || ffplayPath.isEmpty()) {
+        qWarning() << "Audio monitor: ffmpeg and ffplay are both needed to play monitored tracks";
+        return;
+    }
+
+    // Decode each track from the position (raw .pcm is ld-decode's 44.1 kHz
+    // stereo s16le), mix them, and stream the result to ffplay
+    QStringList decodeArgs = {QStringLiteral("-hide_banner"), QStringLiteral("-v"), QStringLiteral("error"),
+                              QStringLiteral("-nostdin")};
+    const QString startArg = QString::number(audioMonitorStartSeconds, 'f', 6);
+    for (const QString &track : tracks) {
+        decodeArgs << QStringLiteral("-ss") << startArg;
+        if (QFileInfo(track).suffix().compare(QStringLiteral("pcm"), Qt::CaseInsensitive) == 0) {
+            decodeArgs << QStringLiteral("-f") << QStringLiteral("s16le") << QStringLiteral("-ar")
+                       << QStringLiteral("44100") << QStringLiteral("-ac") << QStringLiteral("2");
+        }
+        decodeArgs << QStringLiteral("-i") << track;
+    }
+    if (tracks.size() > 1) {
+        QString inputs;
+        for (int i = 0; i < tracks.size(); ++i) inputs += QStringLiteral("[%1:a:0]").arg(i);
+        decodeArgs << QStringLiteral("-filter_complex")
+                   << inputs + QStringLiteral("amix=inputs=%1:normalize=0:duration=longest[mix]").arg(tracks.size())
+                   << QStringLiteral("-map") << QStringLiteral("[mix]");
+    } else {
+        decodeArgs << QStringLiteral("-map") << QStringLiteral("0:a:0");
+    }
+    decodeArgs << QStringLiteral("-c:a") << QStringLiteral("pcm_s16le") << QStringLiteral("-f") << QStringLiteral("nut")
+               << QStringLiteral("-");
+
+    audioMonitorDecoder = new QProcess(this);
+    audioMonitorPlayer = new QProcess(this);
+    audioMonitorDecoder->setStandardOutputProcess(audioMonitorPlayer);
+    audioMonitorPlayer->start(ffplayPath, {QStringLiteral("-hide_banner"), QStringLiteral("-v"), QStringLiteral("error"),
+                                           QStringLiteral("-nodisp"), QStringLiteral("-autoexit"),
+                                           QStringLiteral("-i"), QStringLiteral("-")});
+    audioMonitorDecoder->start(ffmpegPath, decodeArgs);
+}
+
+void ExportDialog::stopAudioMonitor()
+{
+    audioMonitorClock.invalidate();
+    for (QProcess *process : {audioMonitorDecoder, audioMonitorPlayer}) {
+        if (!process) continue;
+        process->kill();
+        process->waitForFinished(1000);
+        process->deleteLater();
+    }
+    audioMonitorDecoder = nullptr;
+    audioMonitorPlayer = nullptr;
 }
 
 QString ExportDialog::defaultOutputBaseName(const QString &inputFile) const

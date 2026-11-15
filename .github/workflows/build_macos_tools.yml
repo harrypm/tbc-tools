@@ -141,6 +141,11 @@ jobs:
             cp "$FFMPEG_STORE/bin/ffprobe" dist/bin/ffprobe
             chmod +x dist/bin/ffprobe
           fi
+          # ffplay plays the Export tab's monitored audio tracks (optional)
+          if [ -x "$FFMPEG_STORE/bin/ffplay" ]; then
+            cp "$FFMPEG_STORE/bin/ffplay" dist/bin/ffplay
+            chmod +x dist/bin/ffplay
+          fi
 
       - name: Get version info
         id: version

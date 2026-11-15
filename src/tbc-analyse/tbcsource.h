@@ -18,6 +18,8 @@
 #include <QSize>
 #include <QtConcurrent/QtConcurrent>
 #include <QDebug>
+#include <QThreadPool>
+#include <memory>
 #include <vector>
 
 // TBC library includes
@@ -37,11 +39,35 @@
 
 struct YuvRangeSettings;
 
+// The chroma decoders used by one decode thread. TbcSource keeps one set for
+// the displayed frame plus one per playback decode-ahead worker, because each
+// decoder holds per-frame working state and FFTW plans.
+struct ChromaDecoders
+{
+    PalColour palColour;
+    SecamDecoder secamDecoder;
+    SecamPredemodDecoder secamPredemodDecoder;
+    Comb ntscColour;
+    MonoDecoder monoDecoder;
+
+    // Which decoder to use, set before each decode
+    VideoSystem system = PAL;
+    PalColour::ChromaFilterMode chromaFilter = PalColour::transform2DFilter;
+    qint32 ntscDimensions = 2;
+    bool separateChroma = false;
+    TbcMetaData::VideoParameters videoParameters;
+    quint64 generation = 0;
+
+    void decode(const QVector<SourceField> &inputFields, const QVector<SourceField> &chromaInputFields,
+                qint32 startIndex, qint32 endIndex, QVector<ComponentFrame> &componentFrames);
+};
+
 class TbcSource : public QObject
 {
     Q_OBJECT
 public:
     explicit TbcSource(QObject *parent = nullptr);
+    ~TbcSource() override;
 
     struct ScanLineData {
         QString systemDescription;
@@ -90,6 +116,7 @@ public:
 
     void setHighlightDropouts(bool _state);
     void setChromaDecoder(bool _state);
+    void setPlaybackPrefetch(bool enabled);
     enum ChromaDecodeMode {
         ACTIVE_ONLY_CHROMA_MODE,
         HYBRID_CHROMA_MODE,
@@ -232,12 +259,27 @@ private:
     QString lastIOError;
 
     // Chroma decoder objects
-    PalColour palColour;
-    SecamDecoder secamDecoder;
-    SecamPredemodDecoder secamPredemodDecoder;
-    Comb ntscColour;
-	MonoDecoder monoDecoder;
+    ChromaDecoders decoders;
     OutputWriter outputWriter;
+
+    // Playback decode-ahead: upcoming frames are decoded on worker threads,
+    // each with its own decoder set, so colour playback isn't limited to the
+    // speed of a single-threaded decode
+    struct PrefetchJob {
+        qint32 frameNumber;
+        quint64 generation;
+        size_t decoderIndex;
+        QVector<SourceField> inputFields;
+        QVector<SourceField> chromaInputFields;
+        qint32 startIndex, endIndex;
+        QVector<ComponentFrame> componentFrames;
+        QFuture<void> future;
+    };
+    bool playbackPrefetch = false;
+    quint64 prefetchGeneration = 1;
+    QThreadPool prefetchPool;
+    std::vector<std::unique_ptr<ChromaDecoders>> prefetchDecoders;
+    std::vector<std::unique_ptr<PrefetchJob>> prefetchJobs;
 
     // VBI decoders
     VbiDecoder vbiDecoder;
@@ -261,8 +303,6 @@ private:
 
     // Chroma decoder output for the loaded frame
     QVector<ComponentFrame> componentFrames;
-    QVector<ComponentFrame> yFrames;
-    QVector<ComponentFrame> cFrames;
     bool decodedFrameValid;
 
     // RGB image data for the loaded frame
@@ -304,9 +344,15 @@ private:
     QVector<qint32> chapterMap;
 
     void resetState();
-    void invalidateImageCache();
+    void invalidateImageCache(bool keepPrefetch = false);
     void configureChromaDecoder();
+    void configureDecoders(ChromaDecoders &set);
+    void updateDecodeRouting(ChromaDecoders &set);
+    void loadFrameFields(qint32 frameNumber, QVector<SourceField> &fields, QVector<SourceField> &chromaFields,
+                         qint32 &startIndex, qint32 &endIndex);
     void loadInputFields();
+    void schedulePrefetch();
+    void stopPrefetch();
     void decodeFrame();
     QImage generateQImage(ViewMode renderViewMode, const QSize &targetSize = QSize());
     QImage generateChromaImage();
