@@ -424,6 +424,16 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="QCheckBox" name="audio1MonitorCheckBox">
+         <property name="toolTip">
+          <string>Play this track in sync with video playback</string>
+         </property>
+         <property name="text">
+          <string>Monitor</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </item>
      <item row="5" column="0">
@@ -471,6 +481,16 @@
         <widget class="QPushButton" name="audio2BrowseButton">
          <property name="text">
           <string>Browse...</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="audio2MonitorCheckBox">
+         <property name="toolTip">
+          <string>Play this track in sync with video playback</string>
+         </property>
+         <property name="text">
+          <string>Monitor</string>
          </property>
         </widget>
        </item>
@@ -524,6 +544,16 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="QCheckBox" name="audio3MonitorCheckBox">
+         <property name="toolTip">
+          <string>Play this track in sync with video playback</string>
+         </property>
+         <property name="text">
+          <string>Monitor</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </item>
      <item row="7" column="0">
@@ -571,6 +601,16 @@
         <widget class="QPushButton" name="audio4BrowseButton">
          <property name="text">
           <string>Browse...</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="audio4MonitorCheckBox">
+         <property name="toolTip">
+          <string>Play this track in sync with video playback</string>
+         </property>
+         <property name="text">
+          <string>Monitor</string>
          </property>
         </widget>
        </item>

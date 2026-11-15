@@ -389,6 +389,10 @@ jobs:
           if (Test-Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffprobe.exe) {
             Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffprobe.exe -Destination release\\
           }
+          # ffplay plays the Export tab's monitored audio tracks (optional)
+          if (Test-Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffplay.exe) {
+            Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffplay.exe -Destination release\\
+          }
           Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\*.dll -Destination release\\
           Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\LICENSE -Destination release\\LICENSES\\copyright-ffmpeg
 

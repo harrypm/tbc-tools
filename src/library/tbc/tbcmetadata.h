@@ -121,6 +121,14 @@ public:
         void write(SqliteWriter &writer, int captureId) const;
         void read(JsonReader &reader);
         void write(JsonWriter &writer) const;
+
+        // True for tape captures. vhs-decode records the tape format (VHS,
+        // U-matic, ...); ld-decode leaves it empty for LaserDisc.
+        bool isTapeSource() const {
+            const QString format = tapeFormat.trimmed().toLower();
+            return !format.isEmpty() && format != QLatin1String("ld") && format != QLatin1String("laserdisc")
+                   && format != QLatin1String("laser disc");
+        }
     };
 
     // Specification for customising the range of active lines in VideoParameters.

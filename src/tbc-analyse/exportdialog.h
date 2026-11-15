@@ -2,6 +2,7 @@
 #define EXPORTDIALOG_H
 
 #include <QWidget>
+#include <QElapsedTimer>
 #include <QProcess>
 #include <QHash>
 
@@ -49,6 +50,10 @@ public:
     void loadAudioTracksForExport(const QStringList &trackFiles,
                                   const QStringList &trackNames = QStringList());
     void refreshResolutionOptions();
+
+    // Play the Monitor-ticked audio tracks from a position in seconds
+    void startAudioMonitor(double startSeconds);
+    void stopAudioMonitor();
 protected:
     void resizeEvent(QResizeEvent *event) override;
 signals:
@@ -99,7 +104,7 @@ private:
     int timecodeToFrame(const QString &timecodeText, bool *ok = nullptr) const;
     void syncRangeTimecodeEditors();
     QString resolveVideoExportPath() const;
-    QString resolveFfmpegPath() const;
+    QString resolveFfmpegPath(const QString &toolName = QStringLiteral("ffmpeg")) const;
     QString defaultOutputBaseName(const QString &inputFile) const;
     QString sourceDataDirectory() const;
     QString sourceStorageTemporaryRoot() const;
@@ -185,6 +190,12 @@ private:
     QString temporaryInputJsonPath;
     QString temporaryExportConfigPath;
     QStringList temporaryAudioTrackPaths;
+
+    // Audio monitor: ffmpeg decodes and mixes the ticked tracks into ffplay
+    QProcess *audioMonitorDecoder = nullptr;
+    QProcess *audioMonitorPlayer = nullptr;
+    double audioMonitorStartSeconds = 0.0;
+    QElapsedTimer audioMonitorClock;
     RunStage activeRunStage = RunStage::Idle;
     bool generateProxyForCurrentRun = false;
     bool audioConfiguredForCurrentRun = false;
