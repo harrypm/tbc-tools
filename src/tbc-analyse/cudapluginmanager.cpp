@@ -122,6 +122,13 @@ QString CudaPluginManager::defaultInstallDirectory()
     return QDir::homePath() + QStringLiteral("/.tbc-tools/plugins/cuda");
 }
 
+QString CudaPluginManager::detectedInstallDirectory()
+{
+    const QString directory = defaultInstallDirectory();
+    const QStringList providers = QDir(directory).entryList({QStringLiteral("*onnxruntime_providers_cuda*")}, QDir::Files);
+    return providers.isEmpty() ? QString() : directory;
+}
+
 QString CudaPluginManager::currentPlatform()
 {
 #if defined(Q_OS_LINUX)
@@ -151,7 +158,7 @@ bool CudaPluginManager::isInstalled() const
     Configuration c;
     const QString version = c.getCudaPluginInstalledVersion();
     if (version.isEmpty()) {
-        return false;
+        return !detectedInstallDirectory().isEmpty();
     }
     const QString path = c.getCudaPluginInstallPath();
     if (path.isEmpty() || !QDir(path).exists()) {

@@ -45,6 +45,9 @@ public:
 
     // Default install directory (app-relative): <appDir>/plugins/cuda
     static QString defaultInstallDirectory();
+    // The default install directory when it holds the CUDA provider library,
+    // whether or not an install record exists; empty otherwise
+    static QString detectedInstallDirectory();
 
     // Current platform string ("linux" or "windows") and arch ("x86_64").
     static QString currentPlatform();

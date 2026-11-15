@@ -281,6 +281,15 @@ void PluginManagerDialog::updateStatusDisplay()
         Configuration c;
         installedVersion = c.getCudaPluginInstalledVersion();
         installPath = c.getCudaPluginInstallPath();
+        // Plugin files present without an install record (installed by hand
+        // or by another build): the decoder will use them, so show it installed
+        if (installedVersion.isEmpty() || installPath.isEmpty() || !QDir(installPath).exists()) {
+            const QString detectedPath = CudaPluginManager::detectedInstallDirectory();
+            if (!detectedPath.isEmpty()) {
+                installPath = detectedPath;
+                if (installedVersion.isEmpty()) installedVersion = tr("unknown");
+            }
+        }
     } else if (plugin.backend == QStringLiteral("generic")) {
         const GenericPluginInstalledInfo info = m_genericInstaller->installedInfo(plugin.id);
         installedVersion = info.installed ? info.version : QString();
@@ -399,7 +408,10 @@ void PluginManagerDialog::onLatestReleaseResolved(const QString &version, const 
     m_updateAvailable = !installed.isEmpty()
         && QVersionNumber::fromString(version) > QVersionNumber::fromString(installed);
 
-    if (installed.isEmpty()) {
+    if (installed.isEmpty() && !CudaPluginManager::detectedInstallDirectory().isEmpty()) {
+        m_updateAvailable = true;
+        appendLog(tr("Installed (version unknown). Install v%1 to record its version.").arg(version));
+    } else if (installed.isEmpty()) {
         appendLog(tr("Not installed. Click Install to download v%1.").arg(version));
     } else if (m_updateAvailable) {
         appendLog(tr("Update available: v%1 -> v%2.").arg(installed, version));

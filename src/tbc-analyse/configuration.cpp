@@ -221,6 +221,17 @@ void Configuration::readConfiguration(void)
     settings.cudaPlugin.enabled = configuration->value("enabled", false).toBool();
     settings.cudaPlugin.trusted = configuration->value("trusted", false).toBool();
     settings.cudaPlugin.installPath = configuration->value("installPath", QString()).toString();
+    // Older builds wrote the install record with lower-case keys; without this
+    // fallback an installed plugin reads back as not installed
+    if (settings.cudaPlugin.installedVersion.isEmpty()) {
+        settings.cudaPlugin.installedVersion = configuration->value("installedversion", QString()).toString();
+    }
+    if (settings.cudaPlugin.releaseTag.isEmpty()) {
+        settings.cudaPlugin.releaseTag = configuration->value("releasetag", QString()).toString();
+    }
+    if (settings.cudaPlugin.installPath.isEmpty()) {
+        settings.cudaPlugin.installPath = configuration->value("installpath", QString()).toString();
+    }
     configuration->endGroup();
 
     // VBI processing options (additive keys - older config files fall back to defaults)
