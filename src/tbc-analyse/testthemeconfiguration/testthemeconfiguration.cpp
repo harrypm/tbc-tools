@@ -79,6 +79,7 @@ int main(int argc, char *argv[])
         Configuration config;
         config.setKeepThemeChoice(true);
         config.setThemeMode(QStringLiteral("stock-light"));
+        config.setThemeStyle(QStringLiteral("Fusion"));
         config.writeConfiguration();
     }
     {
@@ -88,6 +89,45 @@ int main(int argc, char *argv[])
         verify(config.getThemeMode() == QStringLiteral("stock-light"),
                QStringLiteral("mode=stock-light did not survive a write/read round trip, got %1")
                    .arg(config.getThemeMode()));
+        verify(config.getThemeStyle() == QStringLiteral("Fusion"),
+               QStringLiteral("style=Fusion did not survive a write/read round trip, got %1")
+                   .arg(config.getThemeStyle()));
+    }
+
+    // Style persistence is independent of the mode: a style-only kept choice
+    // (Qt style override selected in the Themes menu) round-trips with the
+    // follow-OS mode.
+    {
+        Configuration config;
+        config.setKeepThemeChoice(true);
+        config.setThemeMode(QStringLiteral("stock-system"));
+        config.setThemeStyle(QStringLiteral("Windows"));
+        config.writeConfiguration();
+    }
+    {
+        Configuration config;
+        verify(config.getThemeStyle() == QStringLiteral("Windows"),
+               QStringLiteral("style=Windows did not survive a write/read round trip, got %1")
+                   .arg(config.getThemeStyle()));
+        verify(config.getThemeMode() == QStringLiteral("stock-system"),
+               QStringLiteral("mode should stay stock-system alongside a style, got %1")
+                   .arg(config.getThemeMode()));
+    }
+
+    // Clearing the choice clears both the mode and the style (the uncheck
+    // path in the Themes menu does exactly this).
+    {
+        Configuration config;
+        config.setKeepThemeChoice(false);
+        config.setThemeMode(QStringLiteral("stock-system"));
+        config.setThemeStyle(QString());
+        config.writeConfiguration();
+    }
+    {
+        Configuration config;
+        verify(config.getThemeStyle().isEmpty(),
+               QStringLiteral("style should be cleared alongside the choice, got %1")
+                   .arg(config.getThemeStyle()));
     }
 
     // Clearing the choice resets the stored mode to the follow-OS default

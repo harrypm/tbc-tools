@@ -22,8 +22,8 @@ The Themes menu provides:
 
 * System - follow the OS light/dark setting (default)
 * Dark / Light - pin one of the built-in Fusion palettes
-* Keep theme choice - remember the selected preset between sessions; when unchecked, tbc-analyse always starts following the OS setting
-* Qt style overrides (Fusion, Windows, ...) - advanced session-only widget-style overrides; they do not change the palette and are not persisted
+* Keep theme choice - remember the selected theme between sessions, regardless of type: the selected preset (System/Dark/Light) or the selected Qt style override is restored on the next launch; when unchecked, tbc-analyse always starts following the OS setting with no style override
+* Qt style overrides (Fusion, Windows, ...) - advanced widget-style overrides; they do not change the palette, and with Keep theme choice enabled they persist like any other selection
 
 The pins are also available from the command line via --force-dark-theme and --light-theme, which take precedence over any persisted choice.
 

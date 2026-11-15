@@ -148,6 +148,7 @@ void Configuration::writeConfiguration(void)
     configuration->beginGroup("theme");
     configuration->setValue("keepChoice", settings.theme.keepChoice);
     configuration->setValue("mode", settings.theme.mode);
+    configuration->setValue("style", settings.theme.style);
     configuration->endGroup();
 
     // Sync the settings with disk
@@ -273,16 +274,17 @@ void Configuration::readConfiguration(void)
     if (settings.rfExport.padAfterMs < 0) settings.rfExport.padAfterMs = 0;
     configuration->endGroup();
 
-    // Theme options (additive keys - older config files fall back to defaults)
-    configuration->beginGroup("theme");
-    settings.theme.keepChoice = configuration->value("keepChoice", false).toBool();
-    settings.theme.mode = configuration->value("mode", QStringLiteral("stock-system")).toString();
-    if (settings.theme.mode != QStringLiteral("stock-dark")
-        && settings.theme.mode != QStringLiteral("stock-light")) {
-        // Anything else (including stock-system and garbage) follows the OS.
-        settings.theme.mode = QStringLiteral("stock-system");
-    }
-    configuration->endGroup();
+        // Theme options (additive keys - older config files fall back to defaults)
+        configuration->beginGroup("theme");
+        settings.theme.keepChoice = configuration->value("keepChoice", false).toBool();
+        settings.theme.mode = configuration->value("mode", QStringLiteral("stock-system")).toString();
+        if (settings.theme.mode != QStringLiteral("stock-dark")
+            && settings.theme.mode != QStringLiteral("stock-light")) {
+            // Anything else (including stock-system and garbage) follows the OS.
+            settings.theme.mode = QStringLiteral("stock-system");
+        }
+        settings.theme.style = configuration->value("style", QString()).toString();
+        configuration->endGroup();
 }
 
 void Configuration::setDefault(void)
@@ -356,6 +358,7 @@ void Configuration::setDefault(void)
     // Theme options (Themes menu persistence defaults: do not keep, follow OS)
     settings.theme.keepChoice = false;
     settings.theme.mode = QStringLiteral("stock-system");
+    settings.theme.style = QString();
 
     // Write the configuration
     writeConfiguration();
@@ -772,4 +775,14 @@ void Configuration::setThemeMode(QString themeMode)
 QString Configuration::getThemeMode(void)
 {
     return settings.theme.mode;
+}
+
+void Configuration::setThemeStyle(QString themeStyle)
+{
+    settings.theme.style = themeStyle;
+}
+
+QString Configuration::getThemeStyle(void)
+{
+    return settings.theme.style;
 }

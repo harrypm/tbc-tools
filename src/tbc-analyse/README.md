@@ -51,7 +51,7 @@ tbc-analyse [options] <input.tbc>
 - `-q, --quiet`: Suppress info and warning messages
 
 #### Display Options
-- Theme: tbc-analyse follows the OS light/dark colour scheme by default (dark when the OS reports dark or unknown) and switches live when the OS setting changes. The Themes menu offers System / Dark / Light presets plus `Keep theme choice` to persist the selected preset between sessions; Qt style overrides below the presets are session-only
+- Theme: tbc-analyse follows the OS light/dark colour scheme by default (dark when the OS reports dark or unknown) and switches live when the OS setting changes. The Themes menu offers System / Dark / Light presets plus `Keep theme choice` to persist the selection between sessions regardless of type (preset or Qt style override); without it, tbc-analyse always starts following the OS setting with no style override
 - `--force-dark-theme`: Pin the dark Fusion theme instead of following the system light/dark setting (takes precedence over a persisted choice)
 - `--light-theme`: Pin the light Fusion theme instead of following the system light/dark setting (takes precedence over a persisted choice)
 - `--metadata-only`: Load metadata (`.db` or `.json`) without TBC image data

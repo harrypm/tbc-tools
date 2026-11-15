@@ -61,17 +61,37 @@ inline void normalizeUnsupportedStyleOverrideToFusion()
     }
 }
 
+// The active widget style's factory name. An application style sheet wraps
+// the style in Qt's internal style-sheet proxy, whose objectName() is empty,
+// so the name is recorded whenever a style is set through setApplicationStyle.
+inline QString applicationStyleName()
+{
+    return qApp ? qApp->property("tbcStyleName").toString() : QString();
+}
+
+// Set the application style by factory name (case-insensitive) and record
+// it. Returns false, leaving the style alone, when this platform doesn't
+// provide that style.
+inline bool setApplicationStyle(const QString &styleName)
+{
+    QString factoryKey;
+    for (const QString &key : QStyleFactory::keys()) {
+        if (key.compare(styleName, Qt::CaseInsensitive) == 0) factoryKey = key;
+    }
+    if (factoryKey.isEmpty()) return false;
+    if (applicationStyleName() != factoryKey) {
+        QStyle *style = QStyleFactory::create(factoryKey);
+        if (!style) return false;
+        QApplication::setStyle(style);
+    }
+    qApp->setProperty("tbcStyleName", factoryKey);
+    return true;
+}
+
 inline void applyFusionStyleIfAvailable(QApplication &application)
 {
-    if (!QStyleFactory::keys().contains(QStringLiteral("Fusion"), Qt::CaseInsensitive)) {
-        return;
-    }
-    const QString currentStyleName =
-        application.style() ? application.style()->objectName() : QString();
-    if (currentStyleName.compare(QStringLiteral("Fusion"), Qt::CaseInsensitive) == 0) {
-        return;
-    }
-    application.setStyle(QStringLiteral("Fusion"));
+    Q_UNUSED(application)
+    setApplicationStyle(QStringLiteral("Fusion"));
 }
 
 // Stock dark Fusion palette (neutral grey/black, legacy blue Highlight).
