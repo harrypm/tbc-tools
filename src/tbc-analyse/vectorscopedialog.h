@@ -13,15 +13,27 @@
 
 #include <QAbstractButton>
 #include <QButtonGroup>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QGroupBox>
+#include <QLabel>
+#include <QSlider>
+#include <QSpinBox>
 #include <QGraphicsPixmapItem>
 #include <QDialog>
 #include <QRect>
 #include <QRadioButton>
+#include <QScrollArea>
+#include <QTabWidget>
 #include <QImage>
 
 #include "componentframe.h"
+#include "composite_vectorscope.h"
 #include "tbcmetadata.h"
 #include "tbcsource.h"
+#include "vectorscope_data.h"
+
+#include <optional>
 
 namespace Ui {
 class VectorscopeDialog;
@@ -34,10 +46,21 @@ class VectorscopeDialog : public QDialog
 
 public:
     explicit VectorscopeDialog(QWidget *parent = nullptr);
-    ~VectorscopeDialog();
+    ~VectorscopeDialog() override;
 
     void showTraceImage(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters,
                         const TbcSource::ViewMode& viewMode, const bool isFirstField);
+
+    // Advanced (composite, measurement) acquisition tab: MainWindow assembles
+    // the frame, runs the engine with the dialog's options and hands the
+    // result back here for rendering.
+    void showCompositeTrace(const std::optional<tbc::cvbs::VectorscopeData> &compositeData,
+                            const TbcMetaData::VideoParameters &videoParameters,
+                            const TbcSource::ViewMode& viewMode, const bool isFirstField);
+    bool setAdvancedTabSelected(bool selected);
+    bool isAdvancedTabSelected() const;
+    tbc::cvbs::CompositeVectorscopeOptions compositeOptions() const;
+    void setCompositeGeometry(qint32 frameLines);
     bool isCustomAreaModeSelected() const;
     QRect customAreaRect() const;
     void setCustomAreaModeSelected(bool selected);
@@ -59,26 +82,69 @@ private slots:
     void on_multiColourCheckBox_clicked();
     void on_graticuleButtonGroup_buttonClicked(QAbstractButton *button);
     void on_fieldSelectButtonGroup_buttonClicked(QAbstractButton *button);
-    void on_renderModeButtonGroup_buttonClicked(QAbstractButton *button);
+    void renderModeComboBoxChanged(int index);
     void on_areaModeButtonGroup_buttonClicked(QAbstractButton *button);
+
+    // Advanced (composite) tab controls.  Deliberately not named on_*:
+    // these widgets are created in code, and an on_<object>_<signal> name
+    // would also be picked up by connectSlotsByName and fire twice.
+    void lineViewComboBoxChanged(int index);
+    void fieldViewComboBoxChanged(int index);
+    void fieldViewEndEnabledCheckBoxClicked();
+    void compositeLineSpinBoxChanged();
+    void traceLinesCheckBoxClicked();
 
 private:
     Ui::VectorscopeDialog *ui;
 
     QImage getTraceImage(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters);
+    QImage getCompositeTraceImage(const tbc::cvbs::VectorscopeData &compositeData,
+                                  const TbcMetaData::VideoParameters &videoParameters);
+    void updateFieldSelectionControls(const TbcSource::ViewMode& viewMode, const bool isFirstField);
     void updateScopeLabelPixmap();
+    void updateAdvancedScopePixmap();
     void initialiseAdvancedControls();
+    void setupAdvancedScopeTab();
     void updateAreaControlState(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters);
     void applyAreaPreset();
+    void updateMeasurementReadout();
     QImage cachedTraceImage;
+    QImage cachedCompositeImage;
 
-    QButtonGroup *renderModeButtonGroup = nullptr;
-    QRadioButton *renderModePointsRadioButton = nullptr;
-    QRadioButton *renderModeDensityRadioButton = nullptr;
+    QComboBox *renderModeComboBox = nullptr;  // 0 = point plot, 1 = density plot
+    QWidget *renderModePanel = nullptr;
+    QWidget *basicIntensityPanel = nullptr;
+    QSlider *basicIntensitySlider = nullptr;  // 1..10, 5 = original look
     QButtonGroup *areaModeButtonGroup = nullptr;
+    QGroupBox *areaModeGroupBox = nullptr;
     QRadioButton *areaModeActiveRadioButton = nullptr;
     QRadioButton *areaModeFullRadioButton = nullptr;
     QRadioButton *areaModeCustomRadioButton = nullptr;
+
+    // Advanced (composite) scope tab - mirrors the oscilloscope dialog's
+    // Basic/Advanced tab structure so the standard scope page stays exactly
+    // as it was.
+    QTabWidget *scopeTabWidget = nullptr;
+    QWidget *scopeOriginalTab = nullptr;
+    QWidget *scopeAdvancedTab = nullptr;
+    QLabel *advancedScopeLabel = nullptr;
+    QWidget *advancedSidePanel = nullptr;
+    QScrollArea *advancedScrollArea = nullptr;
+    QComboBox *lineViewComboBox = nullptr;
+    QComboBox *fieldViewComboBox = nullptr;
+    QSpinBox *fieldViewStartSpinBox = nullptr;
+    QSpinBox *fieldViewEndSpinBox = nullptr;
+    QCheckBox *fieldViewEndEnabledCheckBox = nullptr;
+    QCheckBox *traceLinesCheckBox = nullptr;
+    QCheckBox *lineAveragingCheckBox = nullptr;
+    QSlider *traceIntensitySlider = nullptr;  // 1..10, default 2
+    QLabel *measurementLabel = nullptr;
+    QLabel *acquisitionInfoLabel = nullptr;
+    QLabel *acquisitionNoteLabel = nullptr;
+    std::optional<tbc::cvbs::VectorscopeData> compositeData;
+    TbcMetaData::VideoParameters compositeVideoParameters;
+    bool haveCompositeRenderContext = false;
+    qint32 compositeFrameLines = 0;
 
     bool hasAreaContext = false;
     qint32 areaFrameWidth = 0;

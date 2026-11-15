@@ -393,6 +393,7 @@ if(BUILD_TESTING)
     add_subdirectory(src/tbc-analyse/testchromaconfigdialog)
     add_subdirectory(src/tbc-analyse/testthemeconfiguration)
     add_subdirectory(src/tbc-analyse/testcudapluginmanager)
+    add_subdirectory(src/tbc-analyse/testcompositevectorscope)
 
     # Tests for the ld-decode tools.
     # Decode fixtures (.tbc + .tbc.json + .tbc.db) are tracked in-repo under

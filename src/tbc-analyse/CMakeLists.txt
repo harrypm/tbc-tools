@@ -29,6 +29,8 @@ set(tbc-analyse_SOURCES
     tbc_cvbs_conversion.cpp tbc_cvbs_conversion.h
     amplitude_conversion.h
     cvbs_signal_constants.h
+    composite_vectorscope.cpp composite_vectorscope.h
+    vectorscope_data.h
     fieldtimingdialog.cpp fieldtimingdialog.h
     fieldtimingwidget.cpp fieldtimingwidget.h
     aboutdialog.cpp aboutdialog.ui

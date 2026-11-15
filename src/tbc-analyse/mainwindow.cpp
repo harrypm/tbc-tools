@@ -84,6 +84,7 @@
 #include "../audio-align/audioalignmentdialog.h"
 #include "../tbc-export-metadata/metadataexportdialog.h"
 #include "tbc/uistyle.h"
+#include "composite_vectorscope.h"
 namespace {
 QString sanitizedFileToken(const QString &value)
 {
@@ -3744,6 +3745,40 @@ void MainWindow::updateVectorscopeDialogue()
     if (asyncFrameRenderInProgress && shouldRenderFrameAsync()) {
         return;
     }
+
+    // Advanced (composite measurement) scope tab: the engine demodulates
+    // chroma straight from the raw TBC composite against a burst-locked
+    // reference, so the scope shows the signal rather than the decode.
+    if (vectorscopeDialog->isAdvancedTabSelected()) {
+        std::optional<tbc::cvbs::VectorscopeData> compositeResult;
+        if (tbcSource.getIsSourceLoaded() && !tbcSource.getIsMetadataOnly()) {
+            const VideoSystem system = tbcSource.getSystem();
+            if (system == PAL || system == NTSC || system == PAL_M) {
+                const TbcSource::FieldTimingData timingData = tbcSource.getFieldTimingData();
+                if (timingData.valid) {
+                    const TbcMetaData::VideoParameters &videoParameters = tbcSource.getVideoParameters();
+                    const std::vector<int16_t> compositeFrame = tbc::cvbs::assemble_composite_frame(
+                        timingData.firstFieldComposite, timingData.secondFieldComposite,
+                        videoParameters);
+                    if (!compositeFrame.empty()) {
+                        const tbc::cvbs::CompositeScopeParameters parameters =
+                            tbc::cvbs::make_composite_scope_parameters(
+                                videoParameters, timingData.firstFieldHeight,
+                                timingData.secondFieldHeight);
+                        vectorscopeDialog->setCompositeGeometry(parameters.frame_lines());
+                        compositeResult = tbc::cvbs::extract_composite_vectorscope(
+                            compositeFrame.data(), compositeFrame.size(), parameters,
+                            static_cast<uint64_t>(currentFrameNumber),
+                            vectorscopeDialog->compositeOptions());
+                    }
+                }
+            }
+        }
+        vectorscopeDialog->showCompositeTrace(compositeResult, tbcSource.getVideoParameters(),
+                                              tbcSource.getViewMode(), currentFieldNumber % 2);
+        return;
+    }
+
     // Update the vectorscope dialogue
     vectorscopeDialog->showTraceImage(tbcSource.getComponentFrame(), tbcSource.getVideoParameters(),
                                       tbcSource.getViewMode(), currentFieldNumber % 2);
