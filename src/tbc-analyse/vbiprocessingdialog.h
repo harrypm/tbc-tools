@@ -25,7 +25,8 @@ class VbiProcessingDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit VbiProcessingDialog(const VbiProcessingOptions &current, QWidget *parent = nullptr);
+    explicit VbiProcessingDialog(const VbiProcessingOptions &current, const QString &tapeFormat = QString(),
+                                 QWidget *parent = nullptr);
     ~VbiProcessingDialog() override;
 
     VbiProcessingOptions selectedOptions() const;

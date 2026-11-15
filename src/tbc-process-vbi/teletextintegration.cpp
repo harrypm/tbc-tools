@@ -244,8 +244,11 @@ bool runPythonStep(const QString &pythonExecutable,
         setError(errorMessage, QObject::tr("Could not start %1 step.").arg(stepDescription));
         return false;
     }
+    // When output goes to a file the timeout restarts whenever the file
+    // grows, so it only stops a process that has stopped making progress
     QElapsedTimer elapsedTimer;
     elapsedTimer.start();
+    qint64 outputFileSize = 0;
     QString standardOutputBuffer;
     QString standardErrorBuffer;
 
@@ -259,11 +262,18 @@ bool runPythonStep(const QString &pythonExecutable,
         if (!stderrChunk.isEmpty()) {
             standardErrorBuffer += QString::fromLocal8Bit(stderrChunk);
         }
+        if (!standardOutputFile.trimmed().isEmpty()) {
+            const qint64 currentSize = QFileInfo(standardOutputFile).size();
+            if (currentSize > outputFileSize) {
+                outputFileSize = currentSize;
+                elapsedTimer.restart();
+            }
+        }
         if (timeoutMilliseconds > 0 && elapsedTimer.elapsed() > timeoutMilliseconds) {
             process.kill();
             process.waitForFinished(3000);
             setError(errorMessage,
-                     QObject::tr("%1 step timed out after %2 seconds.")
+                     QObject::tr("%1 step made no progress for %2 seconds.")
                          .arg(stepDescription)
                          .arg(timeoutMilliseconds / 1000));
             return false;
@@ -760,14 +770,14 @@ else:
 
     bool deconvolved = false;
     QStringList deconvolutionFailures;
+    // Deconvolution runs to the end of the file. TELETEXT_DECONV_TIMEOUT_SEC
+    // opts in to stopping a backend that writes no packets for that long.
     bool deconvolutionTimeoutOk = false;
     const qint32 deconvolutionTimeoutSecondsRaw =
         qEnvironmentVariableIntValue("TELETEXT_DECONV_TIMEOUT_SEC", &deconvolutionTimeoutOk);
-    const qint64 deconvolutionTimeoutMilliseconds = static_cast<qint64>(
-        (deconvolutionTimeoutOk && deconvolutionTimeoutSecondsRaw > 0)
-            ? deconvolutionTimeoutSecondsRaw
-            : 180
-    ) * 1000;
+    const qint64 deconvolutionTimeoutMilliseconds = (deconvolutionTimeoutOk && deconvolutionTimeoutSecondsRaw > 0)
+        ? static_cast<qint64>(deconvolutionTimeoutSecondsRaw) * 1000
+        : -1;
     for (qint32 attemptIndex = 0; attemptIndex < attempts.size(); ++attemptIndex) {
         const DeconvolutionAttempt &attempt = attempts.at(attemptIndex);
         qInfo() << "Teletext export: starting deconvolution with" << attempt.description;

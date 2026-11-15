@@ -85,16 +85,6 @@ QStringList metadataCandidatesForInput(const QString &inputFilename)
     return candidates;
 }
 
-QString resolveDefaultMetadataFilename(const QString &inputFilename)
-{
-    const QStringList candidates = metadataCandidatesForInput(inputFilename);
-    for (const QString &candidate : candidates) {
-        if (QFileInfo::exists(candidate)) {
-            return candidate;
-        }
-    }
-    return candidates.isEmpty() ? (inputFilename + QStringLiteral(".db")) : candidates.first();
-}
 
 QString backupFilenameForMetadata(const QString &inputMetadataFilename, const QString &backupSuffix)
 {
@@ -120,6 +110,18 @@ QString defaultTeletextHtmlDirectoryForInput(const QString &inputFilename)
     return QDir(inputInfo.absolutePath())
         .filePath(inputInfo.completeBaseName() + QStringLiteral("_teletext_html"));
 }
+}
+
+// Shared with the GUI dialog (declared in processvbidialog.h)
+QString resolveDefaultMetadataFilename(const QString &inputFilename)
+{
+    const QStringList candidates = metadataCandidatesForInput(inputFilename);
+    for (const QString &candidate : candidates) {
+        if (QFileInfo::exists(candidate)) {
+            return candidate;
+        }
+    }
+    return candidates.isEmpty() ? (inputFilename + QStringLiteral(".db")) : candidates.first();
 }
 
 static int runCli(int argc, char *argv[])
@@ -204,6 +206,16 @@ static int runCli(int argc, char *argv[])
 
     // VBI processing options - select which data types to decode (default: the four
     // in-process VBI types on; teletext and VITS are opt-in via --teletext/--vits).
+    // VBI core and NTSC-specific decoding are LaserDisc formats, so they default
+    // off for tape sources; --vbi-core / --ntsc force them on.
+    QCommandLineOption vbiCoreOption(QStringList() << "vbi-core",
+                                     QCoreApplication::translate("main",
+                                                                 "Force biphase VBI decoding on for tape sources (on by default for LaserDisc)"));
+    parser.addOption(vbiCoreOption);
+    QCommandLineOption ntscOption(QStringList() << "ntsc",
+                                  QCoreApplication::translate("main",
+                                                              "Force NTSC-specific decoding on for tape sources (on by default for LaserDisc)"));
+    parser.addOption(ntscOption);
     QCommandLineOption noVbiCoreOption(QStringList() << "no-vbi-core",
                                        QCoreApplication::translate("main",
                                                                    "Disable biphase VBI decoding (frame number/timecode/chapter/user code on lines 16-18)"));
@@ -320,6 +332,17 @@ static int runCli(int argc, char *argv[])
         }
     }
 
+    // LaserDisc-only VBI types default off for tape captures
+    const TbcMetaData::VideoParameters &sourceParameters = metaData.getVideoParameters();
+    if (sourceParameters.isTapeSource()) {
+        if (!parser.isSet(vbiCoreOption)) processingOptions.vbiCore = false;
+        if (!parser.isSet(ntscOption)) processingOptions.ntsc = false;
+        qInfo().noquote() << "Tape source (" + sourceParameters.tapeFormat.trimmed() + "):"
+                          << "VBI core" << (processingOptions.vbiCore ? "on," : "off,")
+                          << "NTSC-specific" << (processingOptions.ntsc ? "on" : "off")
+                          << "(--vbi-core / --ntsc force them on)";
+    }
+
     // Perform the processing
     qInfo() << "Beginning VBI processing...";
     DecoderPool decoderPool(inputFilename, outputMetadataFilename, maxThreads, metaData, processingOptions);
@@ -335,6 +358,14 @@ static int runCli(int argc, char *argv[])
         }
         teletextOptions.maxThreads = maxThreads;
         teletextOptions.tapeFormat = parser.value(teletextTapeFormatOption);
+        if (!parser.isSet(teletextTapeFormatOption) && sourceParameters.isTapeSource()) {
+            // Pick the vhs-teletext profile from the capture's tape format
+            const QString format = sourceParameters.tapeFormat.toUpper();
+            if (format.contains(QLatin1String("BETA"))) teletextOptions.tapeFormat = QStringLiteral("betamax");
+            else if (format.contains(QLatin1String("2X4"))) teletextOptions.tapeFormat = QStringLiteral("grundig_2x4");
+            qInfo().noquote() << "Teletext tape format profile:" << teletextOptions.tapeFormat
+                              << "(from metadata tape format" << sourceParameters.tapeFormat.trimmed() + ")";
+        }
         teletextOptions.minDuplicates = teletextMinDuplicates;
         qInfo().nospace().noquote() << "Teletext export output directory: " << teletextOptions.outputDirectory;
 

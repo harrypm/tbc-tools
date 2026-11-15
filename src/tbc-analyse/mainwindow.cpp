@@ -5014,14 +5014,36 @@ void MainWindow::on_actionProcess_VBI_triggered()
     }
 
     // Show the VBI processing options dialog (defaults/last-used come from configuration).
-    VbiProcessingOptions opts = configuration.getVbiProcessingOptions();
-    VbiProcessingDialog processingDialog(opts, this);
+    // Tape sources start with the LaserDisc-only types (VBI core, NTSC-specific) off
+    TbcMetaData::VideoParameters sourceParameters;
+    if (tbcSource.getIsSourceLoaded() && sameFilePath(inputFileName, tbcSource.getCurrentSourceFilename())) {
+        sourceParameters = tbcSource.getVideoParameters();
+    } else {
+        TbcMetaData sourceMetadata;
+        if (sourceMetadata.read(metadataFilename)) sourceParameters = sourceMetadata.getVideoParameters();
+    }
+    const bool tapeSource = sourceParameters.isTapeSource();
+
+    const VbiProcessingOptions savedOpts = configuration.getVbiProcessingOptions();
+    VbiProcessingOptions opts = savedOpts;
+    if (tapeSource) {
+        opts.vbiCore = false;
+        opts.ntsc = false;
+    }
+    VbiProcessingDialog processingDialog(opts, tapeSource ? sourceParameters.tapeFormat.trimmed() : QString(), this);
     if (processingDialog.exec() != QDialog::Accepted) {
         statusBar()->showMessage(tr("VBI processing cancelled"), 3000);
         return;
     }
     opts = processingDialog.selectedOptions();
-    configuration.setVbiProcessingOptions(opts);
+
+    // Keep the remembered LaserDisc choices for these two when processing a tape
+    VbiProcessingOptions optsToSave = opts;
+    if (tapeSource) {
+        optsToSave.vbiCore = savedOpts.vbiCore;
+        optsToSave.ntsc = savedOpts.ntsc;
+    }
+    configuration.setVbiProcessingOptions(optsToSave);
     configuration.writeConfiguration();
 
     QString backupErrorMessage;
@@ -5049,6 +5071,13 @@ void MainWindow::on_actionProcess_VBI_triggered()
     }
     if (!opts.ntsc && toolHelpListsOption(toolPath, QStringLiteral("--no-ntsc"))) {
         toolArguments << QStringLiteral("--no-ntsc");
+    }
+    // tbc-process-vbi turns these off itself for tapes, so ticking them needs a force flag
+    if (tapeSource && opts.vbiCore && toolHelpListsOption(toolPath, QStringLiteral("--vbi-core"))) {
+        toolArguments << QStringLiteral("--vbi-core");
+    }
+    if (tapeSource && opts.ntsc && toolHelpListsOption(toolPath, QStringLiteral("--ntsc"))) {
+        toolArguments << QStringLiteral("--ntsc");
     }
     if (!opts.vitc && toolHelpListsOption(toolPath, QStringLiteral("--no-vitc"))) {
         toolArguments << QStringLiteral("--no-vitc");

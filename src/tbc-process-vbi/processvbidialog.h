@@ -16,6 +16,9 @@
 
 #include "tbc/vbiprocessingoptions.h"
 
+// Defined in main.cpp
+QString resolveDefaultMetadataFilename(const QString &inputFilename);
+
 class QCheckBox;
 class QGroupBox;
 class QLabel;
@@ -50,6 +53,7 @@ private:
     void buildUi();
     void setBusy(bool enabled);
     void updateControlStates();
+    void applySourceDefaults();
     QString normalizePath(const QString &path) const;
     void appendStatus(const QString &text);
     void appendLog(const QString &text);
@@ -62,6 +66,7 @@ private:
     QString sourceDirectory;
     bool runInProgress = false;
     bool cancelRequested = false;
+    QString sourceDefaultsInput;  // input whose metadata last set the type defaults
 
     QLineEdit *inputTbcLineEdit = nullptr;
     QPushButton *inputTbcBrowseButton = nullptr;
