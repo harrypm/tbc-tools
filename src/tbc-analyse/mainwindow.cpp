@@ -3776,8 +3776,22 @@ void MainWindow::updateVectorscopeDialogue()
                 const TbcSource::FieldTimingData timingData = tbcSource.getFieldTimingData();
                 if (timingData.valid) {
                     const TbcMetaData::VideoParameters &videoParameters = tbcSource.getVideoParameters();
+                    // Separate luma/chroma captures (vhs-decode's .tbc + _chroma.tbc):
+                    // the luma file has no burst, so rebuild the composite the way
+                    // the decoder's combine mode does - luma + chroma, removing the
+                    // chroma file's 32767 offset
+                    const auto withChroma = [](const std::vector<uint16_t> &luma, const std::vector<uint16_t> &chroma) {
+                        if (chroma.size() != luma.size()) return luma;
+                        std::vector<uint16_t> composite(luma.size());
+                        for (size_t i = 0; i < luma.size(); ++i) {
+                            const qint32 sum = static_cast<qint32>(luma[i]) + static_cast<qint32>(chroma[i]) - 32767;
+                            composite[i] = static_cast<uint16_t>(qBound(0, sum, 65535));
+                        }
+                        return composite;
+                    };
                     const std::vector<int16_t> compositeFrame = tbc::cvbs::assemble_composite_frame(
-                        timingData.firstFieldComposite, timingData.secondFieldComposite,
+                        withChroma(timingData.firstFieldComposite, timingData.firstFieldChroma),
+                        withChroma(timingData.secondFieldComposite, timingData.secondFieldChroma),
                         videoParameters);
                     if (!compositeFrame.empty()) {
                         const tbc::cvbs::CompositeScopeParameters parameters =

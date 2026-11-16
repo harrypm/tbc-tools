@@ -330,3 +330,10 @@ all changed/new files above, per repo convention.
 - Added: Graticule "Both" (75% + 100% target sets and zones, labels on the outer set; drawDecodeOrcStyleGraticule takes the list of bar percentages, graticuleBarPercents()); "Burst"/"burst" labels beside the burst target boxes (PAL +V/-V, NTSC/PAL-M one), 40 px offset like decode-orc; "No chroma present" overlay on the Advanced plot when all samples are within 1000 of the centre (decode-orc's threshold).
 - Already equivalent: Colorize = Multi-colour, Gain = Intensity, "No burst lock" = "No burst reference recovered", line/field view options, start/end line.
 - Verified by render on kagemusha-leadout-cbar (Both, labels, no-chroma via scaled samples). ctest 38/38.
+
+## Phase 20 - Advanced scope empty on Y/C (separate chroma) captures
+- User's live window (NTSC VHS Tape_03, vhs-decode .tbc + _chroma.tbc): graticule present but trace collapsed at the centre, "No burst reference recovered".
+- Cause: updateVectorscopeDialogue fed the composite engine firstFieldComposite only, which for BOTH_SOURCES is the luma TBC (no burst/chroma). The chroma fields were already in FieldTimingData (firstFieldChroma/secondFieldChroma).
+- Fix: rebuild composite as luma + chroma - 32767 (as the decoder's combine mode) when chroma fields are present.
+- Verified on Tape_03 frame 1000: before valid=0; after burst lock valid, 18.22 IRE (91.1%), 11.03 deg jitter, 484 lines; burst trace sits in the Burst box.
+- Restore point vs commit check: 338061d contains everything in the restore point (more lines); graticule code identical. NTSC draws one target set (as decode-orc); PAL's mirrored second set is V-switch only.
