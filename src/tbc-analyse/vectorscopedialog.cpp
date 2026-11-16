@@ -154,7 +154,7 @@ void drawCircleMarkers(QPainter &painter, qint32 size, qint32 halfSize, qint32 r
     }
 
     painter.setPen(QPen(Qt::white, 1.0));
-    painter.drawEllipse(0, 0, size - 1, size - 1);
+    painter.drawEllipse(QPointF(halfSize, halfSize), outerRadius, outerRadius);
 }
 
 void drawNtscIqLabels(QPainter &painter, qint32 halfSize, qint32 radius)
@@ -264,12 +264,14 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
     scopePainter.setPen(QPen(Qt::white, axisWidth));
 
     // Draw center cross hairs and main circle/tick markers.
-    scopePainter.drawLine(halfSize, 0, halfSize, size - 1);
-    scopePainter.drawLine(0, halfSize, size - 1, halfSize);
+    const qint32 axisFrom = compositeMode ? halfSize - radius : 0;
+    const qint32 axisTo = compositeMode ? halfSize + radius : size - 1;
+    scopePainter.drawLine(halfSize, axisFrom, halfSize, axisTo);
+    scopePainter.drawLine(axisFrom, halfSize, axisTo, halfSize);
     drawCircleMarkers(scopePainter, size, halfSize, radius);
     if (compositeMode) {
         scopePainter.setPen(QPen(Qt::white, 4.0));
-        scopePainter.drawEllipse(QRectF(2.0, 2.0, size - 5.0, size - 5.0));
+        scopePainter.drawEllipse(QPointF(halfSize, halfSize), radius, radius);
     }
     scopePainter.setPen(QPen(Qt::white, axisWidth));
 
@@ -294,9 +296,10 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
         // blanking-to-white range, so its targets must be too (as in
         // decode-orc); the metadata's IRE range includes NTSC's setup and
         // would put NTSC targets ~12% too far out
+        // Advanced: decode-orc's geometry, full scale (+/-32768) at the plot
+        // radius, the same scale as the plotted samples
         const double uvScale = compositeMode
-            ? static_cast<double>(tbc::cvbs::cvbs_white(videoParameters.system)
-                                  - tbc::cvbs::cvbs_blanking(videoParameters.system))
+            ? static_cast<double>(radius)
             : static_cast<double>(ireRange) / static_cast<double>(scopeScale);
 
         // A composite (measurement) acquisition does not undo the PAL
@@ -384,7 +387,7 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
             const double levelRangeU10 =
                 static_cast<double>(tbc::cvbs::cvbs_white(videoParameters.system)
                                     - tbc::cvbs::cvbs_blanking(videoParameters.system));
-            const double burstMagnitude = burstFraction * levelRangeU10;
+            const double burstMagnitude = burstFraction * (compositeMode ? static_cast<double>(radius) : levelRangeU10);
             const QColor burstBoxColor(220, 220, 220);
             // PAL labels its two V-switch phases Burst (+V) and burst (-V)
             struct BurstTarget { double degrees; const char *label; };
@@ -955,13 +958,6 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     ui->scopeLabel->setParent(scopeOriginalTab);
     originalLayout->addWidget(ui->scopeLabel);
 
-    // decode-orc's title line: frame, sample count, line range, window, fields
-    advancedTitleLabel = new QLabel(scopeAdvancedTab);
-    QFont titleFont = advancedTitleLabel->font();
-    titleFont.setBold(true);
-    advancedTitleLabel->setFont(titleFont);
-    advancedTitleLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    advancedLayout->addWidget(advancedTitleLabel);
     advancedScopeLabel = new QLabel(scopeAdvancedTab);
     advancedScopeLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     advancedScopeLabel->setMinimumSize(QSize(1, 1));
@@ -1034,35 +1030,45 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     // Composite trace display: draw the beam path between consecutive
     // samples (on by default, as a CRT scope shows it).  No gain control - the dwell-brightness law runs at a
     // fixed intensity (see getCompositeTraceImage()).
+    // Trace controls in their own framed box: the beam path between
+    // consecutive samples (on by default, as a CRT scope shows it),
+    // same-phase line averaging and the gain.
     advancedControls->addSpacing(6);
-    traceLinesCheckBox = new QCheckBox(tr("Draw trace lines"), advancedSidePanel);
+    QGroupBox *traceGroup = new QGroupBox(tr("Trace"), advancedSidePanel);
+    QVBoxLayout *traceLayout = new QVBoxLayout(traceGroup);
+    traceLinesCheckBox = new QCheckBox(tr("Draw trace lines"), traceGroup);
     traceLinesCheckBox->setChecked(true);
     connect(traceLinesCheckBox, &QCheckBox::clicked,
             this, &VectorscopeDialog::traceLinesCheckBoxClicked);
-    advancedControls->addWidget(traceLinesCheckBox);
+    traceLayout->addWidget(traceLinesCheckBox);
 
     // Vertical chroma averaging across same-phase lines, as the decoded
     // scope's 2D decoder does: clean vectors on noisy sources.  Display
     // only - the measurements stay on the raw lines.
-    lineAveragingCheckBox = new QCheckBox(tr("Line averaging"), advancedSidePanel);
+    lineAveragingCheckBox = new QCheckBox(tr("Line averaging"), traceGroup);
     lineAveragingCheckBox->setChecked(true);
     lineAveragingCheckBox->setToolTip(
         tr("Average each line with its same-phase neighbours, like a 2D decoder (display only)"));
     connect(lineAveragingCheckBox, &QCheckBox::clicked, this, &VectorscopeDialog::scopeChanged);
-    advancedControls->addWidget(lineAveragingCheckBox);
+    traceLayout->addWidget(lineAveragingCheckBox);
 
-    // Trace intensity for both plot modes (render-only, like the trace
-    // lines).  Default 2: compact vectors with the transitions still visible,
-    // close to the decoded scope's look; higher values bring out the faint
-    // parts of the trace.
-    addCaption(tr("Intensity"), true);
-    traceIntensitySlider = new QSlider(Qt::Horizontal, advancedSidePanel);
+    // Gain (render-only), 1-10, default 3 as in decode-orc, value beside it
+    QHBoxLayout *gainLayout = new QHBoxLayout();
+    gainLayout->addWidget(new QLabel(tr("Gain"), traceGroup));
+    traceIntensitySlider = new QSlider(Qt::Horizontal, traceGroup);
     traceIntensitySlider->setRange(1, 10);
     traceIntensitySlider->setValue(3);
     traceIntensitySlider->setToolTip(tr("Trace brightness for point and density plots"));
+    QLabel *gainValueLabel = new QLabel(QString::number(traceIntensitySlider->value()), traceGroup);
+    gainValueLabel->setMinimumWidth(gainValueLabel->fontMetrics().horizontalAdvance(QStringLiteral("10")));
+    connect(traceIntensitySlider, &QSlider::valueChanged, gainValueLabel,
+            [gainValueLabel](int value) { gainValueLabel->setText(QString::number(value)); });
     connect(traceIntensitySlider, &QSlider::valueChanged,
             this, &VectorscopeDialog::traceLinesCheckBoxClicked);
-    advancedControls->addWidget(traceIntensitySlider);
+    gainLayout->addWidget(traceIntensitySlider, 1);
+    gainLayout->addWidget(gainValueLabel);
+    traceLayout->addLayout(gainLayout);
+    advancedControls->addWidget(traceGroup);
 
     // Measurement readout (composite acquisition only), one reading per line.
     addCaption(tr("Measurements"), true);
@@ -1256,32 +1262,13 @@ void VectorscopeDialog::showCompositeTrace(const std::optional<tbc::cvbs::Vector
             acquisitionInfoLabel->setText(QString());
             acquisitionInfoLabel->setVisible(false);
         }
-        if (advancedTitleLabel) advancedTitleLabel->setText(tr("No vectorscope data"));
         updateAdvancedScopePixmap();
         return;
     }
 
     cachedCompositeImage = getCompositeTraceImage(*compositeData, videoParameters);
     updateMeasurementReadout();
-    if (advancedTitleLabel) {
-        QString window;
-        switch (compositeData->sample_window) {
-            case tbc::cvbs::VectorscopeSampleWindow::BurstOnly: window = tr("burst only"); break;
-            case tbc::cvbs::VectorscopeSampleWindow::ActiveLine: window = tr("active line"); break;
-            case tbc::cvbs::VectorscopeSampleWindow::WholeLine: window = tr("whole line"); break;
-        }
-        const QString stride = compositeData->sample_stride > 1
-            ? tr(", 1 sample in %1").arg(compositeData->sample_stride) : QString();
-        const QString fields = ui->fieldSelectFirstRadioButton->isChecked() ? tr("First field only")
-                             : ui->fieldSelectSecondRadioButton->isChecked() ? tr("Second field only")
-                                                                             : tr("Both fields");
-        advancedTitleLabel->setText(tr("Frame %1 - composite - %2 samples (lines %3-%4, %5%6) - %7")
-                                        .arg(compositeData->field_number)
-                                        .arg(compositeData->samples.size())
-                                        .arg(compositeData->first_line + 1)
-                                        .arg(compositeData->last_line + 1)
-                                        .arg(window, stride, fields));
-    }
+
     updateAdvancedScopePixmap();
 
     // QT Bug workaround for some macOS versions
@@ -1310,7 +1297,11 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
     // to one pixel.
     const double levelRangeU10 = static_cast<double>(tbc::cvbs::cvbs_white(videoParameters.system)
                                                      - tbc::cvbs::cvbs_blanking(videoParameters.system));
-    const double compositeToPixels = levelRangeU10 / 32767.0;
+    // decode-orc's geometry: full scale (+/-32768) at the plot radius, a
+    // 1024 px canvas with 16 px padding
+    constexpr qint32 kCompositePlotRadius = HALF_SIZE - 16;
+    const double compositeToPixels = static_cast<double>(kCompositePlotRadius) / 32768.0;
+    Q_UNUSED(levelRangeU10)
     const qint32 ireRange = videoParameters.white16bIre - videoParameters.black16bIre;
 
     // Initialise a cheap, predictable random number generator, for defocussing
@@ -1459,7 +1450,7 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
         {
             QPainter graticulePainter(&scopeImage);
             if (!ui->graticuleNoneRadioButton->isChecked()) {
-                drawDecodeOrcStyleGraticule(graticulePainter, SIZE, HALF_SIZE, HALF_SIZE - 1, videoParameters,
+                drawDecodeOrcStyleGraticule(graticulePainter, SIZE, HALF_SIZE, kCompositePlotRadius, videoParameters,
                                             graticuleBarPercents(), true);
             }
         }
@@ -1669,7 +1660,7 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
         drawDecodeOrcStyleGraticule(scopePainter,
                                     SIZE,
                                     HALF_SIZE,
-                                    HALF_SIZE - 1,
+                                    kCompositePlotRadius,
                                     videoParameters,
                                     graticuleBarPercents(),
                                     true);
