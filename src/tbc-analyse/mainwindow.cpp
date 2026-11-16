@@ -1472,6 +1472,11 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
     exportDialog->setExportProfileConfigPreference(configuration.getExportProfileConfigEnabled(),
                                                    configuration.getExportProfileConfigPath());
     exportDialog->setExportAdvancedOptions(configuration.getExportAdvancedOptions());
+    exportDialog->setAudioMonitorTracks(configuration.getAudioMonitorTracks());
+    connect(exportDialog, &ExportDialog::audioMonitorTracksChanged, this, [this](const QString &tracks) {
+        configuration.setAudioMonitorTracks(tracks);
+        configuration.writeConfiguration();
+    });
     connect(exportDialog, &ExportDialog::userEditRangeSelectionChanged,
             this, &MainWindow::exportRangeSelectionChangedSignalHandler);
     connect(exportDialog, &ExportDialog::proxyGenerationPreferenceChanged, this, [this](bool enabled) {

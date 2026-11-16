@@ -258,12 +258,20 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
 {
     scopePainter.save();
     scopePainter.setRenderHint(QPainter::Antialiasing, true);
-    scopePainter.setPen(QPen(Qt::white, 1.0));
+    // The Advanced (composite) graticule uses decode-orc's strokes: 2 px
+    // axes and a 4 px outer circle
+    const double axisWidth = compositeMode ? 2.0 : 1.0;
+    scopePainter.setPen(QPen(Qt::white, axisWidth));
 
     // Draw center cross hairs and main circle/tick markers.
     scopePainter.drawLine(halfSize, 0, halfSize, size - 1);
     scopePainter.drawLine(0, halfSize, size - 1, halfSize);
     drawCircleMarkers(scopePainter, size, halfSize, radius);
+    if (compositeMode) {
+        scopePainter.setPen(QPen(Qt::white, 4.0));
+        scopePainter.drawEllipse(QRectF(2.0, 2.0, size - 5.0, size - 5.0));
+    }
+    scopePainter.setPen(QPen(Qt::white, axisWidth));
 
     // NTSC I/Q reference axes + labels.
     if (videoParameters.system == NTSC) {
@@ -940,12 +948,19 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     ui->scopeLabel->setParent(scopeOriginalTab);
     originalLayout->addWidget(ui->scopeLabel);
 
+    // decode-orc's title line: frame, sample count, line range, window, fields
+    advancedTitleLabel = new QLabel(scopeAdvancedTab);
+    QFont titleFont = advancedTitleLabel->font();
+    titleFont.setBold(true);
+    advancedTitleLabel->setFont(titleFont);
+    advancedTitleLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    advancedLayout->addWidget(advancedTitleLabel);
     advancedScopeLabel = new QLabel(scopeAdvancedTab);
     advancedScopeLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     advancedScopeLabel->setMinimumSize(QSize(1, 1));
     advancedScopeLabel->setAlignment(Qt::AlignCenter);
     advancedScopeLabel->setScaledContents(false);
-    advancedLayout->addWidget(advancedScopeLabel);
+    advancedLayout->addWidget(advancedScopeLabel, 1);
 
     // Composite side panel in the shared control frame: line view, field
     // view, trace controls and the measurement readouts.
@@ -1036,7 +1051,7 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     addCaption(tr("Intensity"), true);
     traceIntensitySlider = new QSlider(Qt::Horizontal, advancedSidePanel);
     traceIntensitySlider->setRange(1, 10);
-    traceIntensitySlider->setValue(2);
+    traceIntensitySlider->setValue(3);
     traceIntensitySlider->setToolTip(tr("Trace brightness for point and density plots"));
     connect(traceIntensitySlider, &QSlider::valueChanged,
             this, &VectorscopeDialog::traceLinesCheckBoxClicked);
@@ -1234,12 +1249,32 @@ void VectorscopeDialog::showCompositeTrace(const std::optional<tbc::cvbs::Vector
             acquisitionInfoLabel->setText(QString());
             acquisitionInfoLabel->setVisible(false);
         }
+        if (advancedTitleLabel) advancedTitleLabel->setText(tr("No vectorscope data"));
         updateAdvancedScopePixmap();
         return;
     }
 
     cachedCompositeImage = getCompositeTraceImage(*compositeData, videoParameters);
     updateMeasurementReadout();
+    if (advancedTitleLabel) {
+        QString window;
+        switch (compositeData->sample_window) {
+            case tbc::cvbs::VectorscopeSampleWindow::BurstOnly: window = tr("burst only"); break;
+            case tbc::cvbs::VectorscopeSampleWindow::ActiveLine: window = tr("active line"); break;
+            case tbc::cvbs::VectorscopeSampleWindow::WholeLine: window = tr("whole line"); break;
+        }
+        const QString stride = compositeData->sample_stride > 1
+            ? tr(", 1 sample in %1").arg(compositeData->sample_stride) : QString();
+        const QString fields = ui->fieldSelectFirstRadioButton->isChecked() ? tr("First field only")
+                             : ui->fieldSelectSecondRadioButton->isChecked() ? tr("Second field only")
+                                                                             : tr("Both fields");
+        advancedTitleLabel->setText(tr("Frame %1 - composite - %2 samples (lines %3-%4, %5%6) - %7")
+                                        .arg(compositeData->field_number)
+                                        .arg(compositeData->samples.size())
+                                        .arg(compositeData->first_line + 1)
+                                        .arg(compositeData->last_line + 1)
+                                        .arg(window, stride, fields));
+    }
     updateAdvancedScopePixmap();
 
     // QT Bug workaround for some macOS versions
@@ -1257,12 +1292,10 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
     const bool multiColour = ui->multiColourCheckBox->isChecked();
     const bool defocus = ui->defocusCheckBox->isChecked();
     const bool drawTrace = traceLinesCheckBox && traceLinesCheckBox->isChecked();
-    // Trace intensity from the panel slider (1..10, default 2; 5 matches the
-    // earlier fixed brightness).  Density
-    // plot: the brightness law's exponent is 1 / intensity, so higher values
-    // lift the faint transits towards the vectors' brightness.  Point plot:
-    // the brightness per unit of dwell doubles every two steps.
-    const int traceIntensity = traceIntensitySlider ? traceIntensitySlider->value() : 2;
+    // Gain from the panel slider (1..10, default 3 as in decode-orc).  Point
+    // plot: decode-orc's gain.  Density plot: the brightness law's exponent is
+    // 1 / gain, so higher values lift the faint transits towards the vectors.
+    const int traceIntensity = traceIntensitySlider ? traceIntensitySlider->value() : 3;
     const double pointIntensityScale = std::pow(2.0, (traceIntensity - 5) / 2.0);
 
     // Composite samples are normalised to +/-32767 over the system's
@@ -1282,6 +1315,192 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
 
     QImage scopeImage(SIZE, SIZE, QImage::Format_RGB32);
     scopeImage.fill(Qt::black);
+
+    // Point plot: decode-orc's composite renderer, ported 1:1.  Each sample
+    // lands on its pixel; with trace lines on, consecutive samples of one
+    // line are joined by a transit counted separately.  Both are spread by a
+    // Gaussian beam spot (sigma = canvas / 410).  Intensity is linear in
+    // dwell: the vectors reach full brightness at gain / anchor, where the
+    // anchor is the lower of 8 samples a line on one pixel and the level
+    // above which the beam spends half its resting time; transits are held
+    // near 0.04 x gain.  The trace is added over the graticule.
+    if (!densityMode) {
+        const size_t bufSize = static_cast<size_t>(SIZE) * SIZE;
+        std::vector<uint32_t> hitCount(bufSize, 0);
+        std::vector<uint32_t> transitCount(drawTrace ? bufSize : 0, 0);
+        const auto accumulateLine = [&](int x0, int y0, int x1, int y1) {
+            const int dx = std::abs(x1 - x0);
+            const int sx = (x0 < x1) ? 1 : -1;
+            const int dy = -std::abs(y1 - y0);
+            const int sy = (y0 < y1) ? 1 : -1;
+            int err = dx + dy;
+            for (;;) {
+                if (x0 >= 0 && x0 < SIZE && y0 >= 0 && y0 < SIZE) transitCount[static_cast<size_t>(y0) * SIZE + x0]++;
+                if (x0 == x1 && y0 == y1) break;
+                const int e2 = 2 * err;
+                if (e2 >= dy) { err += dy; x0 += sx; }
+                if (e2 <= dx) { err += dx; y0 += sy; }
+            }
+        };
+
+        uint32_t plottedLines = 0;
+        int countedField = -1, countedLine = -1;
+        bool havePoint = false;
+        int prevX = 0, prevY = 0, prevField = -1, prevLine = -1;
+        for (const tbc::cvbs::UVSample &sample : compositeData.samples) {
+            if ((firstFieldOnly && sample.field_id != 0) || (secondFieldOnly && sample.field_id != 1)) continue;
+            double u = sample.u;
+            double v = sample.v;
+            if (defocus) {
+                u += normalDist(randomEngine);
+                v += normalDist(randomEngine);
+            }
+            if (sample.field_id != countedField || sample.line_number != countedLine || plottedLines == 0) {
+                countedField = sample.field_id;
+                countedLine = sample.line_number;
+                ++plottedLines;
+            }
+            const double x = HALF_SIZE + (u * compositeToPixels);
+            const double y = HALF_SIZE - (v * compositeToPixels);
+            if (x < 0.0 || x >= SIZE || y < 0.0 || y >= SIZE) continue;
+            const int px = static_cast<int>(x);
+            const int py = static_cast<int>(y);
+            hitCount[static_cast<size_t>(py) * SIZE + px]++;
+            if (drawTrace && havePoint && sample.field_id == prevField && sample.line_number == prevLine) {
+                accumulateLine(prevX, prevY, px, py);
+            }
+            havePoint = true;
+            prevX = px; prevY = py; prevField = sample.field_id; prevLine = sample.line_number;
+        }
+
+        // Beam spot: separable Gaussian, sigma = canvas / 410
+        const double sigma = SIZE / 410.0;
+        const int spotRadius = std::clamp(static_cast<int>(std::ceil(3.0 * sigma)), 1, 15);
+        std::vector<float> spot(static_cast<size_t>(spotRadius) + 1);
+        double spotSum = 0.0;
+        for (int t = 0; t <= spotRadius; ++t) {
+            spot[t] = static_cast<float>(std::exp(-0.5 * t * t / (sigma * sigma)));
+            spotSum += (t == 0) ? spot[t] : 2.0 * spot[t];
+        }
+        for (float &w : spot) w = static_cast<float>(w / spotSum);
+        const auto spread = [&](const std::vector<uint32_t> &counts, std::vector<float> &out) {
+            out.assign(bufSize, 0.0f);
+            if (counts.empty()) return;
+            std::vector<float> middle(bufSize, 0.0f);
+            for (int y = 0; y < SIZE; ++y) {
+                const size_t base = static_cast<size_t>(y) * SIZE;
+                for (int x = 0; x < SIZE; ++x) {
+                    float total = spot[0] * counts[base + x];
+                    for (int t = 1; t <= spotRadius; ++t) {
+                        if (x - t >= 0) total += spot[t] * counts[base + x - t];
+                        if (x + t < SIZE) total += spot[t] * counts[base + x + t];
+                    }
+                    middle[base + x] = total;
+                }
+            }
+            for (int y = 0; y < SIZE; ++y) {
+                const size_t base = static_cast<size_t>(y) * SIZE;
+                for (int x = 0; x < SIZE; ++x) {
+                    float total = spot[0] * middle[base + x];
+                    for (int t = 1; t <= spotRadius; ++t) {
+                        if (y - t >= 0) total += spot[t] * middle[base - static_cast<size_t>(t) * SIZE + x];
+                        if (y + t < SIZE) total += spot[t] * middle[base + static_cast<size_t>(t) * SIZE + x];
+                    }
+                    out[base + x] = total;
+                }
+            }
+        };
+        std::vector<float> dwell, transitDwell;
+        spread(hitCount, dwell);
+        spread(transitCount, transitDwell);
+
+        const double gain = static_cast<double>(traceIntensity);
+        const float stride = static_cast<float>(std::max<uint32_t>(compositeData.sample_stride, 1u));
+        const float spotPeak = spot[0] * spot[0];
+        float anchor = (plottedLines > 0) ? (8.0f * plottedLines / stride) * spotPeak : 0.0f;
+        {
+            // Half-of-the-dwell point from a brightness histogram
+            constexpr int kBuckets = 1024;
+            double total = 0.0;
+            float peak = 0.0f;
+            for (const float value : dwell) {
+                if (value <= 0.0f) continue;
+                total += value;
+                peak = std::max(peak, value);
+            }
+            if (peak > 0.0f) {
+                std::vector<double> bucketSum(kBuckets, 0.0);
+                const float toBucket = kBuckets / peak;
+                for (const float value : dwell) {
+                    if (value > 0.0f) bucketSum[std::min(kBuckets - 1, static_cast<int>(value * toBucket))] += value;
+                }
+                double accumulated = 0.0;
+                for (int bucket = kBuckets - 1; bucket >= 0; --bucket) {
+                    accumulated += bucketSum[bucket];
+                    if (accumulated >= 0.5 * total) {
+                        anchor = std::min(anchor, bucket / toBucket);
+                        break;
+                    }
+                }
+            }
+        }
+        const float dwellScale = (anchor > 0.0f) ? static_cast<float>(gain) / anchor : 0.0f;
+        const float transitScale = (plottedLines > 0)
+            ? static_cast<float>(gain * 0.04 * stride / (plottedLines * spotPeak)) : 0.0f;
+
+        // Graticule underneath, trace added over it
+        {
+            QPainter graticulePainter(&scopeImage);
+            if (!ui->graticuleNoneRadioButton->isChecked()) {
+                drawDecodeOrcStyleGraticule(graticulePainter, SIZE, HALF_SIZE, HALF_SIZE - 1, videoParameters,
+                                            graticuleBarPercents(), true);
+            }
+        }
+        for (int py = 0; py < SIZE; ++py) {
+            QRgb *scanLine = reinterpret_cast<QRgb *>(scopeImage.scanLine(py));
+            for (int px = 0; px < SIZE; ++px) {
+                const size_t index = static_cast<size_t>(py) * SIZE + px;
+                const float level = std::min(1.0f, dwell[index] * dwellScale
+                                                       + (transitDwell.empty() ? 0.0f : transitDwell[index] * transitScale));
+                if (level <= 0.0f) continue;
+                double r = 0.0, g = 1.0, b = 0.0;  // decode-orc's plain trace is green
+                if (multiColour) {
+                    // BT.601 inverse at Y = 0.5, normalised to the brightest component
+                    const double un = ((px - HALF_SIZE) / compositeToPixels) / 32768.0;
+                    const double vn = (-(py - HALF_SIZE) / compositeToPixels) / 32768.0;
+                    const double rr = std::clamp(0.5 + vn / 0.877283, 0.0, 1.0);
+                    const double bb = std::clamp(0.5 + un / 0.492111, 0.0, 1.0);
+                    const double gg = std::clamp((0.5 - 0.299 * (0.5 + vn / 0.877283) - 0.114 * (0.5 + un / 0.492111)) / 0.587, 0.0, 1.0);
+                    const double maxC = std::max({rr, gg, bb});
+                    if (maxC > 0.001) { r = rr / maxC; g = gg / maxC; b = bb / maxC; } else { r = g = b = 1.0; }
+                }
+                const QRgb existing = scanLine[px];
+                scanLine[px] = qRgb(std::min(255, qRed(existing) + static_cast<int>(r * level * 255.0f)),
+                                    std::min(255, qGreen(existing) + static_cast<int>(g * level * 255.0f)),
+                                    std::min(255, qBlue(existing) + static_cast<int>(b * level * 255.0f)));
+            }
+        }
+        QPainter scopePainter(&scopeImage);
+        // Like decode-orc, say so when there is no colour to show: every
+        // sample within the no-chroma threshold of the centre
+        constexpr double kNoChromaThreshold = 1000.0;
+        const bool hasChroma = std::any_of(compositeData.samples.begin(), compositeData.samples.end(),
+                                           [](const auto &sample) {
+            return std::abs(sample.u) > kNoChromaThreshold || std::abs(sample.v) > kNoChromaThreshold;
+        });
+        if (!hasChroma) {
+            QFont font = scopePainter.font();
+            font.setPointSize(16);
+            font.setBold(true);
+            scopePainter.setFont(font);
+            scopePainter.setPen(Qt::yellow);
+            scopePainter.drawText(QRect(0, HALF_SIZE - 40, SIZE, 80), Qt::AlignCenter | Qt::TextWordWrap,
+                                  tr("No chroma present"));
+        }
+        scopePainter.end();
+        return scopeImage;
+    }
+
 
     // A CRT scope's brightness is proportional to how long the beam dwells
     // on a point.  The trace is accumulated as dwell into per-class grids:

@@ -1334,6 +1334,15 @@ ExportDialog::ExportDialog(QWidget *parent) :
     for (QCheckBox *monitorCheckBox : {ui->audio1MonitorCheckBox, ui->audio2MonitorCheckBox,
                                        ui->audio3MonitorCheckBox, ui->audio4MonitorCheckBox}) {
         connect(monitorCheckBox, &QCheckBox::toggled, this, restartAudioMonitor);
+        // Ticks are remembered between sessions
+        connect(monitorCheckBox, &QCheckBox::toggled, this, [this]() {
+            QString tracks;
+            for (const QCheckBox *box : {ui->audio1MonitorCheckBox, ui->audio2MonitorCheckBox,
+                                         ui->audio3MonitorCheckBox, ui->audio4MonitorCheckBox}) {
+                tracks += box->isChecked() ? QLatin1Char('1') : QLatin1Char('0');
+            }
+            emit audioMonitorTracksChanged(tracks);
+        });
     }
     for (QLineEdit *trackLineEdit : {ui->audio1LineEdit, ui->audio2LineEdit, ui->audio3LineEdit, ui->audio4LineEdit}) {
         connect(trackLineEdit, &QLineEdit::textChanged, this, restartAudioMonitor);
@@ -4389,6 +4398,16 @@ void ExportDialog::startAudioMonitor(double startSeconds)
                                            QStringLiteral("-nodisp"), QStringLiteral("-autoexit"),
                                            QStringLiteral("-i"), QStringLiteral("-")});
     audioMonitorDecoder->start(ffmpegPath, decodeArgs);
+}
+
+void ExportDialog::setAudioMonitorTracks(const QString &tracks)
+{
+    QCheckBox *monitorCheckBoxes[] = {ui->audio1MonitorCheckBox, ui->audio2MonitorCheckBox,
+                                      ui->audio3MonitorCheckBox, ui->audio4MonitorCheckBox};
+    for (int i = 0; i < 4; ++i) {
+        const QSignalBlocker blocker(monitorCheckBoxes[i]);
+        monitorCheckBoxes[i]->setChecked((i < tracks.size() && tracks.at(i) == QLatin1Char('1')));
+    }
 }
 
 void ExportDialog::stopAudioMonitor()

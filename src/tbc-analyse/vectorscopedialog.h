@@ -129,6 +129,7 @@ private:
     QWidget *scopeOriginalTab = nullptr;
     QWidget *scopeAdvancedTab = nullptr;
     QLabel *advancedScopeLabel = nullptr;
+    QLabel *advancedTitleLabel = nullptr;
     QWidget *advancedSidePanel = nullptr;
     QScrollArea *advancedScrollArea = nullptr;
     QComboBox *lineViewComboBox = nullptr;

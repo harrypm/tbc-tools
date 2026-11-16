@@ -54,6 +54,8 @@ public:
     // Play the Monitor-ticked audio tracks from a position in seconds
     void startAudioMonitor(double startSeconds);
     void stopAudioMonitor();
+    // Restore the Monitor ticks, one '0'/'1' per track
+    void setAudioMonitorTracks(const QString &tracks);
 protected:
     void resizeEvent(QResizeEvent *event) override;
 signals:
@@ -61,6 +63,7 @@ signals:
     void proxyGenerationPreferenceChanged(bool enabled);
     void exportProfileConfigPreferenceChanged(bool enabled, const QString &configPath);
     void advancedOptionsChanged(const ExportAdvancedOptions &options);
+    void audioMonitorTracksChanged(const QString &tracks);
 
 private slots:
     void on_outputBrowseButton_clicked();

@@ -135,6 +135,11 @@ void Configuration::writeConfiguration(void)
     configuration->setValue("threads", settings.exportAdvancedOptions.threads);
     configuration->endGroup();
 
+    // Export tab audio Monitor ticks
+    configuration->beginGroup("audioMonitor");
+    configuration->setValue("tracks", settings.audioMonitorTracks);
+    configuration->endGroup();
+
     // RF segment export (FLAC-Chop)
     configuration->beginGroup("rfExport");
     configuration->setValue("flacChopPath", settings.rfExport.flacChopPath);
@@ -263,6 +268,11 @@ void Configuration::readConfiguration(void)
     if (settings.exportAdvancedOptions.threads < 0) settings.exportAdvancedOptions.threads = 0;
     configuration->endGroup();
 
+    // Export tab audio Monitor ticks (additive key - older config files fall back to none)
+    configuration->beginGroup("audioMonitor");
+    settings.audioMonitorTracks = configuration->value("tracks", QStringLiteral("0000")).toString();
+    configuration->endGroup();
+
     // RF segment export (additive keys - older config files fall back to defaults)
     configuration->beginGroup("rfExport");
     settings.rfExport.flacChopPath = configuration->value("flacChopPath", QString()).toString();
@@ -347,6 +357,7 @@ void Configuration::setDefault(void)
 
     // Advanced export options (defaults match tbc-video-export CLI defaults)
     settings.exportAdvancedOptions = ExportAdvancedOptions();
+    settings.audioMonitorTracks = QStringLiteral("0000");
 
     // RF segment export (FLAC-Chop)
     settings.rfExport.flacChopPath = QString();
@@ -746,6 +757,16 @@ VbiProcessingOptions Configuration::getVbiProcessingOptions(void)
 }
 
 // Advanced export options
+void Configuration::setAudioMonitorTracks(const QString &tracks)
+{
+    settings.audioMonitorTracks = tracks;
+}
+
+QString Configuration::getAudioMonitorTracks(void)
+{
+    return settings.audioMonitorTracks;
+}
+
 void Configuration::setExportAdvancedOptions(const ExportAdvancedOptions &options)
 {
     settings.exportAdvancedOptions = options;

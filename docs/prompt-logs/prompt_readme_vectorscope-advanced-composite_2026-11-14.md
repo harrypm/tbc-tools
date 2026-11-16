@@ -337,3 +337,11 @@ all changed/new files above, per repo convention.
 - Fix: rebuild composite as luma + chroma - 32767 (as the decoder's combine mode) when chroma fields are present.
 - Verified on Tape_03 frame 1000: before valid=0; after burst lock valid, 18.22 IRE (91.1%), 11.03 deg jitter, 484 lines; burst trace sits in the Burst box.
 - Restore point vs commit check: 338061d contains everything in the restore point (more lines); graticule code identical. NTSC draws one target set (as decode-orc); PAL's mirrored second set is V-switch only.
+
+## Phase 21 - Advanced scope matched to decode-orc's look; Monitor ticks persist (2026-11-16)
+- User compared with decode-orc's scope screenshot (PAL test signal, Colorize, Gain 3, second field, active line).
+- Point plot now uses decode-orc's composite renderer 1:1: hit + transit (Bresenham) counts, Gaussian beam spot sigma = canvas/410 (radius <= 15), dwell anchor = min(8 samples/line x lines / stride x spot0^2, half-dwell histogram point), brightness = min(1, dwell x gain/anchor + transit x 0.04 x gain x stride / (lines x spot0^2)), graticule underneath with the trace added, Colorize = BT.601 inverse at Y=0.5 normalised to the max component, plain trace green. Density mode keeps the earlier law. Gain slider default 3.
+- Composite graticule strokes as decode-orc: 4 px outer circle, 2 px axes (Basic tab unchanged).
+- decode-orc's title line above the Advanced plot: "Frame N - composite - X samples (lines a-b, window[, 1 sample in n]) - fields", "No vectorscope data" when empty.
+- Audio Monitor ticks persist: [audioMonitor] tracks = "0101"-style string; ExportDialog::setAudioMonitorTracks/audioMonitorTracksChanged, saved by MainWindow. Verified across three launches with an isolated config (0000 -> 0101 -> 0001).
+- ctest 38/38, CI contract checks passed.
