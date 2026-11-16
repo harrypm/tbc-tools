@@ -859,9 +859,13 @@ void VectorscopeDialog::initialiseAdvancedControls()
         return;
     }
 
-    // Render mode: a dropdown in a framed "Mode" box
-    QGroupBox *renderGroup = new QGroupBox(tr("Mode"), ui->frame);
+    // Render mode as a caption + dropdown, matching the form's plain
+    // "Field:" / "Graticule:" labels rather than a framed group.
+    QWidget *renderGroup = new QWidget(ui->frame);
     QVBoxLayout *renderLayout = new QVBoxLayout(renderGroup);
+    renderLayout->setContentsMargins(0, 0, 0, 0);
+    renderLayout->setSpacing(2);
+    renderLayout->addWidget(new QLabel(tr("Mode:"), renderGroup));
     renderModeComboBox = new QComboBox(renderGroup);
     renderModeComboBox->addItem(tr("Point plot"));
     renderModeComboBox->addItem(tr("Density plot"));
@@ -970,18 +974,23 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     advancedSidePanel = new QWidget(ui->frame);
     auto *advancedControls = new QVBoxLayout(advancedSidePanel);
     advancedControls->setContentsMargins(0, 0, 0, 0);
-    advancedControls->setSpacing(6);
+    advancedControls->setSpacing(2);
 
-    // Each section in its own framed box, as decode-orc groups its panel.
-    const auto addGroup = [this, advancedControls](const QString &title) {
-        auto *group = new QGroupBox(title, advancedSidePanel);
-        auto *layout = new QVBoxLayout(group);
-        advancedControls->addWidget(group);
-        return layout;
+    // Flat bold captions rather than group-box frames: each section holds a
+    // single control, so a frame only adds border and padding.
+    const auto addCaption = [this, advancedControls](const QString &text, bool spaced) {
+        if (spaced) {
+            advancedControls->addSpacing(6);
+        }
+        auto *caption = new QLabel(text, advancedSidePanel);
+        QFont captionFont = caption->font();
+        captionFont.setBold(true);
+        caption->setFont(captionFont);
+        advancedControls->addWidget(caption);
     };
 
     // Line view: which part of each line the composite acquisition samples.
-    QVBoxLayout *lineViewLayout = addGroup(tr("Line view"));
+    addCaption(tr("Line view"), false);
     lineViewComboBox = new QComboBox(advancedSidePanel);
     lineViewComboBox->addItem(tr("Active line"));
     lineViewComboBox->addItem(tr("Whole line"));
@@ -989,19 +998,19 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     lineViewComboBox->setCurrentIndex(1);
     connect(lineViewComboBox, &QComboBox::currentIndexChanged,
             this, &VectorscopeDialog::lineViewComboBoxChanged);
-    lineViewLayout->addWidget(lineViewComboBox);
+    advancedControls->addWidget(lineViewComboBox);
 
     // Field view: which lines down the frame the composite acquisition
     // samples.  The spin boxes carry 1-based interlaced frame lines and are
     // enabled only by the Selected line(s) entry.
-    QVBoxLayout *fieldViewLayout = addGroup(tr("Field view"));
+    addCaption(tr("Field view"), true);
     fieldViewComboBox = new QComboBox(advancedSidePanel);
     fieldViewComboBox->addItem(tr("Active field"));
     fieldViewComboBox->addItem(tr("Whole field"));
     fieldViewComboBox->addItem(tr("Selected line(s)"));
     connect(fieldViewComboBox, &QComboBox::currentIndexChanged,
             this, &VectorscopeDialog::fieldViewComboBoxChanged);
-    fieldViewLayout->addWidget(fieldViewComboBox);
+    advancedControls->addWidget(fieldViewComboBox);
     QHBoxLayout *fieldViewRangeLayout = new QHBoxLayout();
     fieldViewRangeLayout->setContentsMargins(0, 0, 0, 0);
     fieldViewRangeLayout->setSpacing(4);
@@ -1014,7 +1023,7 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     fieldViewRangeLayout->addWidget(fieldViewStartSpinBox, 1);
     fieldViewRangeLayout->addWidget(fieldViewEndEnabledCheckBox);
     fieldViewRangeLayout->addWidget(fieldViewEndSpinBox, 1);
-    fieldViewLayout->addLayout(fieldViewRangeLayout);
+    advancedControls->addLayout(fieldViewRangeLayout);
     connect(fieldViewEndEnabledCheckBox, &QCheckBox::clicked,
             this, &VectorscopeDialog::fieldViewEndEnabledCheckBoxClicked);
     connect(fieldViewStartSpinBox, &QSpinBox::valueChanged,
@@ -1022,14 +1031,15 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     connect(fieldViewEndSpinBox, &QSpinBox::valueChanged,
             this, &VectorscopeDialog::compositeLineSpinBoxChanged);
 
-    // Trace: beam path between consecutive samples (on by default, as a CRT
-    // scope shows it), same-phase line averaging and the gain.
-    QVBoxLayout *traceLayout = addGroup(tr("Trace"));
+    // Composite trace display: draw the beam path between consecutive
+    // samples (on by default, as a CRT scope shows it).  No gain control - the dwell-brightness law runs at a
+    // fixed intensity (see getCompositeTraceImage()).
+    advancedControls->addSpacing(6);
     traceLinesCheckBox = new QCheckBox(tr("Draw trace lines"), advancedSidePanel);
     traceLinesCheckBox->setChecked(true);
     connect(traceLinesCheckBox, &QCheckBox::clicked,
             this, &VectorscopeDialog::traceLinesCheckBoxClicked);
-    traceLayout->addWidget(traceLinesCheckBox);
+    advancedControls->addWidget(traceLinesCheckBox);
 
     // Vertical chroma averaging across same-phase lines, as the decoded
     // scope's 2D decoder does: clean vectors on noisy sources.  Display
@@ -1039,35 +1049,30 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     lineAveragingCheckBox->setToolTip(
         tr("Average each line with its same-phase neighbours, like a 2D decoder (display only)"));
     connect(lineAveragingCheckBox, &QCheckBox::clicked, this, &VectorscopeDialog::scopeChanged);
-    traceLayout->addWidget(lineAveragingCheckBox);
+    advancedControls->addWidget(lineAveragingCheckBox);
 
-    // Gain (render-only, like the trace lines), 1-10, default 3 as in
-    // decode-orc, with its value beside the slider.
-    QHBoxLayout *gainLayout = new QHBoxLayout();
-    gainLayout->addWidget(new QLabel(tr("Gain"), advancedSidePanel));
+    // Trace intensity for both plot modes (render-only, like the trace
+    // lines).  Default 2: compact vectors with the transitions still visible,
+    // close to the decoded scope's look; higher values bring out the faint
+    // parts of the trace.
+    addCaption(tr("Intensity"), true);
     traceIntensitySlider = new QSlider(Qt::Horizontal, advancedSidePanel);
     traceIntensitySlider->setRange(1, 10);
     traceIntensitySlider->setValue(3);
     traceIntensitySlider->setToolTip(tr("Trace brightness for point and density plots"));
-    QLabel *gainValueLabel = new QLabel(QString::number(traceIntensitySlider->value()), advancedSidePanel);
-    gainValueLabel->setMinimumWidth(gainValueLabel->fontMetrics().horizontalAdvance(QStringLiteral("10")));
-    connect(traceIntensitySlider, &QSlider::valueChanged, gainValueLabel,
-            [gainValueLabel](int value) { gainValueLabel->setText(QString::number(value)); });
     connect(traceIntensitySlider, &QSlider::valueChanged,
             this, &VectorscopeDialog::traceLinesCheckBoxClicked);
-    gainLayout->addWidget(traceIntensitySlider, 1);
-    gainLayout->addWidget(gainValueLabel);
-    traceLayout->addLayout(gainLayout);
+    advancedControls->addWidget(traceIntensitySlider);
 
     // Measurement readout (composite acquisition only), one reading per line.
-    QVBoxLayout *measurementLayout = addGroup(tr("Measurements"));
+    addCaption(tr("Measurements"), true);
     measurementLabel = new QLabel(tr("No data"), advancedSidePanel);
     measurementLabel->setWordWrap(true);
     acquisitionInfoLabel = new QLabel(advancedSidePanel);
     acquisitionInfoLabel->setWordWrap(true);
     acquisitionInfoLabel->setVisible(false);
-    measurementLayout->addWidget(measurementLabel);
-    measurementLayout->addWidget(acquisitionInfoLabel);
+    advancedControls->addWidget(measurementLabel);
+    advancedControls->addWidget(acquisitionInfoLabel);
 
     // Note for sources the composite acquisition cannot demodulate.
     acquisitionNoteLabel = new QLabel(
