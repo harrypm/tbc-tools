@@ -290,7 +290,14 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
         constexpr std::array<const char *, 7> colorLabelsUpper = {"", "B", "G", "Cy", "R", "Mg", "Yl"};
         constexpr std::array<const char *, 7> colorLabelsLower = {"", "b", "g", "cy", "r", "mg", "yl"};
         constexpr qint32 scopeScale = 65536 / 1024;
-        const double uvScale = static_cast<double>(ireRange) / static_cast<double>(scopeScale);
+        // The composite plot's samples are scaled over the system's
+        // blanking-to-white range, so its targets must be too (as in
+        // decode-orc); the metadata's IRE range includes NTSC's setup and
+        // would put NTSC targets ~12% too far out
+        const double uvScale = compositeMode
+            ? static_cast<double>(tbc::cvbs::cvbs_white(videoParameters.system)
+                                  - tbc::cvbs::cvbs_blanking(videoParameters.system))
+            : static_cast<double>(ireRange) / static_cast<double>(scopeScale);
 
         // A composite (measurement) acquisition does not undo the PAL
         // V-switch, so its graticule carries two mirrored sets of targets -
@@ -299,9 +306,9 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
         // also sees the NTSC/PAL_M encoder's 0.925 chroma scale, which the
         // decoded acquisition's picture-excursion normalisation hides
         // (SMPTE 170M-2004 section 10).
-        const bool mirrorTargets = compositeMode
-                                   && (videoParameters.system == PAL
-                                       || videoParameters.system == PAL_M);
+        // Drawn for every system so PAL and NTSC show the same graticule; on
+        // NTSC, which has no V-switch, the -V set is a reference only
+        const bool mirrorTargets = compositeMode;
         const double chromaScale = (compositeMode
                                     && (videoParameters.system == NTSC
                                         || videoParameters.system == PAL_M))

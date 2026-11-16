@@ -345,3 +345,9 @@ all changed/new files above, per repo convention.
 - decode-orc's title line above the Advanced plot: "Frame N - composite - X samples (lines a-b, window[, 1 sample in n]) - fields", "No vectorscope data" when empty.
 - Audio Monitor ticks persist: [audioMonitor] tracks = "0101"-style string; ExportDialog::setAudioMonitorTracks/audioMonitorTracksChanged, saved by MainWindow. Verified across three launches with an isolated config (0000 -> 0101 -> 0001).
 - ctest 38/38, CI contract checks passed.
+
+## Phase 22 - Advanced graticule: same boxes on NTSC as PAL; composite target scale
+- User (S-Video VHS NTSC Tape_03): "It is missing boxes", "PAL/NTSC should not be diff for the extra boxes for the vectorscope".
+- The mirrored (-V, lower-case) target set is now drawn in the Advanced view for every system, so NTSC shows the same 12 boxes as PAL (decode-orc draws it for PAL/PAL-M only; on NTSC it is a reference).
+- Bug fix: Advanced targets were scaled from the metadata IRE range while samples use the system's blanking-to-white range (decode-orc uses the latter for both). NTSC metadata range includes setup: 626 vs 560 -> targets ~12% too far out. PAL 593 vs 588. Composite targets now use cvbs_white - cvbs_blanking.
+- Verified with the app's own update path on Tape_03 (NTSC Y/C): 12 colour boxes + Burst, burst locked 18.22 IRE; Tape_06 (PAL Y/C) locks (653,760 samples, valid). ctest 38/38.
