@@ -22,8 +22,7 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
-VbiProcessingDialog::VbiProcessingDialog(const VbiProcessingOptions &current, const QString &tapeFormat,
-                                         QWidget *parent)
+VbiProcessingDialog::VbiProcessingDialog(const VbiProcessingOptions &current, QWidget *parent)
     : QDialog(parent), currentOptions(current)
 {
     setWindowTitle(tr("Process VBI"));
@@ -34,22 +33,15 @@ VbiProcessingDialog::VbiProcessingDialog(const VbiProcessingOptions &current, co
     auto *introLabel = new QLabel(tr("Select which VBI/VITS data types to process:"), this);
     mainLayout->addWidget(introLabel);
 
-    if (!tapeFormat.isEmpty()) {
-        auto *tapeLabel = new QLabel(tr("Tape source (%1): the LaserDisc VBI core and NTSC-specific types "
-                                        "are off by default.").arg(tapeFormat), this);
-        tapeLabel->setWordWrap(true);
-        mainLayout->addWidget(tapeLabel);
-    }
-
     // Six checkboxes. The four in-process VBI decoders default on;
     // teletext and VITS are opt-in (off by default).
     vbiCoreCheckBox = new QCheckBox(tr("VBI core (frame number / timecode / chapter / user code)"), this);
-    vbiCoreCheckBox->setToolTip(tr("LaserDisc biphase-coded VBI on field lines 16-18. Off by default for tape sources."));
+    vbiCoreCheckBox->setToolTip(tr("Biphase-coded VBI on field lines 16-18 (PAL) / equivalent NTSC lines."));
     vbiCoreCheckBox->setChecked(currentOptions.vbiCore);
     mainLayout->addWidget(vbiCoreCheckBox);
 
     ntscCheckBox = new QCheckBox(tr("NTSC-specific (FM code / white flag / video ID)"), this);
-    ntscCheckBox->setToolTip(tr("NTSC LaserDisc-specific data on field lines 10/11/20. Only applies to NTSC sources; off by default for tape sources."));
+    ntscCheckBox->setToolTip(tr("NTSC LaserDisc-specific data on field lines 10/11/20. Only applies to NTSC sources."));
     ntscCheckBox->setChecked(currentOptions.ntsc);
     mainLayout->addWidget(ntscCheckBox);
 

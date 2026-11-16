@@ -9,7 +9,6 @@
  ******************************************************************************/
 
 #include "processvbidialog.h"
-#include "tbcmetadata.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -154,12 +153,12 @@ void ProcessVbiDialog::buildUi()
     QVBoxLayout *optionsLayout = new QVBoxLayout(optionsGroupBox);
 
     vbiCoreCheckBox = new QCheckBox(tr("VBI core (frame number / timecode / chapter / user code)"), optionsGroupBox);
-    vbiCoreCheckBox->setToolTip(tr("LaserDisc biphase-coded VBI on field lines 16-18. Off by default for tape sources."));
+    vbiCoreCheckBox->setToolTip(tr("Biphase-coded VBI on field lines 16-18 (PAL) / equivalent NTSC lines."));
     vbiCoreCheckBox->setChecked(true);
     optionsLayout->addWidget(vbiCoreCheckBox);
 
     ntscCheckBox = new QCheckBox(tr("NTSC-specific (FM code / white flag / video ID)"), optionsGroupBox);
-    ntscCheckBox->setToolTip(tr("NTSC LaserDisc-specific data on field lines 10/11/20. Only applies to NTSC sources; off by default for tape sources."));
+    ntscCheckBox->setToolTip(tr("NTSC LaserDisc-specific data on field lines 10/11/20. Only applies to NTSC sources."));
     ntscCheckBox->setChecked(true);
     optionsLayout->addWidget(ntscCheckBox);
 
@@ -245,7 +244,6 @@ void ProcessVbiDialog::buildUi()
 
     auto stateUpdater = [this]() { updateControlStates(); };
     connect(inputTbcLineEdit, &QLineEdit::textChanged, this, stateUpdater);
-    connect(inputTbcLineEdit, &QLineEdit::textChanged, this, &ProcessVbiDialog::applySourceDefaults);
     connect(vitsCheckBox, &QCheckBox::toggled, this, stateUpdater);
 
     onTeletextToggled(teletextCheckBox->isChecked());
@@ -276,30 +274,6 @@ void ProcessVbiDialog::setBusy(bool enabled)
 
     if (!enabled) {
         updateControlStates();
-    }
-}
-
-// Tape sources start with the LaserDisc-only types (VBI core, NTSC-specific) off
-void ProcessVbiDialog::applySourceDefaults()
-{
-    const QFileInfo inputInfo(normalizePath(inputTbcLineEdit->text()));
-    if (!inputInfo.isFile() || inputInfo.absoluteFilePath() == sourceDefaultsInput) {
-        return;
-    }
-    sourceDefaultsInput = inputInfo.absoluteFilePath();
-
-    const QString outputMetadata = normalizePath(outputMetadataLineEdit->text());
-    TbcMetaData metaData;
-    if (!metaData.read(outputMetadata.isEmpty() ? resolveDefaultMetadataFilename(sourceDefaultsInput) : outputMetadata)) {
-        return;
-    }
-    const TbcMetaData::VideoParameters &videoParameters = metaData.getVideoParameters();
-    const bool tapeSource = videoParameters.isTapeSource();
-    vbiCoreCheckBox->setChecked(!tapeSource);
-    ntscCheckBox->setChecked(!tapeSource);
-    if (tapeSource) {
-        appendStatus(tr("Tape source (%1): VBI core and NTSC-specific are off by default.")
-                         .arg(videoParameters.tapeFormat.trimmed()));
     }
 }
 
@@ -449,13 +423,6 @@ QStringList ProcessVbiDialog::buildToolArguments(const QString &toolPath, const 
     }
     if (!opts.ntsc && toolSupportsOption(toolPath, QStringLiteral("--no-ntsc"))) {
         args << QStringLiteral("--no-ntsc");
-    }
-    // tbc-process-vbi turns these off by itself for tape sources, so ask for them explicitly
-    if (opts.vbiCore && toolSupportsOption(toolPath, QStringLiteral("--vbi-core"))) {
-        args << QStringLiteral("--vbi-core");
-    }
-    if (opts.ntsc && toolSupportsOption(toolPath, QStringLiteral("--ntsc"))) {
-        args << QStringLiteral("--ntsc");
     }
     if (!opts.vitc && toolSupportsOption(toolPath, QStringLiteral("--no-vitc"))) {
         args << QStringLiteral("--no-vitc");

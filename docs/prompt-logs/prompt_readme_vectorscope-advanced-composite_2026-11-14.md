@@ -362,3 +362,8 @@ all changed/new files above, per repo convention.
 - Advanced captions (Line view, Field view, Measurements) plain; Trace group box removed (Draw trace lines, Line averaging, Gain row sit in the panel); panel now fits without scrolling at 720 px.
 - Blend colors shown on the Advanced tab. Point plot counts hits/transits per field; Blend tints field 1 yellow, field 2 cyan, added; a single selected field takes its colour; otherwise decode-orc green; Multi-colour still overrides. Anchor from both fields together.
 - ctest 38/38.
+
+## Phase 26 - LaserDisc VBI modes back on by default
+- User: "re-enable the ld vbi modes by stock".
+- Removed the tape-source defaulting (Phase 11): tbc-process-vbi no longer turns VBI core / NTSC-specific off for tapes; --vbi-core / --ntsc force flags removed; tbc-analyse Process VBI dialog and the tbc-process-vbi GUI no longer untick them or show the tape note. --no-vbi-core / --no-ntsc unchanged. isTapeSource() kept for the teletext tape profile; resolveDefaultMetadataFilename file-local again.
+- Verified on the MESECAM VHS sample: all decoders run, no tape message. ctest 38/38, CI contract checks passed.
