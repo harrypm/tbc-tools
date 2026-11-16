@@ -356,3 +356,9 @@ all changed/new files above, per repo convention.
 - User: panel layout was already settled (reverted 4f0ba50); "remove added text line from top"; graticule present but "off slightly"; "add a trace control box".
 - Geometry now decode-orc's: full scale (+/-32768) at a 496 px radius (1024 canvas, 16 px padding) for samples, colour targets (U x radius, NTSC x0.925), burst boxes (fraction x radius), circle and axes. Checked against the user's decode-orc screenshot: R box 0.476 vs 0.48 of radius, burst 0.215 vs 0.217.
 - Title line removed. Trace group box (Draw trace lines, Line averaging, Gain + value) added; rest of the panel unchanged. ctest 38/38.
+
+## Phase 25 - Plain captions, unboxed trace controls, Blend colours on Advanced
+- User: "Text labels should be de-bolded, and debox the trace line controls to save some space"; "add blend colours to the advanced panel too".
+- Advanced captions (Line view, Field view, Measurements) plain; Trace group box removed (Draw trace lines, Line averaging, Gain row sit in the panel); panel now fits without scrolling at 720 px.
+- Blend colors shown on the Advanced tab. Point plot counts hits/transits per field; Blend tints field 1 yellow, field 2 cyan, added; a single selected field takes its colour; otherwise decode-orc green; Multi-colour still overrides. Anchor from both fields together.
+- ctest 38/38.

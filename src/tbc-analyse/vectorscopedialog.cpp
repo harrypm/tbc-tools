@@ -978,11 +978,7 @@ void VectorscopeDialog::setupAdvancedScopeTab()
         if (spaced) {
             advancedControls->addSpacing(6);
         }
-        auto *caption = new QLabel(text, advancedSidePanel);
-        QFont captionFont = caption->font();
-        captionFont.setBold(true);
-        caption->setFont(captionFont);
-        advancedControls->addWidget(caption);
+        advancedControls->addWidget(new QLabel(text, advancedSidePanel));
     };
 
     // Line view: which part of each line the composite acquisition samples.
@@ -1030,36 +1026,34 @@ void VectorscopeDialog::setupAdvancedScopeTab()
     // Composite trace display: draw the beam path between consecutive
     // samples (on by default, as a CRT scope shows it).  No gain control - the dwell-brightness law runs at a
     // fixed intensity (see getCompositeTraceImage()).
-    // Trace controls in their own framed box: the beam path between
+    // Trace controls, unframed to save space: the beam path between
     // consecutive samples (on by default, as a CRT scope shows it),
     // same-phase line averaging and the gain.
     advancedControls->addSpacing(6);
-    QGroupBox *traceGroup = new QGroupBox(tr("Trace"), advancedSidePanel);
-    QVBoxLayout *traceLayout = new QVBoxLayout(traceGroup);
-    traceLinesCheckBox = new QCheckBox(tr("Draw trace lines"), traceGroup);
+    traceLinesCheckBox = new QCheckBox(tr("Draw trace lines"), advancedSidePanel);
     traceLinesCheckBox->setChecked(true);
     connect(traceLinesCheckBox, &QCheckBox::clicked,
             this, &VectorscopeDialog::traceLinesCheckBoxClicked);
-    traceLayout->addWidget(traceLinesCheckBox);
+    advancedControls->addWidget(traceLinesCheckBox);
 
     // Vertical chroma averaging across same-phase lines, as the decoded
     // scope's 2D decoder does: clean vectors on noisy sources.  Display
     // only - the measurements stay on the raw lines.
-    lineAveragingCheckBox = new QCheckBox(tr("Line averaging"), traceGroup);
+    lineAveragingCheckBox = new QCheckBox(tr("Line averaging"), advancedSidePanel);
     lineAveragingCheckBox->setChecked(true);
     lineAveragingCheckBox->setToolTip(
         tr("Average each line with its same-phase neighbours, like a 2D decoder (display only)"));
     connect(lineAveragingCheckBox, &QCheckBox::clicked, this, &VectorscopeDialog::scopeChanged);
-    traceLayout->addWidget(lineAveragingCheckBox);
+    advancedControls->addWidget(lineAveragingCheckBox);
 
     // Gain (render-only), 1-10, default 3 as in decode-orc, value beside it
     QHBoxLayout *gainLayout = new QHBoxLayout();
-    gainLayout->addWidget(new QLabel(tr("Gain"), traceGroup));
-    traceIntensitySlider = new QSlider(Qt::Horizontal, traceGroup);
+    gainLayout->addWidget(new QLabel(tr("Gain"), advancedSidePanel));
+    traceIntensitySlider = new QSlider(Qt::Horizontal, advancedSidePanel);
     traceIntensitySlider->setRange(1, 10);
     traceIntensitySlider->setValue(3);
     traceIntensitySlider->setToolTip(tr("Trace brightness for point and density plots"));
-    QLabel *gainValueLabel = new QLabel(QString::number(traceIntensitySlider->value()), traceGroup);
+    QLabel *gainValueLabel = new QLabel(QString::number(traceIntensitySlider->value()), advancedSidePanel);
     gainValueLabel->setMinimumWidth(gainValueLabel->fontMetrics().horizontalAdvance(QStringLiteral("10")));
     connect(traceIntensitySlider, &QSlider::valueChanged, gainValueLabel,
             [gainValueLabel](int value) { gainValueLabel->setText(QString::number(value)); });
@@ -1067,8 +1061,7 @@ void VectorscopeDialog::setupAdvancedScopeTab()
             this, &VectorscopeDialog::traceLinesCheckBoxClicked);
     gainLayout->addWidget(traceIntensitySlider, 1);
     gainLayout->addWidget(gainValueLabel);
-    traceLayout->addLayout(gainLayout);
-    advancedControls->addWidget(traceGroup);
+    advancedControls->addLayout(gainLayout);
 
     // Measurement readout (composite acquisition only), one reading per line.
     addCaption(tr("Measurements"), true);
@@ -1136,7 +1129,7 @@ void VectorscopeDialog::setupAdvancedScopeTab()
             areaModeGroupBox->setVisible(!isAdvanced);
         }
         if (ui->blendColorCheckBox) {
-            ui->blendColorCheckBox->setVisible(!isAdvanced);
+            ui->blendColorCheckBox->setVisible(true);
         }
         if (basicIntensityPanel) {
             basicIntensityPanel->setVisible(!isAdvanced);
@@ -1284,6 +1277,7 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
     constexpr qint32 HALF_SIZE = SIZE / 2;
     const bool densityMode = isAdvancedRenderModeSelected();
     const bool multiColour = ui->multiColourCheckBox->isChecked();
+    const bool blendColors = ui->blendColorCheckBox->isChecked();
     const bool defocus = ui->defocusCheckBox->isChecked();
     const bool drawTrace = traceLinesCheckBox && traceLinesCheckBox->isChecked();
     // Gain from the panel slider (1..10, default 3 as in decode-orc).  Point
@@ -1324,16 +1318,18 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
     // near 0.04 x gain.  The trace is added over the graticule.
     if (!densityMode) {
         const size_t bufSize = static_cast<size_t>(SIZE) * SIZE;
-        std::vector<uint32_t> hitCount(bufSize, 0);
-        std::vector<uint32_t> transitCount(drawTrace ? bufSize : 0, 0);
-        const auto accumulateLine = [&](int x0, int y0, int x1, int y1) {
+        // Counted per field so Blend colours can tint field 1 and field 2
+        std::vector<uint32_t> hitCount[2] = {std::vector<uint32_t>(bufSize, 0), std::vector<uint32_t>(bufSize, 0)};
+        std::vector<uint32_t> transitCount[2] = {std::vector<uint32_t>(drawTrace ? bufSize : 0, 0),
+                                                 std::vector<uint32_t>(drawTrace ? bufSize : 0, 0)};
+        const auto accumulateLine = [&](std::vector<uint32_t> &counts, int x0, int y0, int x1, int y1) {
             const int dx = std::abs(x1 - x0);
             const int sx = (x0 < x1) ? 1 : -1;
             const int dy = -std::abs(y1 - y0);
             const int sy = (y0 < y1) ? 1 : -1;
             int err = dx + dy;
             for (;;) {
-                if (x0 >= 0 && x0 < SIZE && y0 >= 0 && y0 < SIZE) transitCount[static_cast<size_t>(y0) * SIZE + x0]++;
+                if (x0 >= 0 && x0 < SIZE && y0 >= 0 && y0 < SIZE) counts[static_cast<size_t>(y0) * SIZE + x0]++;
                 if (x0 == x1 && y0 == y1) break;
                 const int e2 = 2 * err;
                 if (e2 >= dy) { err += dy; x0 += sx; }
@@ -1363,9 +1359,10 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
             if (x < 0.0 || x >= SIZE || y < 0.0 || y >= SIZE) continue;
             const int px = static_cast<int>(x);
             const int py = static_cast<int>(y);
-            hitCount[static_cast<size_t>(py) * SIZE + px]++;
+            const int field = sample.field_id ? 1 : 0;
+            hitCount[field][static_cast<size_t>(py) * SIZE + px]++;
             if (drawTrace && havePoint && sample.field_id == prevField && sample.line_number == prevLine) {
-                accumulateLine(prevX, prevY, px, py);
+                accumulateLine(transitCount[field], prevX, prevY, px, py);
             }
             havePoint = true;
             prevX = px; prevY = py; prevField = sample.field_id; prevLine = sample.line_number;
@@ -1408,9 +1405,14 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
                 }
             }
         };
-        std::vector<float> dwell, transitDwell;
-        spread(hitCount, dwell);
-        spread(transitCount, transitDwell);
+        std::vector<float> fieldDwell[2], fieldTransitDwell[2];
+        for (int field = 0; field < 2; ++field) {
+            spread(hitCount[field], fieldDwell[field]);
+            spread(transitCount[field], fieldTransitDwell[field]);
+        }
+        // The brightness anchor is taken from both fields together
+        std::vector<float> dwell(fieldDwell[0]);
+        for (size_t index = 0; index < bufSize; ++index) dwell[index] += fieldDwell[1][index];
 
         const double gain = static_cast<double>(traceIntensity);
         const float stride = static_cast<float>(std::max<uint32_t>(compositeData.sample_stride, 1u));
@@ -1458,10 +1460,28 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
             QRgb *scanLine = reinterpret_cast<QRgb *>(scopeImage.scanLine(py));
             for (int px = 0; px < SIZE; ++px) {
                 const size_t index = static_cast<size_t>(py) * SIZE + px;
-                const float level = std::min(1.0f, dwell[index] * dwellScale
-                                                       + (transitDwell.empty() ? 0.0f : transitDwell[index] * transitScale));
+                // Field colours as on the Basic scope: Blend colours tints field 1
+                // yellow and field 2 cyan and adds them; a single selected field
+                // takes its colour; otherwise decode-orc's green
+                const bool blendFields = blendColors && !firstFieldOnly && !secondFieldOnly;
+                double r = 0.0, g = 0.0, b = 0.0;
+                float level = 0.0f;
+                for (int field = 0; field < 2; ++field) {
+                    const float fieldLevel = fieldDwell[field][index] * dwellScale
+                        + (fieldTransitDwell[field].empty() ? 0.0f : fieldTransitDwell[field][index] * transitScale);
+                    if (fieldLevel <= 0.0f) continue;
+                    level += fieldLevel;
+                    const bool yellow = blendFields ? (field == 0) : firstFieldOnly;
+                    const bool cyan = blendFields ? (field == 1) : secondFieldOnly;
+                    r += (yellow ? 1.0 : 0.0) * fieldLevel;
+                    g += fieldLevel;
+                    b += (cyan ? 1.0 : 0.0) * fieldLevel;
+                }
                 if (level <= 0.0f) continue;
-                double r = 0.0, g = 1.0, b = 0.0;  // decode-orc's plain trace is green
+                if (level > 1.0f) {
+                    r /= level; g /= level; b /= level;
+                    level = 1.0f;
+                }
                 if (multiColour) {
                     // BT.601 inverse at Y = 0.5, normalised to the brightest component
                     const double un = ((px - HALF_SIZE) / compositeToPixels) / 32768.0;
@@ -1471,11 +1491,12 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
                     const double gg = std::clamp((0.5 - 0.299 * (0.5 + vn / 0.877283) - 0.114 * (0.5 + un / 0.492111)) / 0.587, 0.0, 1.0);
                     const double maxC = std::max({rr, gg, bb});
                     if (maxC > 0.001) { r = rr / maxC; g = gg / maxC; b = bb / maxC; } else { r = g = b = 1.0; }
+                    r *= level; g *= level; b *= level;
                 }
                 const QRgb existing = scanLine[px];
-                scanLine[px] = qRgb(std::min(255, qRed(existing) + static_cast<int>(r * level * 255.0f)),
-                                    std::min(255, qGreen(existing) + static_cast<int>(g * level * 255.0f)),
-                                    std::min(255, qBlue(existing) + static_cast<int>(b * level * 255.0f)));
+                scanLine[px] = qRgb(std::min(255, qRed(existing) + static_cast<int>(r * 255.0)),
+                                    std::min(255, qGreen(existing) + static_cast<int>(g * 255.0)),
+                                    std::min(255, qBlue(existing) + static_cast<int>(b * 255.0)));
             }
         }
         QPainter scopePainter(&scopeImage);
