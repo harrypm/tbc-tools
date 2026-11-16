@@ -2528,6 +2528,13 @@ void ExportDialog::updateFromSource()
             sourceChanged = true;
             currentInputFile = inputFile;
             ui->inputLineEdit->setText(inputFile);
+            // Tape captures default to heavy dropout correction, LaserDisc to basic
+            if (ui->dropoutModeComboBox) {
+                const QString defaultMode = tbcSource->getVideoParameters().isTapeSource()
+                                                ? QStringLiteral("heavy") : QStringLiteral("basic");
+                const int modeIndex = ui->dropoutModeComboBox->findData(defaultMode);
+                if (modeIndex >= 0) ui->dropoutModeComboBox->setCurrentIndex(modeIndex);
+            }
             if (outputAutoSet || ui->outputLineEdit->text().trimmed().isEmpty()) {
                 ui->outputLineEdit->setText(defaultOutputBaseName(inputFile));
                 outputAutoSet = true;
@@ -5158,6 +5165,10 @@ QStringList ExportDialog::buildArguments(QString *errorMessage, const QString &i
         if (dropoutMode == QStringLiteral("heavy")
             && executableSupportsOption(exportPath, QStringLiteral("--overcorrect"))) {
             args << QStringLiteral("--overcorrect");
+        } else if (dropoutMode == QStringLiteral("basic")
+                   && executableSupportsOption(exportPath, QStringLiteral("--no-overcorrect"))) {
+            // tbc-video-export defaults tape sources to heavy, so ask for basic
+            args << QStringLiteral("--no-overcorrect");
         }
         if (supportsDropoutInterfieldCorrection) {
             const QString correctionValue = dropoutInterfieldCorrectionValue(tbcSource, correctionMode);

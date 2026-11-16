@@ -27,6 +27,15 @@ class TestTBCJson:
         tbc_json = TBCJsonHelper(Path("tests/files/pal_svideo.tbc.json"))
         assert str(tbc_json.file_name) == "tests/files/pal_svideo.tbc.json"
 
+    def test_is_tape_source(self) -> None:  # noqa: D102
+        # vhs-decode records the tape format; ld-decode leaves it empty
+        assert TBCJsonHelper(None, '{"videoParameters":{"tapeFormat":"VHS"}}').is_tape_source
+        assert TBCJsonHelper(None, '{"videoParameters":{"tapeFormat":"U-matic"}}').is_tape_source
+        assert not TBCJsonHelper(None, '{"videoParameters":{}}').is_tape_source
+        assert not TBCJsonHelper(None, '{"videoParameters":{"tapeFormat":""}}').is_tape_source
+        assert not TBCJsonHelper(None, '{"videoParameters":{"tapeFormat":"LaserDisc"}}').is_tape_source
+        assert TBCJsonHelper(Path("tests/files/pal_svideo_5.tbc.json")).is_tape_source
+
     def test_video_system(self) -> None:  # noqa: D102
         json_data = '{"videoParameters":{"system":"PAL"}}'
         tbc_json = TBCJsonHelper(None, json_data)

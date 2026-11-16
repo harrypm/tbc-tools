@@ -96,6 +96,8 @@ tbc-analyse capture.tbc
 - The Export tab includes a `Dropout` selector with `Basic`, `Heavy`, and `Disabled`.
   - `Basic` uses normal dropout correction.
   - `Heavy` requests stronger correction mode (`--overcorrect`) when supported by the detected export toolchain.
+  - Tape sources (metadata `tapeFormat` set) default to `Heavy`; LaserDisc sources default to `Basic`.
+    `tbc-video-export` applies the same default on its own (`--overcorrect` / `--no-overcorrect` override it).
   - `Disabled` exports with dropout correction disabled.
 - The Export tab also includes a `Field` selector with `Intra` and `Innerfield` (default is `Intra`).
   - If an explicit selected mode is not supported by the detected `tbc-video-export`/toolchain version, export falls back to tool defaults and logs a notice in the Export log.

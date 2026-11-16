@@ -38,6 +38,7 @@ class WrapperLDDropoutCorrect(Wrapper):
                 self._get_thread_opts(),
                 self._state.file_helper.tbcs[self._config.tbc_type],
                 None if self.dropout_interfield_correction else "-i",
+                "--overcorrect" if self.overcorrect else None,
                 "--input-json",
                 self._state.file_helper.tbc_json.file_name,
                 "--output-json",
@@ -61,6 +62,13 @@ class WrapperLDDropoutCorrect(Wrapper):
             return FlatList(("-t", thread_count))
 
         return None
+
+    @cached_property
+    def overcorrect(self) -> bool:
+        """Heavy dropout correction: as requested, else on for tape sources."""
+        if self._state.opts.overcorrect is not None:
+            return self._state.opts.overcorrect
+        return self._state.file_helper.tbc_json.is_tape_source
 
     @cached_property
     def process_name(self) -> ProcessName:  # noqa: D102

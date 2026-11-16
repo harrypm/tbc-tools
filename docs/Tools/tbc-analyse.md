@@ -220,6 +220,7 @@ The Export tab includes two selectors for dropout-correction behavior:
 * `Dropout`: `Basic`, `Heavy`, or `Disabled`
   * `Basic` uses normal dropout correction.
   * `Heavy` requests stronger correction (`--overcorrect`) when supported by the detected toolchain.
+  * Tape sources (metadata `tapeFormat` set) default to `Heavy`, LaserDisc sources to `Basic`. `tbc-video-export` applies the same default itself; `--overcorrect` / `--no-overcorrect` override it.
   * `Disabled` uses `--no-dropout-correct`.
 * `Field`: `Intra` or `Innerfield` (`Intra` is the default)
 

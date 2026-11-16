@@ -71,6 +71,16 @@ class TBCJsonHelper:
             return None
 
     @cached_property
+    def is_tape_source(self) -> bool:
+        """Return whether the capture is from tape.
+
+        vhs-decode records the tape format (VHS, U-matic, ...); ld-decode leaves
+        it empty for LaserDisc.
+        """
+        tape_format = (self._get_video_parameter("tapeFormat") or "").lower()
+        return tape_format not in ("", "ld", "laserdisc", "laser disc")
+
+    @cached_property
     def git_branch(self) -> str | None:
         """Return decode git branch from videoParameters when available."""
         return self._get_video_parameter("gitBranch")

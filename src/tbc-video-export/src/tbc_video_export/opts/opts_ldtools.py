@@ -353,6 +353,18 @@ def add_ldtool_opts(parent: argparse.ArgumentParser) -> None:
     )
 
     dropout_correct_opts.add_argument(
+        "--overcorrect",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Heavy dropout correction (tbc-dropout-correct --overcorrect).\n"
+            "  - Default: on for tape sources (metadata tapeFormat set), off\n"
+            "    for LaserDisc. --no-overcorrect forces basic correction."
+            "\n\n"
+        ),
+    )
+
+    dropout_correct_opts.add_argument(
         "--dropout-correct-threads",
         type=int,
         metavar="int",

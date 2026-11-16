@@ -367,3 +367,9 @@ all changed/new files above, per repo convention.
 - User: "re-enable the ld vbi modes by stock".
 - Removed the tape-source defaulting (Phase 11): tbc-process-vbi no longer turns VBI core / NTSC-specific off for tapes; --vbi-core / --ntsc force flags removed; tbc-analyse Process VBI dialog and the tbc-process-vbi GUI no longer untick them or show the tape note. --no-vbi-core / --no-ntsc unchanged. isTapeSource() kept for the teletext tape profile; resolveDefaultMetadataFilename file-local again.
 - Verified on the MESECAM VHS sample: all decoders run, no tape message. ctest 38/38, CI contract checks passed.
+
+## Phase 27 - Heavy dropout correction by default for tape sources
+- User: "set dropout to heavy for tape sources for tbc-video-export dropout correct and inside the GUI".
+- tbc-video-export had no --overcorrect, so the GUI's Heavy fell back to basic. Added --overcorrect / --no-overcorrect (argparse BooleanOptionalAction, default auto): auto = on when metadata tapeFormat is set (not LD/LaserDisc), passed to tbc-dropout-correct for luma and chroma. TBCJsonHelper.is_tape_source + test (11/11 in test_tbc_json.py).
+- Export tab: Dropout mode defaults to Heavy for tape sources and Basic for LaserDisc on each new source; Basic passes --no-overcorrect so tapes can still export basic.
+- Verified: dry-run matrix (VHS MESECAM auto/--overcorrect -> 2 dropout-correct runs with --overcorrect, --no-overcorrect -> 0; Kagemusha LD auto -> 0, --overcorrect -> 1); GUI default heavy for both VHS tapes, basic for Kagemusha. ctest 38/38; tbc-video-export pytest 140 passed both before and after (104 pre-existing errors: pytest-mock missing; test_output.py needs pymediainfo).

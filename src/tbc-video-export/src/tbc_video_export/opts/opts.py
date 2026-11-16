@@ -81,6 +81,7 @@ class Opts(argparse.Namespace):
 
     # dropout-correct
     no_dropout_correct: bool
+    overcorrect: bool | None
     dropout_correct_threads: int | None
     dropout_interfield_correction: TBCType
 
