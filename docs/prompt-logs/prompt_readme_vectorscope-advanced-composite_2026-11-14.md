@@ -351,3 +351,7 @@ all changed/new files above, per repo convention.
 - The mirrored (-V, lower-case) target set is now drawn in the Advanced view for every system, so NTSC shows the same 12 boxes as PAL (decode-orc draws it for PAL/PAL-M only; on NTSC it is a reference).
 - Bug fix: Advanced targets were scaled from the metadata IRE range while samples use the system's blanking-to-white range (decode-orc uses the latter for both). NTSC metadata range includes setup: 626 vs 560 -> targets ~12% too far out. PAL 593 vs 588. Composite targets now use cvbs_white - cvbs_blanking.
 - Verified with the app's own update path on Tape_03 (NTSC Y/C): 12 colour boxes + Burst, burst locked 18.22 IRE; Tape_06 (PAL Y/C) locks (653,760 samples, valid). ctest 38/38.
+
+## Phase 23 - Framed group boxes back on the Advanced panel
+- User screenshot 2026-11-14 19:45 (earlier port): Advanced controls in framed group boxes; these had been replaced by flat bold captions during the panel clean-up. User picked "Group boxes, keep dropdowns".
+- Mode, Line view, Field view, Trace (Draw trace lines, Line averaging, Gain slider with value) and Measurements are QGroupBoxes again; dropdowns kept. ctest 38/38.
