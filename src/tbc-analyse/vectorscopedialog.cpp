@@ -67,6 +67,7 @@ constexpr double kPalBurstAmplitudeFraction = 150.0 / 700.0;
 constexpr double kNtscBurstAmplitudeFraction = 0.20;
 
 constexpr double kBurstBoxSizePixels = 30.0;
+constexpr double kBurstLabelOffsetPixels = 40.0;
 constexpr double kBurstCrosshairSizePixels = 16.0;
 
 QPointF pointFromStandardDegrees(double angleDegrees, double magnitude, qint32 halfSize)
@@ -252,8 +253,8 @@ void drawTargetBox(QPainter &painter, const QPointF &centerPoint, const QColor &
 // page always passes false and gets exactly the graticule it always had plus
 // the colour-burst boxes.
 void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 halfSize, qint32 radius,
-                                 const TbcMetaData::VideoParameters &videoParameters, bool graticule75,
-                                 bool compositeMode)
+                                 const TbcMetaData::VideoParameters &videoParameters,
+                                 const QVector<double> &barPercents, bool compositeMode)
 {
     scopePainter.save();
     scopePainter.setRenderHint(QPainter::Antialiasing, true);
@@ -281,7 +282,6 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
         constexpr std::array<const char *, 7> colorLabelsUpper = {"", "B", "G", "Cy", "R", "Mg", "Yl"};
         constexpr std::array<const char *, 7> colorLabelsLower = {"", "b", "g", "cy", "r", "mg", "yl"};
         constexpr qint32 scopeScale = 65536 / 1024;
-        const double percent = graticule75 ? 0.75 : 1.0;
         const double uvScale = static_cast<double>(ireRange) / static_cast<double>(scopeScale);
 
         // A composite (measurement) acquisition does not undo the PAL
@@ -300,6 +300,9 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
                                        ? 0.925
                                        : 1.0;
 
+        // "Both" draws the 75% and 100% sets; the labels go on the outer one
+        for (const double percent : barPercents) {
+        const bool labelTargets = (percent == barPercents.last());
         for (qint32 phasePass = 0; phasePass < 2; phasePass++) {
             const bool mirror = (phasePass == 1);
             if (mirror && !mirrorTargets) continue;
@@ -323,6 +326,7 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
 
                 drawColorZone(scopePainter, halfSize, radius, targetAngleDegrees, targetMagnitude, targetColor);
                 drawTargetBox(scopePainter, targetPoint, targetColor);
+                if (!labelTargets) continue;
 
                 const QPointF labelPoint = pointFromStandardDegrees(targetAngleDegrees,
                                                                     targetMagnitude + kColorLabelOffsetPixels,
@@ -346,6 +350,7 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
                                       labelText);
             }
         }
+        }
 
         // Colour-burst target boxes: PAL carries two, swung +/-45 degrees
         // about the -U axis with the V-switch (ITU-R BT.470-6 Table 2 item
@@ -366,17 +371,25 @@ void drawDecodeOrcStyleGraticule(QPainter &scopePainter, qint32 size, qint32 hal
                                     - tbc::cvbs::cvbs_blanking(videoParameters.system));
             const double burstMagnitude = burstFraction * levelRangeU10;
             const QColor burstBoxColor(220, 220, 220);
-            if (isPal) {
-                drawTargetBox(scopePainter,
-                              pointFromStandardDegrees(kPalBurstVPositiveDegrees, burstMagnitude, halfSize),
+            // PAL labels its two V-switch phases Burst (+V) and burst (-V)
+            struct BurstTarget { double degrees; const char *label; };
+            const QVector<BurstTarget> burstTargets = isPal
+                ? QVector<BurstTarget>{{kPalBurstVPositiveDegrees, "Burst"}, {kPalBurstVNegativeDegrees, "burst"}}
+                : QVector<BurstTarget>{{kNtscBurstDegrees, "Burst"}};
+            QFont burstFont = scopePainter.font();
+            burstFont.setPointSize(12);
+            burstFont.setBold(true);
+            const QFontMetrics burstMetrics(burstFont);
+            for (const BurstTarget &target : burstTargets) {
+                drawTargetBox(scopePainter, pointFromStandardDegrees(target.degrees, burstMagnitude, halfSize),
                               burstBoxColor, kBurstBoxSizePixels, kBurstCrosshairSizePixels);
-                drawTargetBox(scopePainter,
-                              pointFromStandardDegrees(kPalBurstVNegativeDegrees, burstMagnitude, halfSize),
-                              burstBoxColor, kBurstBoxSizePixels, kBurstCrosshairSizePixels);
-            } else {
-                drawTargetBox(scopePainter,
-                              pointFromStandardDegrees(kNtscBurstDegrees, burstMagnitude, halfSize),
-                              burstBoxColor, kBurstBoxSizePixels, kBurstCrosshairSizePixels);
+                const QPointF labelPoint = pointFromStandardDegrees(target.degrees,
+                                                                    burstMagnitude + kBurstLabelOffsetPixels, halfSize);
+                const QString text = QString::fromLatin1(target.label);
+                scopePainter.setFont(burstFont);
+                scopePainter.setPen(QPen(burstBoxColor, 1.0));
+                scopePainter.drawText(static_cast<qint32>(labelPoint.x()) - burstMetrics.horizontalAdvance(text) / 2,
+                                      static_cast<qint32>(labelPoint.y()) + burstMetrics.height() / 4, text);
             }
         }
     }
@@ -724,7 +737,7 @@ QImage VectorscopeDialog::getTraceImage(const ComponentFrame &componentFrame, co
                                     HALF_SIZE,
                                     HALF_SIZE - 1,
                                     videoParameters,
-                                    ui->graticule75RadioButton->isChecked(),
+                                    graticuleBarPercents(),
                                     false);
     }
 
@@ -787,6 +800,14 @@ void VectorscopeDialog::on_blendColorCheckBox_clicked()
 void VectorscopeDialog::on_multiColourCheckBox_clicked()
 {
     emit scopeChanged();
+}
+
+// The colour-bar target sets the graticule draws (75%, 100% or both)
+QVector<double> VectorscopeDialog::graticuleBarPercents() const
+{
+    if (ui->graticuleBothRadioButton->isChecked()) return {0.75, 1.0};
+    if (ui->graticule100RadioButton->isChecked()) return {1.0};
+    return {0.75};
 }
 
 void VectorscopeDialog::on_graticuleButtonGroup_buttonClicked(QAbstractButton *button)
@@ -1424,8 +1445,25 @@ QImage VectorscopeDialog::getCompositeTraceImage(const tbc::cvbs::VectorscopeDat
                                     HALF_SIZE,
                                     HALF_SIZE - 1,
                                     videoParameters,
-                                    ui->graticule75RadioButton->isChecked(),
+                                    graticuleBarPercents(),
                                     true);
+    }
+
+    // Like decode-orc, say so when there is no colour to show: every
+    // sample within the no-chroma threshold of the centre
+    constexpr double kNoChromaThreshold = 1000.0;
+    const bool hasChroma = std::any_of(compositeData.samples.begin(), compositeData.samples.end(),
+                                       [](const auto &sample) {
+        return std::abs(sample.u) > kNoChromaThreshold || std::abs(sample.v) > kNoChromaThreshold;
+    });
+    if (!hasChroma) {
+        QFont font = scopePainter.font();
+        font.setPointSize(16);
+        font.setBold(true);
+        scopePainter.setFont(font);
+        scopePainter.setPen(Qt::yellow);
+        scopePainter.drawText(QRect(0, HALF_SIZE - 40, SIZE, 80), Qt::AlignCenter | Qt::TextWordWrap,
+                              tr("No chroma present"));
     }
 
     scopePainter.end();

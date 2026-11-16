@@ -187,6 +187,16 @@
         </attribute>
        </widget>
       </item>
+      <item>
+       <widget class="QRadioButton" name="graticuleBothRadioButton">
+        <property name="text">
+         <string>Both</string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">graticuleButtonGroup</string>
+        </attribute>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

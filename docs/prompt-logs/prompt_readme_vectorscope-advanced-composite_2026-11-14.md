@@ -324,3 +324,9 @@ all changed/new files above, per repo convention.
 - Measured (colour on): PAL 25.00000 fps / 50 fields/s, NTSC 29.97003 / 59.94006; last frame 22-28 ms after exact due time (one render, non-accumulating); start-up skips 3-11 frames while decoders initialise.
 - ExportDialog::setSource stops/resets the monitor; changing any audio track file (or Monitor tick) while playing restarts at the current position with the new files. on_finishedLoading/loadTbcFile already stop playback.
 - Harness: swap audio mid-play -> new file used; load second TBC -> monitor reset, play restarts audio; end of clip stops audio; no leftover ffmpeg/ffplay.
+
+## Phase 19 - Advanced scope gaps vs decode-orc (2026-11-16)
+- User: "stuff is missing from the advanced scope view". Merge check: Advanced tab code on main intact (338061d). Compared decode-orc's vectorscope_dialog.cpp feature set with the port.
+- Added: Graticule "Both" (75% + 100% target sets and zones, labels on the outer set; drawDecodeOrcStyleGraticule takes the list of bar percentages, graticuleBarPercents()); "Burst"/"burst" labels beside the burst target boxes (PAL +V/-V, NTSC/PAL-M one), 40 px offset like decode-orc; "No chroma present" overlay on the Advanced plot when all samples are within 1000 of the centre (decode-orc's threshold).
+- Already equivalent: Colorize = Multi-colour, Gain = Intensity, "No burst lock" = "No burst reference recovered", line/field view options, start/end line.
+- Verified by render on kagemusha-leadout-cbar (Both, labels, no-chroma via scaled samples). ctest 38/38.

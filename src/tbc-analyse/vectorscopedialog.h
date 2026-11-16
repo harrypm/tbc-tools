@@ -98,6 +98,7 @@ private:
     Ui::VectorscopeDialog *ui;
 
     QImage getTraceImage(const ComponentFrame &componentFrame, const TbcMetaData::VideoParameters &videoParameters);
+    QVector<double> graticuleBarPercents() const;
     QImage getCompositeTraceImage(const tbc::cvbs::VectorscopeData &compositeData,
                                   const TbcMetaData::VideoParameters &videoParameters);
     void updateFieldSelectionControls(const TbcSource::ViewMode& viewMode, const bool isFirstField);
