@@ -172,6 +172,20 @@ def add_ldtool_opts(parent: argparse.ArgumentParser) -> None:
     )
 
     decoder_opts.add_argument(
+        "--active-video-start",
+        type=int,
+        metavar="int",
+        help="The first active sample of a line. (default: from the TBC json)\n\n",
+    )
+
+    decoder_opts.add_argument(
+        "--active-video-end",
+        type=int,
+        metavar="int",
+        help="The sample after the last active one. (default: from the TBC json)\n\n",
+    )
+
+    decoder_opts.add_argument(
         "--chroma-decoder",
         type=opt_types.TypeChromaDecoder(parent),
         choices=list(ChromaDecoder),

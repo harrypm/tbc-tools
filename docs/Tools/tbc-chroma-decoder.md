@@ -218,6 +218,11 @@ Options:
   --input-start-frame <frame>                 The piped input begins at this
                                               frame (output of
                                               tbc-dropout-correct --start)
+  --active-video-start <sample>               The first active sample of a
+                                              line (default: from the
+                                              metadata)
+  --active-video-end <sample>                 The sample after the last active
+                                              one (default: from the metadata)
   -r, --reverse                               Reverse the field order to
                                               second/first (default
                                               first/second)

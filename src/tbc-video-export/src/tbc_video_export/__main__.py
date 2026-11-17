@@ -43,6 +43,15 @@ async def _run(argv: list[str]) -> None:
 
         opt_validators.validate_opts(state, parser, opts)
 
+        # Segments set in tbc-analyse: export each with its framing, then join
+        if state.tbc_json.user_segments and not opts.ignore_segments:
+            from tbc_video_export.process.segments import run_segmented_export
+
+            logging.getLogger("console").info(f"{strings.application_header()}\n\n{state}\n")
+            if not await run_segmented_export(state, parser, config):
+                sys.exit(1)
+            return
+
         handler = ProcessHandler(state)
 
         if os.name == "nt":

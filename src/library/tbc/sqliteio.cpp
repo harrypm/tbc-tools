@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS capture (
     user_marker_selection INTEGER,
     user_marker_comment TEXT,
     user_markers_json TEXT,
+    user_segments_json TEXT,
 
     capture_notes TEXT
 );
@@ -255,6 +256,7 @@ bool SqliteReader::readCaptureMetadata(int &captureId, QString &system, QString 
                                      int &userEditInSelection, int &userEditOutSelection,
                                      int &userMarkerSelection, QString &userMarkerComment,
                                      QString &userMarkersJson,
+                                     QString &userSegmentsJson,
                                      QString &captureNotes)
 {
     // Check if blanking_16b_ire column exists (for backward compatibility)
@@ -273,6 +275,7 @@ bool SqliteReader::readCaptureMetadata(int &captureId, QString &system, QString 
     bool hasUserMarkerSelectionColumn = false;
     bool hasUserMarkerCommentColumn = false;
     bool hasUserMarkersJsonColumn = false;
+    bool hasUserSegmentsJsonColumn = false;
     bool hasFirstActiveFieldLineColumn = false;
     bool hasLastActiveFieldLineColumn = false;
     bool hasFirstActiveFrameLineColumn = false;
@@ -312,6 +315,8 @@ bool SqliteReader::readCaptureMetadata(int &captureId, QString &system, QString 
                 hasUserMarkerCommentColumn = true;
             } else if (columnName == "user_markers_json") {
                 hasUserMarkersJsonColumn = true;
+            } else if (columnName == "user_segments_json") {
+                hasUserSegmentsJsonColumn = true;
             } else if (columnName == "first_active_field_line") {
                 hasFirstActiveFieldLineColumn = true;
             } else if (columnName == "last_active_field_line") {
@@ -386,6 +391,9 @@ bool SqliteReader::readCaptureMetadata(int &captureId, QString &system, QString 
     }
     if (hasUserMarkersJsonColumn) {
         queryStr += ", user_markers_json";
+    }
+    if (hasUserSegmentsJsonColumn) {
+        queryStr += ", user_segments_json";
     }
     queryStr += ", capture_notes FROM capture LIMIT 1";
     
@@ -526,6 +534,11 @@ bool SqliteReader::readCaptureMetadata(int &captureId, QString &system, QString 
     } else {
         userMarkersJson.clear();
     }
+    if (hasUserSegmentsJsonColumn) {
+        userSegmentsJson = query.value("user_segments_json").toString();
+    } else {
+        userSegmentsJson.clear();
+    }
     
     captureNotes = query.value("capture_notes").toString();
 
@@ -567,7 +580,8 @@ static bool ensureCaptureColumns(QSqlDatabase &db)
         {"user_edit_out_selection", "INTEGER"},
         {"user_marker_selection", "INTEGER"},
         {"user_marker_comment", "TEXT"},
-        {"user_markers_json", "TEXT"}
+        {"user_markers_json", "TEXT"},
+        {"user_segments_json", "TEXT"}
     };
 
     bool altered = false;
@@ -918,6 +932,7 @@ int SqliteWriter::writeCaptureMetadata(const QString &system, const QString &dec
                                      int userEditInSelection, int userEditOutSelection,
                                      int userMarkerSelection, const QString &userMarkerComment,
                                      const QString &userMarkersJson,
+                                     const QString &userSegmentsJson,
                                      const QString &captureNotes)
 {
     QSqlQuery query(db);
@@ -930,8 +945,8 @@ int SqliteWriter::writeCaptureMetadata(const QString &system, const QString &dec
                  "chroma_decoder, chroma_gain, chroma_phase, luma_nr, "
                  "ntsc_adaptive, ntsc_adapt_threshold, ntsc_chroma_weight, ntsc_phase_compensation, "
                  "pal_transform_threshold, user_edit_in_selection, user_edit_out_selection, "
-                 "user_marker_selection, user_marker_comment, user_markers_json, capture_notes) "
-                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                 "user_marker_selection, user_marker_comment, user_markers_json, user_segments_json, capture_notes) "
+                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     query.addBindValue(system);
     query.addBindValue(decoder);
@@ -969,6 +984,7 @@ int SqliteWriter::writeCaptureMetadata(const QString &system, const QString &dec
     query.addBindValue(userMarkerSelection);
     query.addBindValue(userMarkerComment.isEmpty() ? QVariant() : userMarkerComment);
     query.addBindValue(userMarkersJson.isEmpty() ? QVariant() : userMarkersJson);
+    query.addBindValue(userSegmentsJson.isEmpty() ? QVariant() : userSegmentsJson);
     query.addBindValue(captureNotes.isEmpty() ? QVariant() : captureNotes);
 
     if (!query.exec()) {
@@ -994,6 +1010,7 @@ bool SqliteWriter::updateCaptureMetadata(int captureId, const QString &system, c
                                        int userEditInSelection, int userEditOutSelection,
                                        int userMarkerSelection, const QString &userMarkerComment,
                                        const QString &userMarkersJson,
+                                       const QString &userSegmentsJson,
                                        const QString &captureNotes)
 {
     if (!ensureCaptureColumns(db)) {
@@ -1012,7 +1029,7 @@ bool SqliteWriter::updateCaptureMetadata(int captureId, const QString &system, c
                  "chroma_decoder=?, chroma_gain=?, chroma_phase=?, luma_nr=?, "
                  "ntsc_adaptive=?, ntsc_adapt_threshold=?, ntsc_chroma_weight=?, ntsc_phase_compensation=?, "
                  "pal_transform_threshold=?, user_edit_in_selection=?, user_edit_out_selection=?, "
-                 "user_marker_selection=?, user_marker_comment=?, user_markers_json=?, capture_notes=? "
+                 "user_marker_selection=?, user_marker_comment=?, user_markers_json=?, user_segments_json=?, capture_notes=? "
                  "WHERE capture_id=?");
 
     query.addBindValue(system);
@@ -1051,6 +1068,7 @@ bool SqliteWriter::updateCaptureMetadata(int captureId, const QString &system, c
     query.addBindValue(userMarkerSelection);
     query.addBindValue(userMarkerComment.isEmpty() ? QVariant() : userMarkerComment);
     query.addBindValue(userMarkersJson.isEmpty() ? QVariant() : userMarkersJson);
+    query.addBindValue(userSegmentsJson.isEmpty() ? QVariant() : userSegmentsJson);
     query.addBindValue(captureNotes.isEmpty() ? QVariant() : captureNotes);
     query.addBindValue(captureId);
 

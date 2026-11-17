@@ -63,6 +63,7 @@ public:
                            int &userEditInSelection, int &userEditOutSelection,
                            int &userMarkerSelection, QString &userMarkerComment,
                            QString &userMarkersJson,
+                           QString &userSegmentsJson,
                            QString &captureNotes);
 
     // Read PCM audio parameters
@@ -131,6 +132,7 @@ public:
                            int userEditInSelection, int userEditOutSelection,
                            int userMarkerSelection, const QString &userMarkerComment,
                            const QString &userMarkersJson,
+                           const QString &userSegmentsJson,
                            const QString &captureNotes);
 
     // Update existing capture metadata  
@@ -149,6 +151,7 @@ public:
                              int userEditInSelection, int userEditOutSelection,
                              int userMarkerSelection, const QString &userMarkerComment,
                              const QString &userMarkersJson,
+                           const QString &userSegmentsJson,
                              const QString &captureNotes);
 
     // Write PCM audio parameters

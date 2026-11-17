@@ -283,6 +283,16 @@ int main(int argc, char *argv[])
                                            QCoreApplication::translate("main", "number"));
     parser.addOption(lastFrameLineOption);
 
+    // Options to override the horizontal active area in our video parameters
+    QCommandLineOption activeVideoStartOption(QStringList() << "active-video-start",
+                                              QCoreApplication::translate("main", "The first active sample of a line (default: from the metadata)"),
+                                              QCoreApplication::translate("main", "sample"));
+    parser.addOption(activeVideoStartOption);
+    QCommandLineOption activeVideoEndOption(QStringList() << "active-video-end",
+                                            QCoreApplication::translate("main", "The sample after the last active one (default: from the metadata)"),
+                                            QCoreApplication::translate("main", "sample"));
+    parser.addOption(activeVideoEndOption);
+
     // -- NTSC decoder options --
 
     // Option to overlay the adaptive filter map
@@ -803,6 +813,18 @@ int main(int argc, char *argv[])
     }
     
     metaData.processLineParameters(lineParameters);
+    if (parser.isSet(activeVideoStartOption) || parser.isSet(activeVideoEndOption)) {
+        TbcMetaData::VideoParameters activeArea = metaData.getVideoParameters();
+        if (parser.isSet(activeVideoStartOption)) activeArea.activeVideoStart = parser.value(activeVideoStartOption).toInt();
+        if (parser.isSet(activeVideoEndOption)) activeArea.activeVideoEnd = parser.value(activeVideoEndOption).toInt();
+        if (activeArea.activeVideoStart < 0 || activeArea.activeVideoEnd > activeArea.fieldWidth
+            || activeArea.activeVideoEnd <= activeArea.activeVideoStart) {
+            qCritical() << "Active video area" << activeArea.activeVideoStart << "-" << activeArea.activeVideoEnd
+                        << "is outside the" << activeArea.fieldWidth << "sample line";
+            return -1;
+        }
+        metaData.setVideoParameters(activeArea);
+    }
     
     // Reverse field order if required
     if (parser.isSet(setReverseOption)) {

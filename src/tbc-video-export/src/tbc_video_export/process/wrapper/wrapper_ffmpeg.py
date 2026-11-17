@@ -301,6 +301,9 @@ class WrapperFFmpeg(Wrapper):
 
         # set video filters
         video_filters.append(f"setfield={self._get_field_order()}")
+        # export segment framing that crosses the picture edge (see segments.py)
+        if (segment_filter := getattr(self._state.opts, "segment_shift_filter", None)) is not None:
+            video_filters.append(segment_filter)
         video_filters += _vf
 
         # override profile colorlevels if set with opt

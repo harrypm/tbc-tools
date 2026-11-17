@@ -382,3 +382,10 @@ all changed/new files above, per repo convention.
 - GUI: Export tab kept the whole tbc-video-export output (progress redraws) in memory for the run; now keeps the last 512k chars per stream (main + parallel proxy).
 - Completion time: tbc-video-export footer "Remaining: h:mm:ss  Finishes: HH:MM" from ffmpeg frames vs total over a 2-minute window; Export tab status line "Export: X remaining, finishes at HH:MM".
 - ctest 38/38; pytest 141 passed (104 pre-existing pytest-mock errors); CI contract checks passed.
+
+## Phase 29 - Export segments, stage 1 (metadata + tbc-video-export)
+- User: "segment 1 start/end, segment 2 start/end ..." - an ordered list of segments exported and joined into one uniform file (gaps = cuts), each with its own framing adjustment; recorded in the final metadata.
+- Metadata: VideoParameters.userSegmentsJson ("UserSegmentsJson" in JSON, user_segments_json column in .db, added to existing .db files automatically). Format: [{"start", "end", "offsetX", "offsetY"}], offsets in samples / frame lines from the global framing. Round trip JSON -> .db -> JSON verified via tbc-dropout-correct metadata write.
+- tbc-chroma-decoder: --active-video-start/--active-video-end overrides.
+- tbc-video-export: reads UserSegmentsJson (--ignore-segments to skip); per segment copies opts (range, framing, temp output) and runs the pipeline; joins with ffmpeg concat stream copy, attaches the json once, tags tbc_segments. Offsets: inside the picture -> decoder window moved; past the edge -> global window + ffmpeg crop/pad shift (black fill). Vertical offsets must be even (odd swaps field order). Output size identical by construction.
+- Verified on Tape_03 (NTSC Y/C) 3 segments (1000-1299 0/0, 3000-3149 +8/+4, 6000-6099 -6/-2): one 760x488 file, 550 frames, tag + attachment, temp dir removed; each segment framemd5-identical to a standalone reference export with the equivalent explicit framing. ctest 38/38, pytest 143 passed, CI contracts passed.
