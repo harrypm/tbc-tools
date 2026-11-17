@@ -46,8 +46,6 @@ public:
     void setExportAdvancedOptions(const ExportAdvancedOptions &options);
     void setInPoint(int frameNumber);
     void setOutPoint(int frameNumber);
-    int inPoint() const;
-    int outPoint() const;
     bool hasAudioTracksConfigured() const;
     void loadAudioTracksForExport(const QStringList &trackFiles,
                                   const QStringList &trackNames = QStringList());

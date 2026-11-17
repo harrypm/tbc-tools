@@ -187,12 +187,12 @@ JSON metadata remains JSON throughout this workflow, including temporary and bac
 
 ## Edit tab (export segments)
 
-The main window has three tabs: **Viewer**, **Edit** and **Export**. The Edit tab holds an ordered list of export segments:
+The main window has three tabs: **Viewer**, **Edit** and **Export**. The Edit tab shows the same picture as the Viewer, with a segment timeline underneath:
 
-* Each row is a segment (Segment 1, Segment 2, ...) with a **Start** and **End** frame, an **X offset** (samples) and a **Y offset** (frame lines, in steps of 2).
-* **Add segment from in/out** adds a row from the Export tab's current in/out points. **Remove**, **Move up**, **Move down** and **Go to start** edit the list and jump the viewer.
-* When segments exist, the export renders each segment in order and joins them into one file; the frames between segments are cut. With no segments the export uses the in/out range as before.
-* The offsets move the global active area for that segment, so recordings framed differently line up. Inside the picture the moved area is decoded; past the picture edge the gap is filled black. Every segment has the same output size. Y offsets must be even: an odd line shift would swap the field order.
+* **Segment start** and **Segment end** mark a segment at the current frame. The timeline shows each segment as a numbered block across the whole source; the gaps between them are cut from the export. Clicking or dragging on the timeline moves the playhead.
+* With the playhead inside a segment, the picture shows that segment's active area, and dragging its left, right or top edge moves the area for that segment only (its X and Y offsets). The **Start**, **End**, **X offset** and **Y offset** fields fine-tune the segment under the playhead; **Remove** deletes it.
+* Y offsets are even: an odd line shift would swap the field order. Every segment exports at the same size; where a moved area goes past the picture edge, the gap is black.
+* When segments exist, the export renders them in timeline order and joins them into one file. With no segments the export uses the in/out range as before.
 * Segments are saved in the metadata (`UserSegmentsJson`) and recorded in the exported file (`tbc_segments` tag and the attached metadata JSON). `tbc-video-export --ignore-segments` exports the plain range instead.
 
 ## Export tab and unsaved metadata changes

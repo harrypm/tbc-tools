@@ -249,6 +249,7 @@ private:
     MetadataConversionDialog *metadataConversionDialog;
     MetadataStatusDialog *metadataStatusDialog;
     EditSegmentsWidget *editSegmentsWidget = nullptr;
+    int editSegmentAtCurrentFrame() const;
     ExportDialog *exportDialog;
     AudioAlignmentDialog *audioAlignmentDialog = nullptr;
     EfmHandlerDialog *efmHandlerDialog = nullptr;
