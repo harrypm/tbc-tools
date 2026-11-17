@@ -355,6 +355,8 @@ int main(int argc, char *argv[])
             qInfo() << "Please verify that the specified source video files exist with the correct file permissions";
             return 1;
         }
+        // A single source is read straight through: read it in shared-disk blocks
+        if (totalNumberOfInputFiles == 1) sourceVideos[i]->setChunkedReads(true);
 
         // Verify TBC and metadata input fields match
         if (sourceVideos[i]->getNumberOfAvailableFields() != metaData[i]->getNumberOfFields()) {

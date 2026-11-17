@@ -25,7 +25,16 @@
 #include "sourcevideo.h"
 
 #include <cstdio>
+#include <cstring>
+#include <QDir>
+#include <QLockFile>
+#include <QRegularExpression>
+#include <QStorageInfo>
 #include "tbc/logging.h"
+
+// Chunked reads: each block is this large, so a disk shared with another
+// reader spends its time reading rather than seeking between the files
+static constexpr qint64 kChunkBytes = 64LL * 1024 * 1024;
 
 // Class constructor
 SourceVideo::SourceVideo()
@@ -138,6 +147,53 @@ qint32 SourceVideo::getFieldLength()
 
 // Method to retrieve a range of field lines from a single video field.
 // If startFieldLine and endFieldLine are both -1, read the whole field.
+void SourceVideo::setChunkedReads(bool enabled)
+{
+    // Only for files: a pipe is already read in order by one process
+    chunkedReads = enabled && isSourceVideoOpen && availableFields != -1;
+    chunkBuffer.clear();
+    chunkStart = -1;
+    if (!chunkedReads) return;
+
+    // One lock per disk, so readers on different disks don't wait for each other
+    const QStorageInfo storage(inputFile.fileName());
+    QString device = QString::fromLocal8Bit(storage.isValid() ? storage.device() : QByteArray("tbc-tools"));
+    device.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_.-]")), QStringLiteral("_"));
+    chunkLockPath = QDir(QDir::tempPath()).filePath(QStringLiteral("tbc-tools-read-%1.lock").arg(device));
+}
+
+// Read the block starting at |position|. On a shared disk (a separate luma and
+// chroma TBC read by two processes at once) interleaved small reads make the
+// heads seek between the files - on NTFS via ntfs-3g a pair of readers fell
+// from 245 MB/s to ~50 MB/s - so blocks are read whole, one process at a time.
+bool SourceVideo::readChunk(qint64 position)
+{
+    const qint64 length = qMin(kChunkBytes, inputFile.size() - position);
+    if (length <= 0) return false;
+    chunkBuffer.resize(length);
+
+    QLockFile lock(chunkLockPath);
+    const bool locked = lock.lock();
+    qint64 total = 0;
+    if (inputFile.seek(position)) {
+        while (total < length) {
+            const qint64 received = inputFile.read(chunkBuffer.data() + total, length - total);
+            if (received <= 0) break;
+            total += received;
+        }
+    }
+    if (locked) lock.unlock();
+
+    inputFilePos = position + total;
+    if (total != length) {
+        chunkBuffer.clear();
+        chunkStart = -1;
+        return false;
+    }
+    chunkStart = position;
+    return true;
+}
+
 void SourceVideo::setStreamStartField(qint32 fieldNumber)
 {
     // The stream's first byte is that field's first byte, so reads from it
@@ -190,6 +246,22 @@ SourceVideo::Data SourceVideo::getVideoField(qint32 fieldNumber, qint32 startFie
 
     // Resize the output buffer
     outputFieldData.resize(static_cast<qint32>(requiredReadLength) / 2);
+
+    // Chunked reads: serve the data from the current block, reading the block
+    // that starts here when it isn't in memory
+    if (chunkedReads) {
+        const bool inChunk = chunkStart >= 0 && requiredStartPosition >= chunkStart
+                             && requiredStartPosition + requiredReadLength <= chunkStart + chunkBuffer.size();
+        if (inChunk || readChunk(requiredStartPosition)) {
+            std::memcpy(outputFieldData.data(), chunkBuffer.constData() + (requiredStartPosition - chunkStart),
+                        static_cast<size_t>(requiredReadLength));
+            if (startFieldLine == -1 && endFieldLine == -1) {
+                fieldCache.insert(fieldNumber, new Data(outputFieldData), 1);
+            }
+            return outputFieldData;
+        }
+        // Fall through to a plain read if the block couldn't be read
+    }
 
     // Seek to the correct file position (if not already there)
     if (inputFilePos != requiredStartPosition) {

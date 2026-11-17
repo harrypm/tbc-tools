@@ -87,6 +87,8 @@ bool DecoderPool::process()
         qInfo() << "Unable to open ld-decode video file";
         return false;
     }
+    // Read straight through in shared-disk blocks (no effect on piped input)
+    sourceVideo.setChunkedReads(true);
 
     // Optional luma guide (same geometry as the input)
     if (!guideFileName.isEmpty()) {

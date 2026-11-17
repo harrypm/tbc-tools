@@ -3,6 +3,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
+from collections import deque
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from tbc_video_export.common import consts
@@ -32,6 +35,9 @@ class ProgressHandler:
         self._procs = procs
         self._state_str = str(self._state)
         self._stop_event = stop_event
+
+        # (time, frames done) over the last couple of minutes, for the estimate
+        self._rate_samples: deque[tuple[float, int]] = deque()
 
         self._col_w: dict[str, int] = {
             "sender": 22,
@@ -100,6 +106,37 @@ class ProgressHandler:
 
         logging.getLogger("progress").info(output_line)
 
+    def _get_completion_estimate(self) -> str:
+        """Return time remaining and finish time from the final stage's progress.
+
+        The rate is measured over the last two minutes, so the estimate follows
+        a long export whose speed changes.
+        """
+        procs = [p for p in self._procs if p.wrapper.process_name is ProcessName.FFMPEG]
+        parser = procs[0].output_parser if procs else None
+        total = self._state.total_frames
+        if parser is None or total <= 0 or parser.tracked_value <= 0:
+            return ""
+
+        now = time.monotonic()
+        done = parser.tracked_value
+        self._rate_samples.append((now, done))
+        while len(self._rate_samples) > 2 and now - self._rate_samples[0][0] > 120:
+            self._rate_samples.popleft()
+
+        first_time, first_done = self._rate_samples[0]
+        if now - first_time < 5 or done <= first_done:
+            return f"\t{ansi.dim('Remaining:')} estimating..."
+
+        rate = (done - first_done) / (now - first_time)
+        remaining = timedelta(seconds=int(max(0, total - done) / rate))
+        finish = datetime.now() + remaining
+        finish_fmt = "%H:%M" if remaining < timedelta(hours=20) else "%a %H:%M"
+        return (
+            f"\t{ansi.dim('Remaining:')} {remaining}"
+            f"\t{ansi.dim('Finishes:')} {finish.strftime(finish_fmt)}"
+        )
+
     def _get_output_file_line(self) -> str:
         """Return a string containing stats on the finale output file."""
         return (
@@ -110,6 +147,7 @@ class ProgressHandler:
             f"{self._state.export.duration[:-3]:>{self._col_w['duration']}s}\t"
             f"{ansi.dim('Bitrate:')} "
             f"{self._state.export.bitrate:>{self._col_w['bitrate']}s}"
+            f"{self._get_completion_estimate()}"
             f"\n"
         )
 

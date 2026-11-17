@@ -3916,6 +3916,16 @@ void ExportDialog::processOutputLine(const QString &line, QString *lastStatus, c
         return;
     }
 
+    // tbc-video-export's completion estimate (footer "Remaining: ... Finishes: ...")
+    static const QRegularExpression estimatePattern(
+        QStringLiteral("Remaining:\\s*(\\d+:\\d\\d:\\d\\d|\\d+ days?, \\d+:\\d\\d:\\d\\d)\\s+Finishes:\\s*(.+)$"));
+    const QRegularExpressionMatch estimate = estimatePattern.match(trimmed);
+    if (estimate.hasMatch()) {
+        appendStatus(tr("Export: %1 remaining, finishes at %2")
+                         .arg(estimate.captured(1), estimate.captured(2).trimmed()));
+        return;
+    }
+
     if (lastStatus) {
         *lastStatus = trimmed;
     }
@@ -3973,10 +3983,22 @@ void ExportDialog::flushPendingProcessOutput(const QString &feedTag)
     pendingStderrBuffer.clear();
 }
 
+// Keep only the end of the export's output: it is read at the end (failure
+// detection, details) and the progress redraws would otherwise grow it for the
+// whole export - hundreds of MB over a multi-hour run
+static void appendOutputTail(QString &output, const QString &chunk)
+{
+    constexpr qsizetype kMaxOutputChars = 512 * 1024;
+    output += chunk;
+    if (output.size() > 2 * kMaxOutputChars) {
+        output.remove(0, output.size() - kMaxOutputChars);
+    }
+}
+
 void ExportDialog::handleProcessStdout()
 {
     const QString chunk = QString::fromLocal8Bit(exportProcess->readAllStandardOutput());
-    processStdout += chunk;
+    appendOutputTail(processStdout, chunk);
     const QString feedTag = activeRunStage == RunStage::ProxyExport ? kStatsFeedProxy : kStatsFeedMain;
     consumeProcessOutputChunk(chunk, &pendingStdoutBuffer, feedTag);
 }
@@ -3984,7 +4006,7 @@ void ExportDialog::handleProcessStdout()
 void ExportDialog::handleProcessStderr()
 {
     const QString chunk = QString::fromLocal8Bit(exportProcess->readAllStandardError());
-    processStderr += chunk;
+    appendOutputTail(processStderr, chunk);
     const QString feedTag = activeRunStage == RunStage::ProxyExport ? kStatsFeedProxy : kStatsFeedMain;
     consumeProcessOutputChunk(chunk, &pendingStderrBuffer, feedTag);
 }
@@ -3992,14 +4014,14 @@ void ExportDialog::handleProcessStderr()
 void ExportDialog::handleParallelProxyProcessStdout()
 {
     const QString chunk = QString::fromLocal8Bit(parallelProxyProcess->readAllStandardOutput());
-    parallelProxyStdout += chunk;
+    appendOutputTail(parallelProxyStdout, chunk);
     consumeProcessOutputChunk(chunk, &pendingParallelProxyStdoutBuffer, kStatsFeedProxy);
 }
 
 void ExportDialog::handleParallelProxyProcessStderr()
 {
     const QString chunk = QString::fromLocal8Bit(parallelProxyProcess->readAllStandardError());
-    parallelProxyStderr += chunk;
+    appendOutputTail(parallelProxyStderr, chunk);
     consumeProcessOutputChunk(chunk, &pendingParallelProxyStderrBuffer, kStatsFeedProxy);
 }
 
