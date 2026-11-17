@@ -202,6 +202,12 @@ int main(int argc, char *argv[])
                                         QCoreApplication::translate("main", "number"));
     parser.addOption(lengthOption);
 
+    // Piped input that starts mid-TBC (tbc-dropout-correct --start)
+    QCommandLineOption inputStartFrameOption(QStringList() << "input-start-frame",
+                                             QCoreApplication::translate("main", "The piped input begins at this frame (default 1)"),
+                                             QCoreApplication::translate("main", "frame"));
+    parser.addOption(inputStartFrameOption);
+
     // Option to reverse the field order (-r)
     QCommandLineOption setReverseOption(QStringList() << "r" << "reverse",
                                        QCoreApplication::translate("main", "Reverse the field order to second/first (default first/second)"));
@@ -1086,6 +1092,9 @@ int main(int argc, char *argv[])
 
     // Perform the processing
     DecoderPool decoderPool(*decoder, inputFileName, metaData, outputConfig, outputFileName, startFrame, length, maxThreads);
+    if (parser.isSet(inputStartFrameOption)) {
+        decoderPool.setInputStartFrame(parser.value(inputStartFrameOption).toInt());
+    }
     if (!secamLumaGuideFile.isEmpty()) {
         decoderPool.setGuideFile(secamLumaGuideFile);
     }

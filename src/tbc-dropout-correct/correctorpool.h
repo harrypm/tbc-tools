@@ -45,6 +45,8 @@ public:
                            bool _reverse, bool _intraField, bool _overCorrect, QObject *parent = nullptr);
 
     bool process();
+    // Process frames [startFrame, startFrame + length) only (length -1 = to the end)
+    void setFrameRange(qint32 _startFrame, qint32 _length);
 
     // Member functions used by worker threads
     bool getInputFrame(qint32& frameNumber,
@@ -80,6 +82,8 @@ private:
     QMutex inputMutex;
     qint32 inputFrameNumber;
     qint32 lastFrameNumber;
+    qint32 rangeStartFrame = 1;
+    qint32 rangeLength = -1;
     QVector<TbcMetaData *> &metaData;
     QVector<SourceVideo *> &sourceVideos;
 

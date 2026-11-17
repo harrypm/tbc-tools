@@ -36,6 +36,7 @@ class WrapperLDDropoutCorrect(Wrapper):
             (
                 self.binary,
                 self._get_thread_opts(),
+                self._get_range_opts(),
                 self._state.file_helper.tbcs[self._config.tbc_type],
                 None if self.dropout_interfield_correction else "-i",
                 "--overcorrect" if self.overcorrect else None,
@@ -51,6 +52,18 @@ class WrapperLDDropoutCorrect(Wrapper):
         return Path(gettempdir()).joinpath(
             f"tbc-video-export-{self._config.tbc_type}-{uuid4().hex}.dropout.db"
         )
+
+    def _get_range_opts(self) -> FlatList | None:
+        """Only correct the frames a ranged export uses."""
+        if (frame_range := self._state.dropout_correct_range) is None:
+            return None
+        start, length = frame_range
+        opts = FlatList()
+        if start > 1:
+            opts.append(("-s", start))
+        if length is not None:
+            opts.append(("-l", length))
+        return opts
 
     def _get_thread_opts(self) -> FlatList | None:
         thread_count = self._state.opts.threads

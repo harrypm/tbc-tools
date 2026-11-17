@@ -100,6 +100,17 @@ bool DecoderPool::process()
     // If no startFrame parameter was specified, set the start frame to 1
     if (startFrame == -1) startFrame = 1;
 
+    // A piped input that starts mid-TBC: position the reader at its first field
+    if (inputStartFrame > 1) {
+        if (startFrame - decoderLookBehind < inputStartFrame) {
+            qCritical() << "The input starts at frame" << inputStartFrame << "but decoding from frame" << startFrame
+                        << "needs frame" << startFrame - decoderLookBehind;
+            return false;
+        }
+        sourceVideo.setStreamStartField(qMin(metaData.getFirstFieldNumber(inputStartFrame),
+                                             metaData.getSecondFieldNumber(inputStartFrame)));
+    }
+
     if (startFrame > metaData.getNumberOfFrames()) {
         qInfo() << "Specified start frame is out of bounds, only" << metaData.getNumberOfFrames() << "frames available";
         return false;

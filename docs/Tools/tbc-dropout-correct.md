@@ -18,6 +18,8 @@ Options:
   -i, --intra               Force intrafield correction (default interfield)
   -t, --threads <number>    Specify the number of concurrent threads (default
                             is the number of logical CPUs)
+  -s, --start <frame>       Specify the start frame number
+  -l, --length <frames>     Specify the number of frames to process
 
 Arguments:
   input                     Specify input TBC file (- for piped input)

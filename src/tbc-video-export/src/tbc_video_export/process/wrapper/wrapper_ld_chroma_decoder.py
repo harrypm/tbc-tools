@@ -222,6 +222,14 @@ class WrapperLDChromaDecoder(Wrapper):
             ),
         )
 
+        # Input piped from tbc-dropout-correct that starts mid-TBC
+        if (
+            not self._state.opts.no_dropout_correct
+            and (frame_range := self._state.dropout_correct_range) is not None
+            and frame_range[0] > 1
+        ):
+            decoder_opts.append(("--input-start-frame", frame_range[0]))
+
         if self._state.video_system is VideoSystem.NTSC:
             # True unless ld detected
             add_phase_check = not self._state.file_helper.is_combined_ld

@@ -138,6 +138,13 @@ qint32 SourceVideo::getFieldLength()
 
 // Method to retrieve a range of field lines from a single video field.
 // If startFieldLine and endFieldLine are both -1, read the whole field.
+void SourceVideo::setStreamStartField(qint32 fieldNumber)
+{
+    // The stream's first byte is that field's first byte, so reads from it
+    // need no seek and earlier fields can't be read
+    inputFilePos = static_cast<qint64>(fieldByteLength) * static_cast<qint64>(qMax(1, fieldNumber) - 1);
+}
+
 SourceVideo::Data SourceVideo::getVideoField(qint32 fieldNumber, qint32 startFieldLine, qint32 endFieldLine)
 {
     // Adjust the field number to index from zero

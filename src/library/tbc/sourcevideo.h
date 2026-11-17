@@ -52,6 +52,8 @@ public:
 
     // Field handling methods
     Data getVideoField(qint32 fieldNumber, qint32 startFieldLine = -1, qint32 endFieldLine = -1);
+    // For a piped input that begins at |fieldNumber| rather than field 1
+    void setStreamStartField(qint32 fieldNumber);
 
     // Get and set methods
     bool isSourceValid();

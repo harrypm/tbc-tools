@@ -77,6 +77,8 @@ public:
     // Returns true if a frame was returned, false if the end of the input has
     // been reached.
     bool getInputFrames(qint32 &startFrameNumber, QVector<SourceField> &fields, qint32 &startIndex, qint32 &endIndex);
+    // The piped input begins at this frame (tbc-dropout-correct --start)
+    void setInputStartFrame(qint32 frame) { inputStartFrame = frame; }
 
     // For worker threads: return decoded frames to write to the output file.
     //
@@ -108,6 +110,7 @@ private:
     // Input stream information (all guarded by inputMutex while threads are running)
     QMutex inputMutex;
     qint32 decoderLookBehind;
+    qint32 inputStartFrame = 1;
     qint32 decoderLookAhead;
     qint32 inputFrameNumber;
     qint32 lastFrameNumber;

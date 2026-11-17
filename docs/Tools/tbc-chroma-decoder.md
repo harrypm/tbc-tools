@@ -215,6 +215,9 @@ Options:
   -s, --start <number>                        Specify the start frame number
   -l, --length <number>                       Specify the length (number of
                                               frames to process)
+  --input-start-frame <frame>                 The piped input begins at this
+                                              frame (output of
+                                              tbc-dropout-correct --start)
   -r, --reverse                               Reverse the field order to
                                               second/first (default
                                               first/second)

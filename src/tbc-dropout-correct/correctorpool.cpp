@@ -36,6 +36,12 @@ CorrectorPool::CorrectorPool(QString _outputFilename, QString _outputMetadataFil
 {
 }
 
+void CorrectorPool::setFrameRange(qint32 _startFrame, qint32 _length)
+{
+    rangeStartFrame = qMax(1, _startFrame);
+    rangeLength = _length;
+}
+
 bool CorrectorPool::process()
 {
     qInfo() << "Performing final sanity checks...";
@@ -61,7 +67,8 @@ bool CorrectorPool::process()
     qint32 firstFieldNumber = metaData[0]->getFirstFieldNumber(1);
     qint32 secondFieldNumber = metaData[0]->getSecondFieldNumber(1);
 
-    if (firstFieldNumber != 1 && secondFieldNumber != 1) {
+    // (only when the output starts at the beginning of the TBC)
+    if (rangeStartFrame == 1 && firstFieldNumber != 1 && secondFieldNumber != 1) {
         SourceVideo::Data sourceField = sourceVideos[0]->getVideoField(1);
         if (!writeOutputField(sourceField)) {
             // Could not write to target TBC file
@@ -90,9 +97,18 @@ bool CorrectorPool::process()
     multiSourceCorrectionTotal = 0;
 
     // Initialise processing state
-    inputFrameNumber = 1;
-    outputFrameNumber = 1;
-    lastFrameNumber = metaData[0]->getNumberOfFrames();
+    // A range starts the output at the start frame's earlier field
+    const qint32 totalFrames = metaData[0]->getNumberOfFrames();
+    if (rangeStartFrame > totalFrames) {
+        qCritical() << "Start frame" << rangeStartFrame << "is beyond the" << totalFrames << "frames available";
+        return false;
+    }
+    inputFrameNumber = rangeStartFrame;
+    outputFrameNumber = rangeStartFrame;
+    lastFrameNumber = (rangeLength > 0) ? qMin(totalFrames, rangeStartFrame + rangeLength - 1) : totalFrames;
+    if (rangeStartFrame > 1 || rangeLength > 0) {
+        qInfo() << "Processing frames" << rangeStartFrame << "to" << lastFrameNumber;
+    }
     totalTimer.start();
 
     // Start a vector of decoding threads to process the video
@@ -118,8 +134,9 @@ bool CorrectorPool::process()
 
     // Show the processing speed to the user
     double totalSecs = (static_cast<double>(totalTimer.elapsed()) / 1000.0);
-    qInfo() << "Dropout correction complete -" << lastFrameNumber << "frames in" << totalSecs << "seconds (" <<
-               lastFrameNumber / totalSecs << "FPS )";
+    const qint32 processedFrames = lastFrameNumber - rangeStartFrame + 1;
+    qInfo() << "Dropout correction complete -" << processedFrames << "frames in" << totalSecs << "seconds (" <<
+               processedFrames / totalSecs << "FPS )";
 
     qInfo() << "Creating metadata file for drop-out corrected TBC...";
     metaData[0]->write(outputMetadataFilename);
