@@ -2030,6 +2030,16 @@ void ExportDialog::emitExportProfileConfigPreferenceChanged()
     emit exportProfileConfigPreferenceChanged(enabled, exportProfileConfigPath.trimmed());
 }
 
+int ExportDialog::inPoint() const
+{
+    return ui && ui->inPointSpinBox ? ui->inPointSpinBox->value() : 1;
+}
+
+int ExportDialog::outPoint() const
+{
+    return ui && ui->outPointSpinBox ? ui->outPointSpinBox->value() : 1;
+}
+
 void ExportDialog::setInPoint(int frameNumber)
 {
     if (!ui || !ui->inPointSpinBox || !ui->outPointSpinBox) {

@@ -8,6 +8,7 @@ set(tbc-analyse_SOURCES
     ../audio-align/audioalignmentutil.cpp ../audio-align/audioalignmentutil.h
     closedcaptionsdialog.cpp closedcaptionsdialog.ui
     efmhandlerdialog.cpp efmhandlerdialog.h
+    editsegmentswidget.cpp editsegmentswidget.h
     exportdialog.cpp exportdialog.ui
     exportarguments.cpp exportarguments.h
     metadataconversiondialog.cpp metadataconversiondialog.ui

@@ -1466,6 +1466,30 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
                 updateTimelineMarkers();
                 updateNotesViewerState();
             });
+    // Edit tab (Viewer / Edit / Export): export segments with per-segment framing
+    editSegmentsWidget = new EditSegmentsWidget(this);
+    ui->mainTabWidget->addTab(editSegmentsWidget, tr("Edit"));
+    connect(editSegmentsWidget, &EditSegmentsWidget::addSegmentRequested, this, [this]() {
+        if (exportDialog) editSegmentsWidget->addSegment(exportDialog->inPoint(), exportDialog->outPoint());
+    });
+    connect(editSegmentsWidget, &EditSegmentsWidget::segmentsChanged, this, [this](const QString &segmentsJson) {
+        if (!tbcSource.getIsSourceLoaded()) return;
+        TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+        if (videoParameters.userSegmentsJson == segmentsJson) return;
+        videoParameters.userSegmentsJson = segmentsJson;
+        tbcSource.setVideoParameters(videoParameters);
+        ui->actionSave_Metadata->setEnabled(true);
+        updateMetadataStatusPanel();
+    });
+    connect(editSegmentsWidget, &EditSegmentsWidget::goToFrameRequested, this, [this](qint32 frameNumber) {
+        if (!tbcSource.getIsSourceLoaded()) return;
+        setPlaybackRunning(false);
+        setCurrentFrame(qBound<qint32>(1, frameNumber, qMax<qint32>(1, tbcSource.getNumberOfFrames())));
+        const qint32 currentNumber = tbcSource.getFieldViewEnabled() ? currentFieldNumber : currentFrameNumber;
+        updatePositionEditorValue(currentNumber);
+        ui->posHorizontalSlider->setValue(currentNumber);
+    });
+
     exportDialog = new ExportDialog(this);
     ui->mainTabWidget->addTab(exportDialog, tr("Export"));
     exportDialog->setGenerateProxyEnabledPreference(configuration.getGenerateProxyEnabled());
@@ -2617,6 +2641,9 @@ void MainWindow::updateGuiUnloaded()
     updateMetadataStatusPanel();
     if (exportDialog) {
         exportDialog->setSource(&tbcSource);
+    }
+    if (editSegmentsWidget) {
+        editSegmentsWidget->setSource(0, QString());
     }
 }
 
@@ -8725,6 +8752,10 @@ void MainWindow::on_finishedLoading(bool success)
         }
         if (exportDialog) {
             exportDialog->setSource(&tbcSource);
+        }
+        if (editSegmentsWidget) {
+            editSegmentsWidget->setSource(tbcSource.getNumberOfFrames(),
+                                          tbcSource.getVideoParameters().userSegmentsJson);
         }
 
         // Set the main window title
