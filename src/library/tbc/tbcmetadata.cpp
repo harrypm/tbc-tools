@@ -453,7 +453,6 @@ void TbcMetaData::VideoParameters::read(JsonReader &reader)
         else if (member == "UserEditOutSelection" || member == "userEditOutSelection") reader.read(userEditOutSelection);
         else if (member == "UserMarkerComment" || member == "userMarkerComment") reader.read(userMarkerComment);
         else if (member == "UserMarkersJson" || member == "userMarkersJson") reader.read(userMarkersJson);
-        else if (member == "UserSegmentsJson" || member == "userSegmentsJson") reader.read(userSegmentsJson);
         else if (member == "UserMarkerSelection" || member == "userMarkerSelection") reader.read(userMarkerSelection);
         else reader.discard();
     }
@@ -535,9 +534,6 @@ void TbcMetaData::VideoParameters::write(JsonWriter &writer) const
     }
     if (!userMarkersJson.isEmpty()) {
         writer.writeMember("UserMarkersJson", userMarkersJson);
-    }
-    if (!userSegmentsJson.isEmpty()) {
-        writer.writeMember("UserSegmentsJson", userSegmentsJson);
     }
     if (userMarkerSelection > 0) {
         writer.writeMember("UserMarkerSelection", userMarkerSelection);
@@ -965,7 +961,6 @@ bool TbcMetaData::read(QString fileName)
         int userMarkerSelection = -1;
         QString userMarkerComment;
         QString userMarkersJson;
-        QString userSegmentsJson;
         bool isMapped, isSubcarrierLocked, isWidescreen;
 
         // Read capture metadata
@@ -981,7 +976,7 @@ bool TbcMetaData::read(QString fileName)
                                        ntscChromaWeight, ntscPhaseCompensation, palTransformThreshold,
                                        userEditInSelection, userEditOutSelection,
                                        userMarkerSelection, userMarkerComment,
-                                       userMarkersJson, userSegmentsJson,
+                                       userMarkersJson,
                                        captureNotes)) {
             qCritical() << "Failed to read capture metadata from SQLite file";
             return false;
@@ -1029,7 +1024,6 @@ bool TbcMetaData::read(QString fileName)
         videoParameters.userMarkerSelection = userMarkerSelection;
         videoParameters.userMarkerComment = userMarkerComment;
         videoParameters.userMarkersJson = userMarkersJson;
-        videoParameters.userSegmentsJson = userSegmentsJson;
         videoParameters.gitBranch = gitBranch;
         videoParameters.gitCommit = gitCommit;
         videoParameters.isValid = true;
@@ -1121,7 +1115,6 @@ bool TbcMetaData::write(QString fileName) const
             int existingUserMarkerSelection = -1;
             QString existingUserMarkerComment;
             QString existingUserMarkersJson;
-            QString existingUserSegmentsJson;
             bool existingIsMapped, existingIsSubcarrierLocked, existingIsWidescreen;
             
             if (reader.readCaptureMetadata(captureId, existingSystem, existingDecoder, 
@@ -1139,7 +1132,7 @@ bool TbcMetaData::write(QString fileName) const
                                          existingPalTransformThreshold,
                                          existingUserEditInSelection, existingUserEditOutSelection,
                                          existingUserMarkerSelection, existingUserMarkerComment,
-                                         existingUserMarkersJson, existingUserSegmentsJson,
+                                         existingUserMarkersJson,
                                          existingCaptureNotes)) {
                 tbcDebugStream() << "Updating existing SQLite file with capture_id:" << captureId;
             } else {
@@ -1196,7 +1189,6 @@ bool TbcMetaData::write(QString fileName) const
                                             videoParameters.userMarkerSelection,
                                             videoParameters.userMarkerComment,
                                             videoParameters.userMarkersJson,
-                                            videoParameters.userSegmentsJson,
                                             videoParameters.tapeFormat)) {
                 writer.rollbackTransaction();
                 return false;
@@ -1225,7 +1217,6 @@ bool TbcMetaData::write(QString fileName) const
                 videoParameters.userMarkerSelection,
                 videoParameters.userMarkerComment,
                 videoParameters.userMarkersJson,
-                videoParameters.userSegmentsJson,
                 videoParameters.tapeFormat);
 
             if (captureId == -1) {

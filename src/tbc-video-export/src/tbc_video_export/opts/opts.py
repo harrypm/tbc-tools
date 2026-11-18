@@ -60,9 +60,6 @@ class Opts(argparse.Namespace):
     last_active_field_line: int | None
     first_active_frame_line: int | None
     last_active_frame_line: int | None
-    active_video_start: int | None
-    active_video_end: int | None
-    ignore_segments: bool
     chroma_decoder: ChromaDecoder | None
     chroma_decoder_luma: ChromaDecoder | None
     chroma_gain: float | None

@@ -36,32 +36,6 @@ class TestTBCJson:
         assert not TBCJsonHelper(None, '{"videoParameters":{"tapeFormat":"LaserDisc"}}').is_tape_source
         assert TBCJsonHelper(Path("tests/files/pal_svideo_5.tbc.json")).is_tape_source
 
-    def test_user_segments(self) -> None:  # noqa: D102
-        segments = json.dumps(
-            [
-                {"start": 10, "end": 20},
-                {"start": 30, "end": 40, "offsetX": 8, "offsetY": -4},
-                {"start": 50},
-                {"start": 70, "end": 60},
-            ]
-        )
-        data = json.dumps({"videoParameters": {"UserSegmentsJson": segments}})
-        assert TBCJsonHelper(None, data).user_segments == [
-            {"start": 10, "end": 20, "offset_x": 0, "offset_y": 0},
-            {"start": 30, "end": 40, "offset_x": 8, "offset_y": -4},
-        ]
-        assert TBCJsonHelper(None, '{"videoParameters":{}}').user_segments == []
-        bad = json.dumps({"videoParameters": {"UserSegmentsJson": "not json"}})
-        assert TBCJsonHelper(None, bad).user_segments == []
-
-    def test_segment_shift_filter(self) -> None:  # noqa: D102
-        from tbc_video_export.process.segments import _shift_filter
-
-        assert _shift_filter(8, "x") == "crop=iw-8:ih:8:0,pad=iw+8:ih:0:0"
-        assert _shift_filter(-6, "x") == "crop=iw-6:ih:0:0,pad=iw+6:ih:6:0"
-        assert _shift_filter(4, "y") == "crop=iw:ih-4:0:4,pad=iw:ih+4:0:0"
-        assert _shift_filter(-2, "y") == "crop=iw:ih-2:0:0,pad=iw:ih+2:0:2"
-
     def test_video_system(self) -> None:  # noqa: D102
         json_data = '{"videoParameters":{"system":"PAL"}}'
         tbc_json = TBCJsonHelper(None, json_data)

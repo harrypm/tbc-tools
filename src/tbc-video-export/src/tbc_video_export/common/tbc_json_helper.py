@@ -71,62 +71,6 @@ class TBCJsonHelper:
             return None
 
     @cached_property
-    def first_active_field_line(self) -> int | None:
-        """Return firstActiveFieldLine from videoParameters when available."""
-        return self._get_video_parameter_int("firstActiveFieldLine")
-
-    @cached_property
-    def last_active_field_line(self) -> int | None:
-        """Return lastActiveFieldLine from videoParameters when available."""
-        return self._get_video_parameter_int("lastActiveFieldLine")
-
-    @cached_property
-    def field_width(self) -> int | None:
-        """Return fieldWidth (samples per line) from videoParameters when available."""
-        return self._get_video_parameter_int("fieldWidth")
-
-    @cached_property
-    def active_video_start(self) -> int | None:
-        """Return activeVideoStart from videoParameters when available."""
-        return self._get_video_parameter_int("activeVideoStart")
-
-    @cached_property
-    def active_video_end(self) -> int | None:
-        """Return activeVideoEnd from videoParameters when available."""
-        return self._get_video_parameter_int("activeVideoEnd")
-
-    @cached_property
-    def user_segments(self) -> list[dict[str, int]]:
-        """Return the export segments set in tbc-analyse (UserSegmentsJson).
-
-        Each is {start, end, offset_x, offset_y}: an inclusive frame range and
-        the framing offsets (samples, frame lines) applied to the global active
-        area for that range. Invalid entries are skipped.
-        """
-        raw = self._get_video_parameter("UserSegmentsJson") or self._get_video_parameter(
-            "userSegmentsJson"
-        )
-        if not raw:
-            return []
-        try:
-            entries = json.loads(raw)
-        except json.JSONDecodeError:
-            return []
-        segments: list[dict[str, int]] = []
-        for entry in entries if isinstance(entries, list) else []:
-            try:
-                start, end = int(entry["start"]), int(entry["end"])
-                offset_x = int(entry.get("offsetX", 0))
-                offset_y = int(entry.get("offsetY", 0))
-            except (KeyError, TypeError, ValueError):
-                continue
-            if 1 <= start <= end:
-                segments.append(
-                    {"start": start, "end": end, "offset_x": offset_x, "offset_y": offset_y}
-                )
-        return segments
-
-    @cached_property
     def is_tape_source(self) -> bool:
         """Return whether the capture is from tape.
 

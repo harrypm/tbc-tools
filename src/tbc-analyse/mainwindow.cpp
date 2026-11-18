@@ -1466,36 +1466,6 @@ MainWindow::MainWindow(QString inputFilenameParam, bool metadataOnlyParam, QWidg
                 updateTimelineMarkers();
                 updateNotesViewerState();
             });
-    // Edit tab (Viewer / Edit / Export): export segments with per-segment framing
-    editSegmentsWidget = new EditSegmentsWidget(this);
-    ui->mainTabWidget->addTab(editSegmentsWidget, tr("Edit"));
-    // The Edit tab shows the Viewer's picture: move it with the tab
-    connect(ui->mainTabWidget, &QTabWidget::currentChanged, this, [this](int) {
-        if (ui->mainTabWidget->currentWidget() == editSegmentsWidget) {
-            editSegmentsWidget->viewerSlot()->addWidget(ui->scrollArea);
-        } else if (ui->mainTabWidget->currentWidget() == ui->viewerTab) {
-            ui->viewerTabLayout->addWidget(ui->scrollArea);
-        }
-    });
-    connect(editSegmentsWidget, &EditSegmentsWidget::segmentsChanged, this, [this](const QString &segmentsJson) {
-        if (!tbcSource.getIsSourceLoaded()) return;
-        TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
-        if (videoParameters.userSegmentsJson == segmentsJson) return;
-        videoParameters.userSegmentsJson = segmentsJson;
-        tbcSource.setVideoParameters(videoParameters);
-        ui->actionSave_Metadata->setEnabled(true);
-        updateMetadataStatusPanel();
-        updateImage();
-    });
-    connect(editSegmentsWidget, &EditSegmentsWidget::goToFrameRequested, this, [this](qint32 frameNumber) {
-        if (!tbcSource.getIsSourceLoaded()) return;
-        setPlaybackRunning(false);
-        setCurrentFrame(qBound<qint32>(1, frameNumber, qMax<qint32>(1, tbcSource.getNumberOfFrames())));
-        const qint32 currentNumber = tbcSource.getFieldViewEnabled() ? currentFieldNumber : currentFrameNumber;
-        updatePositionEditorValue(currentNumber);
-        ui->posHorizontalSlider->setValue(currentNumber);
-    });
-
     exportDialog = new ExportDialog(this);
     ui->mainTabWidget->addTab(exportDialog, tr("Export"));
     exportDialog->setGenerateProxyEnabledPreference(configuration.getGenerateProxyEnabled());
@@ -2648,9 +2618,6 @@ void MainWindow::updateGuiUnloaded()
     if (exportDialog) {
         exportDialog->setSource(&tbcSource);
     }
-    if (editSegmentsWidget) {
-        editSegmentsWidget->setSource(0, QString());
-    }
 }
 
 void MainWindow::updateVideoPushButton()
@@ -3020,16 +2987,7 @@ bool MainWindow::isViewerTabActive() const
     if (!ui || !ui->mainTabWidget || !ui->viewerTab) {
         return true;
     }
-    // The Edit tab shows the same picture as the Viewer
-    return ui->mainTabWidget->currentWidget() == ui->viewerTab
-           || (editSegmentsWidget && ui->mainTabWidget->currentWidget() == editSegmentsWidget);
-}
-
-// In the Edit tab, the segment under the playhead whose framing the picture shows (-1 = global framing)
-int MainWindow::editSegmentAtCurrentFrame() const
-{
-    if (!editSegmentsWidget || ui->mainTabWidget->currentWidget() != editSegmentsWidget) return -1;
-    return editSegmentsWidget->segmentAt(currentFrameNumber);
+    return ui->mainTabWidget->currentWidget() == ui->viewerTab;
 }
 
 QImage MainWindow::renderedCurrentImageForExport()
@@ -3210,8 +3168,7 @@ void MainWindow::updateImageViewer()
             }
         }
 
-        // The Edit tab always shows the active area: it is what segments adjust
-        if (showExportBoundary || editSegmentAtCurrentFrame() >= 0) {
+        if (showExportBoundary) {
             const QVector<QRect> activeRects = getActiveVideoRects();
             if (!activeRects.isEmpty() && pixmap.width() > 0 && pixmap.height() > 0) {
                 const double scaleX = static_cast<double>(scaledPixmap.width()) / static_cast<double>(pixmap.width());
@@ -3270,8 +3227,7 @@ void MainWindow::updateImageViewer()
         ui->imageViewerLabel->setPixmap(scaledPixmap);
     }
 
-    // Update the current frame markers on the graphs (and the Edit tab timeline)
-    if (editSegmentsWidget) editSegmentsWidget->setCurrentFrame(currentFrameNumber);
+    // Update the current frame markers on the graphs
     blackSnrAnalysisDialog->updateFrameMarker(currentFrameNumber);
     whiteSnrAnalysisDialog->updateFrameMarker(currentFrameNumber);
     dropoutAnalysisDialog->updateFrameMarker(currentFrameNumber);
@@ -3291,17 +3247,7 @@ QVector<QRect> MainWindow::getActiveVideoRects() const
         return rects;
     }
 
-    // In the Edit tab, show the active area of the segment under the playhead
-    TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
-    if (const int segmentIndex = editSegmentAtCurrentFrame(); segmentIndex >= 0) {
-        const ExportSegment &segment = editSegmentsWidget->segment(segmentIndex);
-        videoParameters.activeVideoStart += segment.offsetX;
-        videoParameters.activeVideoEnd += segment.offsetX;
-        videoParameters.firstActiveFrameLine += segment.offsetY;
-        videoParameters.lastActiveFrameLine += segment.offsetY;
-        videoParameters.firstActiveFieldLine += segment.offsetY / 2;
-        videoParameters.lastActiveFieldLine += segment.offsetY / 2;
-    }
+    const TbcMetaData::VideoParameters &videoParameters = tbcSource.getVideoParameters();
     if (videoParameters.activeVideoStart < 0 || videoParameters.activeVideoEnd <= videoParameters.activeVideoStart) {
         return rects;
     }
@@ -3376,8 +3322,7 @@ QVector<QRect> MainWindow::getActiveVideoRects() const
 
 bool MainWindow::isExportBoundaryDragAvailable() const
 {
-    if ((!showExportBoundary && editSegmentAtCurrentFrame() < 0) || !tbcSource.getIsSourceLoaded()
-        || !isViewerTabActive()) {
+    if (!showExportBoundary || !tbcSource.getIsSourceLoaded() || !isViewerTabActive()) {
         return false;
     }
     if (!ui || !ui->imageViewerLabel || !ui->mouseModePushButton) {
@@ -3498,23 +3443,6 @@ void MainWindow::applyExportBoundaryDragAtViewerPoint(const QPoint &viewerPoint)
 
     TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     bool changed = false;
-
-    // Inside a segment in the Edit tab, an edge drag moves that segment's
-    // active area (its offsets) instead of resizing the global one
-    if (const int segmentIndex = editSegmentAtCurrentFrame(); segmentIndex >= 0) {
-        const ExportSegment &segment = editSegmentsWidget->segment(segmentIndex);
-        qint32 offsetX = segment.offsetX;
-        qint32 offsetY = segment.offsetY;
-        if (exportBoundaryDragHandle == ExportBoundaryHandle::Left) {
-            offsetX = sourceX - videoParameters.activeVideoStart;
-        } else if (exportBoundaryDragHandle == ExportBoundaryHandle::Right) {
-            offsetX = sourceX + 1 - videoParameters.activeVideoEnd;
-        } else if (exportBoundaryDragHandle == ExportBoundaryHandle::Top) {
-            offsetY = sourceY - videoParameters.firstActiveFrameLine;
-        }
-        editSegmentsWidget->setSegmentOffsets(segmentIndex, offsetX, offsetY);
-        return;
-    }
 
     switch (exportBoundaryDragHandle) {
     case ExportBoundaryHandle::Top: {
@@ -8797,10 +8725,6 @@ void MainWindow::on_finishedLoading(bool success)
         }
         if (exportDialog) {
             exportDialog->setSource(&tbcSource);
-        }
-        if (editSegmentsWidget) {
-            editSegmentsWidget->setSource(tbcSource.getNumberOfFrames(),
-                                          tbcSource.getVideoParameters().userSegmentsJson);
         }
 
         // Set the main window title

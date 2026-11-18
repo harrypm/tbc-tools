@@ -208,8 +208,6 @@ class WrapperLDChromaDecoder(Wrapper):
 
         decoder_opts.append(
             (
-                self._state.opts.convert_opt("active_video_start", "--active-video-start"),
-                self._state.opts.convert_opt("active_video_end", "--active-video-end"),
                 self._state.opts.convert_opt("start", "-s"),
                 self._state.opts.convert_opt("length", "-l"),
                 self._state.opts.convert_opt("reverse", "-r"),

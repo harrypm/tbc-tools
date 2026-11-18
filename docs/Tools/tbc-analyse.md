@@ -185,16 +185,6 @@ This preserves a rollback copy while avoiding partial writes.
 
 JSON metadata remains JSON throughout this workflow, including temporary and backup file names such as `.json.new` and `.json.bup`.
 
-## Edit tab (export segments)
-
-The main window has three tabs: **Viewer**, **Edit** and **Export**. The Edit tab shows the same picture as the Viewer, with a segment timeline underneath:
-
-* **Segment start** and **Segment end** mark a segment at the current frame. The timeline shows each segment as a numbered block across the whole source; the gaps between them are cut from the export. Clicking or dragging on the timeline moves the playhead.
-* With the playhead inside a segment, the picture shows that segment's active area, and dragging its left, right or top edge moves the area for that segment only (its X and Y offsets). The **Start**, **End**, **X offset** and **Y offset** fields fine-tune the segment under the playhead; **Remove** deletes it.
-* Y offsets are even: an odd line shift would swap the field order. Every segment exports at the same size; where a moved area goes past the picture edge, the gap is black.
-* When segments exist, the export renders them in timeline order and joins them into one file. With no segments the export uses the in/out range as before.
-* Segments are saved in the metadata (`UserSegmentsJson`) and recorded in the exported file (`tbc_segments` tag and the attached metadata JSON). `tbc-video-export --ignore-segments` exports the plain range instead.
-
 ## Export tab and unsaved metadata changes
 
 When exporting from inside tbc-analyse, the current in-memory settings are used even if you have not run Save Metadata.

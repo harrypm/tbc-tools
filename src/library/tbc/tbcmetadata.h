@@ -97,8 +97,6 @@ public:
         qint32 userMarkerSelection = -1;
         QString userMarkerComment;
         QString userMarkersJson;
-        // Export segments (JSON array of {start, end[, framing]}), see tbc-video-export
-        QString userSegmentsJson;
 
         // -- Members set by the library --
 

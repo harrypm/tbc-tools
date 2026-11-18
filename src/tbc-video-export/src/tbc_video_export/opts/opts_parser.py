@@ -141,18 +141,6 @@ def parse_opts(
     )
 
     general_opts.add_argument(
-        "--ignore-segments",
-        action="store_true",
-        default=False,
-        help=(
-            "Ignore the export segments set in tbc-analyse. (default: no)\n"
-            "  - Without this, a TBC json with segments exports each segment\n"
-            "    with its own framing offsets and joins them into one file."
-            "\n\n"
-        ),
-    )
-
-    general_opts.add_argument(
         "--overwrite",
         action="store_true",
         default=False,

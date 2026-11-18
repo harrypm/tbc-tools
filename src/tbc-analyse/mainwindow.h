@@ -54,7 +54,6 @@
 #include "closedcaptionsdialog.h"
 #include "videoparametersdialog.h"
 #include "chromadecoderconfigdialog.h"
-#include "editsegmentswidget.h"
 #include "exportdialog.h"
 #include "metadataconversiondialog.h"
 #include "metadatastatusdialog.h"
@@ -248,8 +247,6 @@ private:
     ChromaDecoderConfigDialog *chromaDecoderConfigDialog;
     MetadataConversionDialog *metadataConversionDialog;
     MetadataStatusDialog *metadataStatusDialog;
-    EditSegmentsWidget *editSegmentsWidget = nullptr;
-    int editSegmentAtCurrentFrame() const;
     ExportDialog *exportDialog;
     AudioAlignmentDialog *audioAlignmentDialog = nullptr;
     EfmHandlerDialog *efmHandlerDialog = nullptr;
