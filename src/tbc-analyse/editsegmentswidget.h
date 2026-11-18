@@ -91,8 +91,6 @@ private:
     QPushButton *removeButton = nullptr;
     QSpinBox *startSpin = nullptr;
     QSpinBox *endSpin = nullptr;
-    QSpinBox *offsetXSpin = nullptr;
-    QSpinBox *offsetYSpin = nullptr;
     QLabel *summaryLabel = nullptr;
 
     QVector<ExportSegment> segments;

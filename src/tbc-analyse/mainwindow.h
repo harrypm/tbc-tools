@@ -250,6 +250,10 @@ private:
     MetadataStatusDialog *metadataStatusDialog;
     EditSegmentsWidget *editSegmentsWidget = nullptr;
     int editSegmentAtCurrentFrame() const;
+    // The video parameters as the picture shows them: in the Edit tab inside a
+    // segment, the global ones with that segment's active area
+    TbcMetaData::VideoParameters displayedVideoParameters() const;
+    QString videoParametersDialogSegmentKey;  // what the dialog last showed
     ExportDialog *exportDialog;
     AudioAlignmentDialog *audioAlignmentDialog = nullptr;
     EfmHandlerDialog *efmHandlerDialog = nullptr;

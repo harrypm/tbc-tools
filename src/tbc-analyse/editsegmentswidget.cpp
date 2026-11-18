@@ -130,7 +130,8 @@ EditSegmentsWidget::EditSegmentsWidget(QWidget *parent) : QWidget(parent)
     controls->addWidget(removeButton);
     controls->addSpacing(16);
 
-    // Fine adjustment of the segment under the playhead
+    // Range of the segment under the playhead (its framing is set by dragging the
+    // active area, or in the Video Parameters dialog)
     const auto addSpin = [this, controls](const QString &label, qint32 minimum, qint32 maximum, qint32 step) {
         controls->addWidget(new QLabel(label, this));
         auto *spin = new QSpinBox(this);
@@ -141,10 +142,6 @@ EditSegmentsWidget::EditSegmentsWidget(QWidget *parent) : QWidget(parent)
     };
     startSpin = addSpin(tr("Start"), 1, 1, 1);
     endSpin = addSpin(tr("End"), 1, 1, 1);
-    offsetXSpin = addSpin(tr("X offset"), -400, 400, 1);
-    offsetYSpin = addSpin(tr("Y offset"), -200, 200, 2);
-    offsetXSpin->setToolTip(tr("Move the active area sideways for this segment (samples)"));
-    offsetYSpin->setToolTip(tr("Move the active area up or down for this segment (lines, even: an odd shift swaps the field order)"));
     controls->addStretch();
     summaryLabel = new QLabel(this);
     controls->addWidget(summaryLabel);
@@ -170,22 +167,16 @@ EditSegmentsWidget::EditSegmentsWidget(QWidget *parent) : QWidget(parent)
         segments.removeAt(index);
         segmentsEdited();
     });
-    for (QSpinBox *spin : {startSpin, endSpin, offsetXSpin, offsetYSpin}) {
-        connect(spin, &QSpinBox::valueChanged, this, [this, spin]() {
+    for (QSpinBox *spin : {startSpin, endSpin}) {
+        connect(spin, &QSpinBox::valueChanged, this, [this]() {
             const int index = segmentAt(currentFrame);
             if (updatingControls || index < 0) return;
-            if (spin == offsetYSpin && spin->value() % 2 != 0) {
-                spin->setValue(spin->value() - (spin->value() % 2));
-                return;
-            }
-            ExportSegment &segment = segments[index];
-            segment.start = qMin(startSpin->value(), endSpin->value());
-            segment.end = qMax(startSpin->value(), endSpin->value());
-            segment.offsetX = offsetXSpin->value();
-            segment.offsetY = offsetYSpin->value();
+            const qint32 start = qMin(startSpin->value(), endSpin->value());
+            segments[index].start = start;
+            segments[index].end = qMax(startSpin->value(), endSpin->value());
             segmentsEdited();
             // Keep editing this segment if its range no longer covers the playhead
-            if (segmentAt(currentFrame) < 0) emit goToFrameRequested(segment.start);
+            if (segmentAt(currentFrame) < 0) emit goToFrameRequested(start);
         });
     }
 
@@ -263,15 +254,13 @@ void EditSegmentsWidget::refresh()
     removeButton->setEnabled(index >= 0);
 
     updatingControls = true;
-    for (QSpinBox *spin : {startSpin, endSpin, offsetXSpin, offsetYSpin}) spin->setEnabled(index >= 0);
+    for (QSpinBox *spin : {startSpin, endSpin}) spin->setEnabled(index >= 0);
     startSpin->setRange(1, qMax(1, frameCount));
     endSpin->setRange(1, qMax(1, frameCount));
     if (index >= 0) {
         const ExportSegment &segment = segments.at(index);
         startSpin->setValue(segment.start);
         endSpin->setValue(segment.end);
-        offsetXSpin->setValue(segment.offsetX);
-        offsetYSpin->setValue(segment.offsetY);
     }
     updatingControls = false;
 

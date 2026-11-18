@@ -3025,6 +3025,21 @@ bool MainWindow::isViewerTabActive() const
            || (editSegmentsWidget && ui->mainTabWidget->currentWidget() == editSegmentsWidget);
 }
 
+TbcMetaData::VideoParameters MainWindow::displayedVideoParameters() const
+{
+    TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
+    if (const int segmentIndex = editSegmentAtCurrentFrame(); segmentIndex >= 0) {
+        const ExportSegment &segment = editSegmentsWidget->segment(segmentIndex);
+        videoParameters.activeVideoStart += segment.offsetX;
+        videoParameters.activeVideoEnd += segment.offsetX;
+        videoParameters.firstActiveFrameLine += segment.offsetY;
+        videoParameters.lastActiveFrameLine += segment.offsetY;
+        videoParameters.firstActiveFieldLine += segment.offsetY / 2;
+        videoParameters.lastActiveFieldLine += segment.offsetY / 2;
+    }
+    return videoParameters;
+}
+
 // In the Edit tab, the segment under the playhead whose framing the picture shows (-1 = global framing)
 int MainWindow::editSegmentAtCurrentFrame() const
 {
@@ -3272,6 +3287,20 @@ void MainWindow::updateImageViewer()
 
     // Update the current frame markers on the graphs (and the Edit tab timeline)
     if (editSegmentsWidget) editSegmentsWidget->setCurrentFrame(currentFrameNumber);
+    // Keep the Video Parameters dialog on the framing the picture shows: a
+    // segment's in the Edit tab, the global one otherwise
+    if (videoParametersDialog && tbcSource.getIsSourceLoaded()) {
+        const int segmentIndex = editSegmentAtCurrentFrame();
+        QString key = QStringLiteral("global");
+        if (segmentIndex >= 0) {
+            const ExportSegment &segment = editSegmentsWidget->segment(segmentIndex);
+            key = QStringLiteral("%1:%2:%3").arg(segmentIndex).arg(segment.offsetX).arg(segment.offsetY);
+        }
+        if (key != videoParametersDialogSegmentKey) {
+            videoParametersDialogSegmentKey = key;
+            videoParametersDialog->setVideoParameters(displayedVideoParameters());
+        }
+    }
     blackSnrAnalysisDialog->updateFrameMarker(currentFrameNumber);
     whiteSnrAnalysisDialog->updateFrameMarker(currentFrameNumber);
     dropoutAnalysisDialog->updateFrameMarker(currentFrameNumber);
@@ -3292,16 +3321,7 @@ QVector<QRect> MainWindow::getActiveVideoRects() const
     }
 
     // In the Edit tab, show the active area of the segment under the playhead
-    TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
-    if (const int segmentIndex = editSegmentAtCurrentFrame(); segmentIndex >= 0) {
-        const ExportSegment &segment = editSegmentsWidget->segment(segmentIndex);
-        videoParameters.activeVideoStart += segment.offsetX;
-        videoParameters.activeVideoEnd += segment.offsetX;
-        videoParameters.firstActiveFrameLine += segment.offsetY;
-        videoParameters.lastActiveFrameLine += segment.offsetY;
-        videoParameters.firstActiveFieldLine += segment.offsetY / 2;
-        videoParameters.lastActiveFieldLine += segment.offsetY / 2;
-    }
+    const TbcMetaData::VideoParameters videoParameters = displayedVideoParameters();
     if (videoParameters.activeVideoStart < 0 || videoParameters.activeVideoEnd <= videoParameters.activeVideoStart) {
         return rects;
     }
@@ -8600,8 +8620,29 @@ void MainWindow::mouseScanLineSelect(qint32 oX, qint32 oY)
 }
 
 // Handle parameters changed signal from the video parameters dialogue
-void MainWindow::videoParametersChangedSignalHandler(const TbcMetaData::VideoParameters &videoParameters)
+void MainWindow::videoParametersChangedSignalHandler(const TbcMetaData::VideoParameters &changedVideoParameters)
 {
+    TbcMetaData::VideoParameters videoParameters = changedVideoParameters;
+
+    // Inside a segment in the Edit tab the dialog shows that segment's active
+    // area: a change to it moves the segment's area; anything else is global
+    if (const int segmentIndex = editSegmentAtCurrentFrame(); segmentIndex >= 0) {
+        const TbcMetaData::VideoParameters global = tbcSource.getVideoParameters();
+        const ExportSegment &segment = editSegmentsWidget->segment(segmentIndex);
+        const TbcMetaData::VideoParameters shown = displayedVideoParameters();
+        const qint32 offsetX = segment.offsetX + (videoParameters.activeVideoStart - shown.activeVideoStart);
+        const qint32 offsetY = segment.offsetY + (videoParameters.firstActiveFrameLine - shown.firstActiveFrameLine);
+        videoParameters.activeVideoStart = global.activeVideoStart;
+        videoParameters.activeVideoEnd = global.activeVideoEnd;
+        videoParameters.firstActiveFrameLine = global.firstActiveFrameLine;
+        videoParameters.lastActiveFrameLine = global.lastActiveFrameLine;
+        videoParameters.firstActiveFieldLine = global.firstActiveFieldLine;
+        videoParameters.lastActiveFieldLine = global.lastActiveFieldLine;
+        editSegmentsWidget->setSegmentOffsets(segmentIndex, offsetX, offsetY);
+        // Keep the segment list just updated, not the dialog's copy of it
+        videoParameters.userSegmentsJson = tbcSource.getVideoParameters().userSegmentsJson;
+    }
+
     cancelInFlightAsyncFrameRender();
     // Update the VideoParameters in the source
     tbcSource.setVideoParameters(videoParameters);
