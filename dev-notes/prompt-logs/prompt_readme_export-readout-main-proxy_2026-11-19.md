@@ -365,6 +365,27 @@ content inspection (the nupkgs carry everything the steps require); CI is the
 final proof. Local build/ tree needs a cmake re-run to pick up the new
 ONNXRUNTIME_ROOT.
 
+Run 44687159292 results (commit 03d8cf7): guardrails, parity, Linux x86_64,
+Linux arm64, Windows x86_64 and Windows arm64 ALL PASSED (nuget ORT + the
+ffmpeg --remove-destination staging both proven). macOS x86_64/arm64 failed
+on two follow-on bugs (fixed in 46e202f):
+- x86_64: `cp: cannot stat 'runtimes/osx-x86_64/native/libonnxruntime.dylib'`
+  — the nupkg names the Intel macOS natives dir `runtimes/osx-x64` (not
+  x86_64); the flake now maps the nix archSuffix to a runtimeArch for the
+  dylib path.
+- arm64: `cp: dist/bin/ffmpeg: Permission denied` — the result/bin copy
+  loops pre-stage read-only Nix-store copies of ffmpeg/ffprobe/ffplay (the
+  flake's bundled launchers) and BSD cp cannot overwrite a non-writable
+  file. The macOS staging now `rm -f`s them before the explicit cp (the
+  same collision class as the Linux jobs; macOS cp has no
+  --remove-destination). Pinned by the updated
+  FFMPEG_SELF_CONTAINED_MACOS_REQUIRED_SNIPPETS contract (rm -f required).
+
+FINAL: run 44689559054 (commit 46e202f) = **SUCCESS** — all jobs green:
+guardrails, Linux parity, Linux x86_64/arm64, Windows x86_64/arm64, macOS
+x86_64/arm64, universal macOS dmg. Upload skipped as designed (no-publish
+test mode). Main is green for the first time since the ORT purge broke it.
+
 ## Key locations (for future reference)
 
 - `ExportDialog::processOutputLine` / `consumeProcessOutputChunk` /
