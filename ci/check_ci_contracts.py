@@ -306,8 +306,13 @@ ORT_SOURCE_CUDA_SCRIPT_REQUIRED_SNIPPETS = (
     "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Linux/$ORT_VERSION",
     "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Windows/$ORT_VERSION",
 )
+# The rm -f is required: the result/bin copy loops pre-stage read-only
+# Nix-store copies of ffmpeg/ffprobe/ffplay (from the flake's bundled
+# launchers) and BSD cp cannot overwrite a non-writable file ("Permission
+# denied" - broke the macOS arm64 job on 2026-11-20).
 FFMPEG_SELF_CONTAINED_MACOS_REQUIRED_SNIPPETS = (
     "nix build .#ffmpeg^bin",
+    "rm -f dist/bin/ffmpeg dist/bin/ffprobe dist/bin/ffplay",
     'cp "$FFMPEG_STORE/bin/ffmpeg" dist/bin/ffmpeg',
     'cp "$FFMPEG_STORE/bin/ffprobe" dist/bin/ffprobe',
     'cp "$FFMPEG_STORE/bin/ffplay" dist/bin/ffplay',

@@ -79,11 +79,15 @@
           else if isDarwin then
             # Microsoft prebuilt for CoreML EP (nixpkgs lacks it). The fat
             # 1.23.2 nupkg ships the per-arch thin dylibs
-            # (runtimes/osx-{arm64,x86_64}) required for the universal DMG's
+            # (runtimes/osx-{arm64,x64}) required for the universal DMG's
             # per-arch lipo merge, plus the public headers.
             let
               archSuffix =
                 if pkgsUnstable.stdenv.hostPlatform.isAarch64 then "arm64" else "x86_64";
+              # The nupkg's runtimes/ tree uses x64 (not x86_64) for the
+              # Intel macOS natives.
+              runtimeArch =
+                if pkgsUnstable.stdenv.hostPlatform.isAarch64 then "arm64" else "x64";
             in
             pkgsUnstable.stdenvNoCC.mkDerivation rec {
               pname = "onnxruntime-osx-${archSuffix}-prebuilt";
@@ -114,7 +118,7 @@
                 runHook preInstall
                 mkdir -p "$out/include" "$out/lib"
                 cp build/native/include/*.h "$out/include/"
-                cp "runtimes/osx-${archSuffix}/native/libonnxruntime.dylib" "$out/lib/"
+                cp "runtimes/osx-${runtimeArch}/native/libonnxruntime.dylib" "$out/lib/"
                 cp LICENSE "$out/LICENSE" || true
                 install_name_tool -id \
                   "$out/lib/libonnxruntime.dylib" \
