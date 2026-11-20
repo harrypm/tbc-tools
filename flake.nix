@@ -185,6 +185,22 @@
               "-DCUDAToolkit_ROOT=${cudaPackages.cudatoolkit}"
               "-DCMAKE_CUDA_HOST_COMPILER=${cudaHostCompiler}/bin/g++"
             ];
+
+            # Self-contained ffmpeg policy (hard rule): a deployment must
+            # never depend on a host/system ffmpeg. The flake-pinned ffmpeg
+            # (7.1.1, threaded filter graphs) is symlinked into $out/bin next
+            # to the tbc-video-export wrapper so `nix profile install .#`
+            # ships it; tbc-video-export's find_binary resolves the
+            # script-adjacent binary before PATH, and tbc-analyse's
+            # app-dir-first executable search finds it the same way. The
+            # AppImage/tar release jobs replace these symlinks with real
+            # copies during bundle assembly. Enforced by
+            # ci/check_ci_contracts.py (FFMPEG_SELF_CONTAINED_*).
+            postInstall = ''
+              ln -s ${pkgs.ffmpeg.bin}/bin/ffmpeg $out/bin/ffmpeg
+              ln -s ${pkgs.ffmpeg.bin}/bin/ffprobe $out/bin/ffprobe
+              ln -s ${pkgs.ffmpeg.bin}/bin/ffplay $out/bin/ffplay
+            '';
           };
       in
       assert pkgs.lib.assertMsg

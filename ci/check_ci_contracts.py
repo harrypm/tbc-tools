@@ -28,6 +28,8 @@ TBC_ANALYSE_EXPORT_DIALOG = ROOT / "src/tbc-analyse/exportdialog.cpp"
 TBC_ANALYSE_MAIN_WINDOW = ROOT / "src/tbc-analyse/mainwindow.cpp"
 TBC_VIDEO_EXPORT_OPTS_FFMPEG = ROOT / "src/tbc-video-export/src/tbc_video_export/opts/opts_ffmpeg.py"
 TBC_VIDEO_EXPORT_FIELD_ORDER = ROOT / "src/tbc-video-export/src/tbc_video_export/common/field_order.py"
+TBC_VIDEO_EXPORT_FILES_PY = ROOT / "src/tbc-video-export/src/tbc_video_export/common/utils/files.py"
+FLAKE_FILE = ROOT / "flake.nix"
 AGENTS_RULES_FILE = ROOT / "AGENTS.md"
 
 XCB_RUNTIME_LIBS = (
@@ -237,6 +239,53 @@ LINUX_AAA_FORBIDDEN_SNIPPETS = (
 AGENTS_HARD_RULE_REQUIRED_SNIPPETS = (
     "Hard rule: Windows dedicated cache repo pushes must clear checkout-injected github.com auth headers before pull/push",
     "Hard rule: Linux AAA source builds must stay xbuild-compatible and must not require apt msbuild on arm64",
+    "Hard rule: exports must use only bundled, self-contained ffmpeg",
+)
+
+# Hard rule: exports must use only bundled, self-contained ffmpeg (never a
+# host/system ffmpeg). Every deployment ships ffmpeg beside the tools; PATH is
+# a dev-shell fallback only. The nix profile (packages.default) symlinks the
+# flake-pinned ffmpeg.bin into $out/bin next to the tbc-video-export wrapper
+# (so `nix profile install .#` is self-contained), find_binary resolves the
+# script-adjacent binary before PATH so a bundled ffmpeg always wins, and the
+# Linux (AppImage x86 + tar arm64), macOS (.app) and Windows (release\) bundle
+# jobs copy the same pinned ffmpeg into their bundles. A prior export run
+# silently resolved Ubuntu's /usr/bin/ffmpeg 4.4.8 (single-threaded filter
+# graphs) this way, capping the encoder at one core.
+FFMPEG_SELF_CONTAINED_FLAKE_REQUIRED_SNIPPETS = (
+    "postInstall = ''",
+    "ln -s ${pkgs.ffmpeg.bin}/bin/ffmpeg $out/bin/ffmpeg",
+    "ln -s ${pkgs.ffmpeg.bin}/bin/ffprobe $out/bin/ffprobe",
+    "ln -s ${pkgs.ffmpeg.bin}/bin/ffplay $out/bin/ffplay",
+)
+FFMPEG_SELF_CONTAINED_FILES_REQUIRED_SNIPPETS = (
+    # Script-adjacent binary takes precedence over PATH (bundled ffmpeg wins).
+    "get_runtime_directory().with_name(name)",
+)
+FFMPEG_SELF_CONTAINED_LINUX_REQUIRED_SNIPPETS = (
+    # Both Linux jobs (x86 AppImage + arm64 tar) bundle the flake's ffmpeg.
+    "nix build .#ffmpeg --out-link ffmpeg-result",
+)
+FFMPEG_SELF_CONTAINED_LINUX_APPIMAGE_SNIPPETS = (
+    'cp -a "$FFMPEG_BIN" AppDir/usr/bin/ffmpeg',
+    'cp -a "$FFPROBE_BIN" AppDir/usr/bin/ffprobe',
+)
+FFMPEG_SELF_CONTAINED_LINUX_TARBALL_SNIPPETS = (
+    'cp -a "$FFMPEG_BIN" release/bin/ffmpeg',
+)
+FFMPEG_SELF_CONTAINED_MACOS_REQUIRED_SNIPPETS = (
+    "nix build .#ffmpeg^bin",
+    'cp "$FFMPEG_STORE/bin/ffmpeg" dist/bin/ffmpeg',
+    'cp "$FFMPEG_STORE/bin/ffprobe" dist/bin/ffprobe',
+    'cp "$FFMPEG_STORE/bin/ffplay" dist/bin/ffplay',
+)
+# The Windows workflow writes the Copy-Item paths with doubled backslashes
+# (PowerShell tolerates them); match that literal form.
+FFMPEG_SELF_CONTAINED_WINDOWS_REQUIRED_SNIPPETS = (
+    "FFMPEG_URL:",
+    r"Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffmpeg.exe",
+    r"Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffprobe.exe",
+    r"Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffplay.exe",
 )
 
 # tbc-analyse must route all deinterlace/proxy output through tbc-video-export web profiles
@@ -571,6 +620,24 @@ def main() -> int:
         check_contains(TBC_VIDEO_EXPORT_OPTS_FFMPEG, snippet, errors)
     check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_is_tff", errors)
     check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_top_pad_lines", errors)
+
+    # Self-contained ffmpeg policy: the flake must bundle the pinned ffmpeg
+    # into the installed package, find_binary must keep script-adjacent
+    # resolution ahead of PATH, and every platform bundle job must copy the
+    # pinned ffmpeg into its bundle.
+    for snippet in FFMPEG_SELF_CONTAINED_FLAKE_REQUIRED_SNIPPETS:
+        check_contains(FLAKE_FILE, snippet, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_FILES_REQUIRED_SNIPPETS:
+        check_contains(TBC_VIDEO_EXPORT_FILES_PY, snippet, errors)
+    check_count_at_least(LINUX_WORKFLOW, FFMPEG_SELF_CONTAINED_LINUX_REQUIRED_SNIPPETS[0], 2, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_LINUX_APPIMAGE_SNIPPETS:
+        check_contains(LINUX_WORKFLOW, snippet, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_LINUX_TARBALL_SNIPPETS:
+        check_contains(LINUX_WORKFLOW, snippet, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_MACOS_REQUIRED_SNIPPETS:
+        check_contains(MACOS_WORKFLOW, snippet, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_WINDOWS_REQUIRED_SNIPPETS:
+        check_contains(WINDOWS_WORKFLOW, snippet, errors)
 
     # raw.githubusercontent.com 429). Step is gated to arm64 and must appear
     # exactly once in build_windows_tools.yml.
