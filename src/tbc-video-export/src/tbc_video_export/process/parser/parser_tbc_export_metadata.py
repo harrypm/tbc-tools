@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from tbc_video_export.common.enums import ProcessName
 
 
-class ParserLDExportMetadata(Parser):
+class ParserTBCExportMetadata(Parser):
     """Parser for tbc-export-metadata process.
 
     This tool is silent unless there is a problem.

@@ -226,19 +226,16 @@ class ProcessHandler:
         # group 1 (vbi)
         # run process vbi
         if self._state.opts.process_vbi:
-            procs |= ProcessName.LD_PROCESS_VBI
+            procs |= ProcessName.TBC_PROCESS_VBI
 
             self._procs[create_group(export_mode, TBCType.NONE, procs)] = []
 
         procs = ProcessName.NONE
 
         # group 2 (standalone)
-        # run export metadata & process efm
+        # run export metadata
         if self._state.opts.export_metadata:
-            procs |= ProcessName.LD_EXPORT_METADATA
-
-        if self._state.opts.process_efm:
-            procs |= ProcessName.LD_PROCESS_EFM
+            procs |= ProcessName.TBC_EXPORT_METADATA
 
         if procs != ProcessName.NONE:
             self._procs[create_group(export_mode, TBCType.NONE, procs)] = []
@@ -248,9 +245,9 @@ class ProcessHandler:
         # group 3 (decoding/encoding)
         if export_mode != ExportMode.LUMA_4FSC:
             if not self._state.opts.no_dropout_correct:
-                procs |= ProcessName.LD_DROPOUT_CORRECT
+                procs |= ProcessName.TBC_DROPOUT_CORRECT
 
-            procs |= ProcessName.LD_CHROMA_DECODER
+            procs |= ProcessName.TBC_CHROMA_DECODER
 
         # we always want ffmpeg
         procs |= ProcessName.FFMPEG

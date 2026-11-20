@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from tbc_video_export.program_state import ProgramState
 
 
-class WrapperLDExportMetadata(Wrapper):
+class WrapperTBCExportMetadata(Wrapper):
     """Wrapper for tbc-export-metadata."""
 
     def __init__(self, state: ProgramState, config: WrapperConfig[None, None]) -> None:
@@ -40,7 +40,7 @@ class WrapperLDExportMetadata(Wrapper):
 
     @cached_property
     def process_name(self) -> ProcessName:  # noqa: D102
-        return ProcessName.LD_EXPORT_METADATA
+        return ProcessName.TBC_EXPORT_METADATA
 
     @cached_property
     def supported_pipe_types(self) -> PipeType:  # noqa: D102

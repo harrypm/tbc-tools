@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from tbc_video_export.common.enums import ProcessName
 
 
-class ParserLDDropoutCorrect(Parser):
+class ParserTBCDropoutCorrect(Parser):
     """Parser for tbc-dropout-correct process."""
 
     def __init__(self, process_name: ProcessName) -> None:

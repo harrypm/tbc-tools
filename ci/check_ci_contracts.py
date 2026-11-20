@@ -29,6 +29,8 @@ TBC_ANALYSE_MAIN_WINDOW = ROOT / "src/tbc-analyse/mainwindow.cpp"
 TBC_VIDEO_EXPORT_OPTS_FFMPEG = ROOT / "src/tbc-video-export/src/tbc_video_export/opts/opts_ffmpeg.py"
 TBC_VIDEO_EXPORT_FIELD_ORDER = ROOT / "src/tbc-video-export/src/tbc_video_export/common/field_order.py"
 TBC_VIDEO_EXPORT_FILES_PY = ROOT / "src/tbc-video-export/src/tbc_video_export/common/utils/files.py"
+TBC_VIDEO_EXPORT_SRC_DIR = ROOT / "src/tbc-video-export/src/tbc_video_export"
+TBC_VIDEO_EXPORT_ENUMS = TBC_VIDEO_EXPORT_SRC_DIR / "common/enums.py"
 FLAKE_FILE = ROOT / "flake.nix"
 AGENTS_RULES_FILE = ROOT / "AGENTS.md"
 
@@ -286,6 +288,51 @@ FFMPEG_SELF_CONTAINED_WINDOWS_REQUIRED_SNIPPETS = (
     r"Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffmpeg.exe",
     r"Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffprobe.exe",
     r"Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffplay.exe",
+)
+
+# Hard rule: tbc-video-export invokes only tbc-tools binaries - no legacy
+# ld-* tool naming may survive anywhere in the vendored exporter. The
+# experimental --process-efm path's unmapped ProcessName member silently
+# derived "ld-process-efm" from its member name and resolved the legacy tool
+# from PATH on user machines; every ProcessName must now map explicitly to a
+# tbc-* binary (enums.py __str__ raises on unmapped members), and the
+# wrapper/parser modules + classes use tbc_* names. LaserDisc domain terms
+# (CHROMA_COMBINED_LD, is_combined_ld) and mentions of the upstream ld-decode
+# software are not legacy tool naming and are unaffected.
+TBC_TOOL_NAMING_ENUM_REQUIRED_SNIPPETS = (
+    'return "tbc-export-metadata"',
+    'return "tbc-dropout-correct"',
+    'return "tbc-chroma-decoder"',
+    'return "tbc-process-vbi"',
+    'return "ffmpeg"',
+    "no tbc-tools binary name mapping",
+)
+TBC_TOOL_NAMING_FORBIDDEN_SNIPPETS = (
+    "LD_PROCESS_VBI",
+    "LD_EXPORT_METADATA",
+    "LD_DROPOUT_CORRECT",
+    "LD_CHROMA_DECODER",
+    "LD_PROCESS_EFM",
+    "wrapper_ld_",
+    "parser_ld_",
+    "WrapperLD",
+    "ParserLD",
+    '"ld-chroma-decoder"',
+    '"ld-dropout-correct"',
+    '"ld-process-vbi"',
+    '"ld-export-metadata"',
+    '"ld-process-efm"',
+)
+TBC_TOOL_NAMING_REQUIRED_FILES = (
+    TBC_VIDEO_EXPORT_ENUMS,
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/wrapper/wrapper_tbc_chroma_decoder.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/wrapper/wrapper_tbc_dropout_correct.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/wrapper/wrapper_tbc_export_metadata.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/wrapper/wrapper_tbc_process_vbi.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/parser/parser_tbc_chroma_decoder.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/parser/parser_tbc_dropout_correct.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/parser/parser_tbc_export_metadata.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/parser/parser_tbc_process_vbi.py",
 )
 
 # tbc-analyse must route all deinterlace/proxy output through tbc-video-export web profiles
@@ -638,6 +685,17 @@ def main() -> int:
         check_contains(MACOS_WORKFLOW, snippet, errors)
     for snippet in FFMPEG_SELF_CONTAINED_WINDOWS_REQUIRED_SNIPPETS:
         check_contains(WINDOWS_WORKFLOW, snippet, errors)
+
+    # Hard rule: tbc-video-export invokes only tbc-tools binaries; no legacy
+    # ld-* tool naming may survive anywhere in the vendored exporter.
+    for required_file in TBC_TOOL_NAMING_REQUIRED_FILES:
+        if not required_file.exists():
+            errors.append(f"missing required file: {required_file}")
+    for snippet in TBC_TOOL_NAMING_ENUM_REQUIRED_SNIPPETS:
+        check_contains(TBC_VIDEO_EXPORT_ENUMS, snippet, errors)
+    for py_file in sorted(TBC_VIDEO_EXPORT_SRC_DIR.rglob("*.py")):
+        for snippet in TBC_TOOL_NAMING_FORBIDDEN_SNIPPETS:
+            check_not_contains(py_file, snippet, errors)
 
     # raw.githubusercontent.com 429). Step is gated to arm64 and must appear
     # exactly once in build_windows_tools.yml.

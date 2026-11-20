@@ -181,6 +181,108 @@ Validation:
   updated profile (`nix profile install .#` needs re-running to replace the
   currently-installed profile, which predates the bundling).
 
+## Follow-up 3 (2026-11-20 ~03:30-03:40): export failed to start — stale build tree + shadow copies scrubbed
+
+User's 03:30 export attempt from tbc-analyse produced:
+"--overcorrect is not supported by the detected tbc-video-export" (plus
+interfield/resolution-mode fallbacks) and "Failed to start export config
+generation."
+
+Root causes found (both verified):
+1. **The entire `build/` tree was configured 2026-09-22.** Ninja only rebuilt
+   what source-file changes trigger, so `build/bin/tbc-analyse` got the 21:50
+   readout-fix rebuild, but `build/bin/tbc-video-export` (configure-time
+   wrapper) and `build/share/tbc-video-export/src` (configure-time copy of the
+   vendored Python the wrapper imports) were two months stale — APP_VERSION
+   baked as 3.2.9, missing all November source (completion estimate etc.).
+   A full `ninja -C build` was a no-op because nothing it tracked had changed.
+2. **Shadow copies of the tools existed outside build/bin**: repo-root
+   `AppDir/` (400M manual AppImage staging, its bundled tbc-video-export
+   verified to LACK `--overcorrect` in `--help` — matches the 03:30 failure
+   signature if launched from there), `squashfs-root/` (400M), `release/`
+   (222M, stale tbc-tools-x86_64.AppImage), stale `result` nix out-link, and
+   `~/.local/bin/.old-tbc-tools-20260324-002304/`.
+
+User directive: "the only local builds should be in
+/home/harry/tbc-tools/build/bin — scrub anything else."
+
+Actions:
+- Scrubbed: `AppDir/`, `squashfs-root/`, `release/`, `result` (stale 3.2.9
+  out-link), `~/.local/bin/.old-tbc-tools-20260324-002304/`. Kept:
+  `~/.local/bin` symlinks (they all point AT build/bin — every shell now
+  resolves the one true location first), ld-* pipx scripts (vhs-decode,
+  unrelated), appimagetool/linuxdeploy tooling, RESTOREPOINT zips, build-aaa/.
+- Clean-reconfigured and fully rebuilt `build/` from main @ fabd80d
+  (rm -rf build + cmake + ninja in the devShell). Now:
+  `build/bin/tbc-video-export --version` → 3.3.1, `--help` lists the vendored
+  options (overcorrect x3), `tbc-analyse --version` → 3.3.1 (readout fix
+  included), and `build/share` carries the current source (Remaining:/
+  Finishes: present in progress_handler.py).
+- Path check after scrub: `which -a tbc-video-export` → ~/.local/bin
+  (→build/bin) first, nix profile second. The nix profile still holds the
+  old 3.2.9 (its vendored source predates --overcorrect; refresh with
+  `nix profile install .#` to get 3.3.1 + the bundled ffmpeg 7.1.1).
+
+CI for the pushed commits (run 44667963387): CI guardrails (contract
+checker) PASSED; Linux/Windows build jobs failed with the same
+job pattern as the previous main run (44211916999), whose root cause was
+the pre-existing ONNX Runtime GPU 1.18.1 tarball 404 breaking
+`onnxruntime-gpu-prebuilt` (main was already red before these commits).
+Failed-job logs were not yet retrievable while macOS jobs were still
+running; full diagnosis pending run completion.
+
+## Follow-up 4 (2026-11-20 ~05:04-05:20): purge legacy ld-* naming from tbc-video-export
+
+User report: 3.3.1 exports "trying to call old ld-xxx tools". Root cause
+(verified): `ProcessName.__str__` in the vendored exporter mapped five members
+explicitly to tbc-* binaries but `LD_PROCESS_EFM` fell through to
+`str(self.name).lower()` = "ld-process-efm", so `--process-efm` resolved the
+legacy tool from PATH on any machine with the old ld-decode/pipx tools
+installed. The remaining LD_* member names / wrapper_ld_* / parser_ld_*
+modules / WrapperLD* / ParserLD* classes were leftovers of the vendored fork
+that the binary rename never touched (user: "why is there any LD naming in
+here still?" / "everything should be moved hard to tbc-xxxx now").
+
+Changes (all in the vendored tree):
+- `enums.py`: `LD_PROCESS_EFM` member removed; `__str__` now maps EVERY member
+  explicitly (tbc-export-metadata / tbc-dropout-correct / tbc-chroma-decoder /
+  tbc-process-vbi / ffmpeg / none) and raises on unmapped members — a future
+  member can never silently derive an ld-* name again.
+- The experimental `--process-efm` path is removed entirely (opts group,
+  opts fields, tool resolution, process wiring, WrapperLDProcessEFM,
+  ParserLDProcessEFM): it could only ever run by accident against a foreign
+  legacy binary — tbc-tools EFM handling lives in the efm-decoder-* suite /
+  tbc-efm-handler. tbc-analyse never passes --process-efm (verified), so only
+  direct CLI use was affected; argparse now rejects the flag.
+- Full internal rename: 8 modules git-mv'd (wrapper_ld_* → wrapper_tbc_*,
+  parser_ld_* → parser_tbc_*), classes WrapperLD*/ParserLD* → WrapperTBC*/
+  ParserTBC*, enum members LD_* → TBC_*, docstrings referencing legacy binary
+  names updated. LaserDisc domain terms (CHROMA_COMBINED_LD, is_combined_ld)
+  and mentions of the upstream ld-decode software intentionally unaffected
+  (word-bounded sed — `FFMPEG_USE_OLD_MERGEPLANES` contains the substring
+  `LD_` and must not be touched).
+- Hard enforcement: new `TBC_TOOL_NAMING_*` contracts in
+  `ci/check_ci_contracts.py` — required enums.py mappings + raise message, the
+  8 renamed modules as required files, and forbidden snippets (LD_* member
+  names, wrapper_ld_/parser_ld_, WrapperLD/ParserLD, quoted "ld-*" exe names)
+  scanned across every .py in the vendored tree. New AGENTS.md hard rule.
+
+Verification: contract checker passes; `python3 -m compileall` clean;
+imports of WrapperGroup/ParserFactory/process_handler OK; every ProcessName
+str asserted tbc-*/ffmpeg; build/share rebuilt (cmake+ninja);
+`build/bin/tbc-video-export --version` → 3.3.1, `--help` has no process-efm,
+`--process-efm` rejected by argparse; dry-run export on
+test-data/pal/kagemusha-leadout-cbar invokes only tbc-dropout-correct /
+tbc-chroma-decoder / ffmpeg — zero `ld-` tool names (word-boundary checked).
+
+Remaining ld-named items flagged for a decision (NOT changed here):
+- The still-ld-named tbc-tools binaries: `ld-discmap`, `ld-disc-stacker`,
+  `ld-lds-converter` (tbc-analyse invokes ld-lds-converter at mainwindow.cpp
+  ~5555). Renaming these is a cross-cutting change (binaries, CI, docs, user
+  scripts).
+- tbcmetadata.cpp writes "ld-decode" as the capture decoder name (existing
+  TODO to make it configurable).
+
 ## Key locations (for future reference)
 
 - `ExportDialog::processOutputLine` / `consumeProcessOutputChunk` /

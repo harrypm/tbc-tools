@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from tbc_video_export.program_state import ProgramState
 
 
-class WrapperLDChromaDecoder(Wrapper):
+class WrapperTBCChromaDecoder(Wrapper):
     """Wrapper for ld-tools-decoder."""
 
     def __init__(self, state: ProgramState, config: WrapperConfig[Pipe, Pipe]) -> None:
@@ -253,7 +253,7 @@ class WrapperLDChromaDecoder(Wrapper):
 
     @cached_property
     def process_name(self) -> ProcessName:  # noqa: D102
-        return ProcessName.LD_CHROMA_DECODER
+        return ProcessName.TBC_CHROMA_DECODER
 
     @cached_property
     def supported_pipe_types(self) -> PipeType:  # noqa: D102

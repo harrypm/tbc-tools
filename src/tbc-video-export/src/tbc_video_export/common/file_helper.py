@@ -370,28 +370,23 @@ class FileHelper:
         tools[ProcessName.FFMPEG] = self._get_tool_path(ProcessName.FFMPEG)
 
         if not self._opts.no_dropout_correct and not self._opts.luma_4fsc:
-            tools[ProcessName.LD_DROPOUT_CORRECT] = self._get_tbc_tool_path(
-                ProcessName.LD_DROPOUT_CORRECT
+            tools[ProcessName.TBC_DROPOUT_CORRECT] = self._get_tbc_tool_path(
+                ProcessName.TBC_DROPOUT_CORRECT
             )
 
         if not self._opts.luma_4fsc:
-            tools[ProcessName.LD_CHROMA_DECODER] = self._get_tbc_tool_path(
-                ProcessName.LD_CHROMA_DECODER
+            tools[ProcessName.TBC_CHROMA_DECODER] = self._get_tbc_tool_path(
+                ProcessName.TBC_CHROMA_DECODER
             )
 
         if self._opts.process_vbi:
-            tools[ProcessName.LD_PROCESS_VBI] = self._get_tbc_tool_path(
-                ProcessName.LD_PROCESS_VBI
-            )
-
-        if self._opts.process_efm:
-            tools[ProcessName.LD_PROCESS_EFM] = self._get_tbc_tool_path(
-                ProcessName.LD_PROCESS_EFM
+            tools[ProcessName.TBC_PROCESS_VBI] = self._get_tbc_tool_path(
+                ProcessName.TBC_PROCESS_VBI
             )
 
         if self._opts.export_metadata:
-            tools[ProcessName.LD_EXPORT_METADATA] = self._get_tbc_tool_path(
-                ProcessName.LD_EXPORT_METADATA
+            tools[ProcessName.TBC_EXPORT_METADATA] = self._get_tbc_tool_path(
+                ProcessName.TBC_EXPORT_METADATA
             )
 
         return tools

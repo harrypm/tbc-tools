@@ -172,7 +172,7 @@ class ProgramState:
     def _effective_active_frame_lines(self) -> tuple[int, int]:
         """Return the (first, last) active frame lines the chroma decoder will use.
 
-        Resolution mirrors WrapperLDChromaDecoder._get_active_line_opts:
+        Resolution mirrors WrapperTBCChromaDecoder._get_active_line_opts:
         user opts take priority, then a non-default active-line preset, then the
         TBC JSON, then the video-system default preset.
         """
