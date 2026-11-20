@@ -311,6 +311,60 @@ A/B notes (pre-existing, NOT changed here):
   repo EFM fixtures, which fail F2 lead-in detection in both 3.2.9 and
   3.3.1 — fixture-data characteristic, not tool breakage).
 
+## Follow-up 6 (2026-11-20 ~06:00-06:20): Microsoft purged the onnxruntime GitHub releases — ORT moved to nuget.org
+
+Monitoring run 44684351107 per user request. Verified root causes of the 5
+failed jobs (the macOS jobs were still running):
+- Linux parity + Linux x64: the flake's `onnxruntime-linux-x64-gpu-1.18.1.tgz`
+  fetch 404s — Microsoft deleted the ENTIRE onnxruntime GitHub Releases
+  section (`releases/tags/v1.18.1` AND `releases/tags/v1.23.2` both 404; even
+  the releases list endpoint 404s). The macOS flake branch (osx 1.23.2 tgz)
+  and both Windows ORT zip downloads were equally dead.
+- Windows x64/arm64: ORT zip download fails, then the header/lib validation
+  throws.
+- Linux arm64 (tar job): DIFFERENT cause — `cp: 'ffmpeg-result-bin/bin/ffmpeg'
+  and 'release/bin/ffmpeg' are the same file` — a collision introduced by the
+  ffmpeg self-contained commit (fabd80d): the result/bin copy loops pre-stage
+  ffmpeg/ffprobe/ffplay as Nix-store symlinks (from the flake's bundled
+  launchers), and the explicit `cp -a` of the same store path onto that
+  symlink errors. The x86 AppImage job would hit the same once ORT was fixed.
+
+User direction: these dependency issues should have been pre-fixed by the
+cache and self-contained policies — bring ORT under the policy umbrella.
+
+Fix (all under contract):
+- flake.nix: both ORT branches now fetch immutable nuget.org packages
+  (versions are never deleted, unlike GitHub releases):
+  `Microsoft.ML.OnnxRuntime.Gpu.Linux` 1.18.1 (Linux x64 GPU; installPhase
+  arranges the flat public headers + native .so set into include/ + lib/ and
+  adds the SONAME name libonnxruntime.so.1.18.1 — the nupkg ships only the
+  unversioned file) and the fat `Microsoft.ML.OnnxRuntime` 1.23.2 (macOS per-
+  arch thin dylibs + headers). nupkgs need `sourceRoot = "."` (multi-dir
+  unpack) + unzip in nativeBuildInputs + a .zip `name` for fetchurl.
+- build_windows_tools.yml: the ORT step fetches the nupkg and arranges it
+  into the include/ + lib/ tree ONNXRUNTIME_ROOT expects — x64 uses
+  `Microsoft.ML.OnnxRuntime.Gpu.Windows` 1.18.1 (headers + onnxruntime.lib +
+  DLLs + providers), arm64 uses the fat CPU package's runtimes/win-arm64
+  natives (arm64 is CPU-only ORT per the CUDA policy).
+- cuda-plugin-package.sh: both ORT provider fetches (Linux .so + Windows
+  .dll) pull from the Gpu nupkgs instead of the dead release URLs.
+- build_linux_tools.yml (BOTH jobs): the explicit ffmpeg staging now uses
+  `cp -a --remove-destination` so it replaces the pre-staged Nix-store
+  symlinks with the real binaries.
+- New hard rule (AGENTS.md) + `ORT_SOURCE_*` contracts: GitHub-release ORT
+  URLs are FORBIDDEN across flake/workflows/scripts; the nuget URLs + the
+  SONAME symlink + the win-arm64 natives are required snippets. The
+  FFMPEG_SELF_CONTAINED_LINUX_* snippets were updated to the
+  --remove-destination forms (pins the collision fix).
+
+Verification: contract checker passes; full `nix build .#` with the nuget ORT
+succeeds — ORT package has include/ (flat public headers) + lib/ (so set +
+SONAME symlink), `ldd` resolves libonnxruntime.so.1.18.1 from the new store
+path, tbc-chroma-decoder runs. Windows/macOS paths verified by package
+content inspection (the nupkgs carry everything the steps require); CI is the
+final proof. Local build/ tree needs a cmake re-run to pick up the new
+ONNXRUNTIME_ROOT.
+
 ## Key locations (for future reference)
 
 - `ExportDialog::processOutputLine` / `consumeProcessOutputChunk` /

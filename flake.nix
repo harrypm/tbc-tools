@@ -35,69 +35,90 @@
         cudaPackages = vendoredCudaPackages11;
         cudaHostCompiler = if enableCuda then legacyPkgs.gcc11 else null;
         cudaCudnnPackage = if enableCuda then cudaPackages.cudnn_8_9 else null;
+        # ORT source policy (hard rule): Microsoft purged the onnxruntime
+        # GitHub Releases section on 2026-11-20 (the v1.18.1 and v1.23.2
+        # pins both 404'd, breaking every Linux/Windows/macOS CI job), so
+        # ORT comes from the immutable nuget.org package registry instead.
+        # The nupkgs carry the same build outputs (flat public headers +
+        # native libraries) under runtimes/<platform>/native; the install
+        # phases arrange them into the include/ + lib/ tree that
+        # ONNXRUNTIME_ROOT consumers expect. Never point these back at a
+        # GitHub release URL (enforced by ci/check_ci_contracts.py).
         onnxruntimePackage =
           if isLinuxX86_64 then
             legacyPkgs.stdenvNoCC.mkDerivation rec {
               pname = "onnxruntime-gpu-prebuilt";
               version = "1.18.1";
               src = legacyPkgs.fetchurl {
-                url = "https://github.com/microsoft/onnxruntime/releases/download/v${version}/onnxruntime-linux-x64-gpu-${version}.tgz";
-                sha256 = "sha256-2UevDkMR/TgBKtad6kmD5zzl8XVNoNW3oRhgPdh7GX0=";
+                url = "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Linux/${version}";
+                sha256 = "sha256-Nb/PGwmlu9Hc5KA2ykOJWvqXGmrtqg481I+Iosrxazo=";
+                # Name the download with a .zip suffix so the default unpack
+                # phase recognises the nupkg.
+                name = "onnxruntime-gpu-linux-${version}.zip";
               };
-              sourceRoot = "onnxruntime-linux-x64-gpu-${version}";
+              nativeBuildInputs = [ legacyPkgs.unzip ];
+              # The nupkg extracts multiple top-level directories (build/,
+              # buildTransitive/, runtimes/, ...) so the unpacker cannot
+              # auto-pick a source root; stay in the unpack directory.
+              sourceRoot = ".";
               dontConfigure = true;
               dontBuild = true;
               installPhase = ''
                 runHook preInstall
-                mkdir -p "$out"
-                cp -r ./* "$out"/
+                mkdir -p "$out/include" "$out/lib"
+                cp buildTransitive/native/include/*.h "$out/include/"
+                cp runtimes/linux-x64/native/*.so "$out/lib/"
+                # The .so records SONAME libonnxruntime.so.${version} but the
+                # nupkg ships only the unversioned file name; provide the
+                # SONAME name for the dynamic loader.
+                ln -s libonnxruntime.so "$out/lib/libonnxruntime.so.${version}"
+                cp LICENSE "$out/LICENSE" || true
                 runHook postInstall
               '';
             }
           else if isDarwin then
-            # Microsoft prebuilt for CoreML EP (nixpkgs lacks it). 1.23.2
-            # is the last release with matching arm64+x86_64 thin builds,
-            # required for the universal DMG's per-arch lipo merge.
+            # Microsoft prebuilt for CoreML EP (nixpkgs lacks it). The fat
+            # 1.23.2 nupkg ships the per-arch thin dylibs
+            # (runtimes/osx-{arm64,x86_64}) required for the universal DMG's
+            # per-arch lipo merge, plus the public headers.
             let
               archSuffix =
                 if pkgsUnstable.stdenv.hostPlatform.isAarch64 then "arm64" else "x86_64";
-              archSha256 =
-                if pkgsUnstable.stdenv.hostPlatform.isAarch64
-                then "sha256-tNUTqysm8IjGaJHbvBQIFmcIdz18xBY9573KDpu7eFY="
-                else "sha256-0QNZ4WNHtX2ZWffoCiJaW0pm7X1+AHJ0oVyuhoNkhaY=";
             in
             pkgsUnstable.stdenvNoCC.mkDerivation rec {
               pname = "onnxruntime-osx-${archSuffix}-prebuilt";
               version = "1.23.2";
               src = pkgsUnstable.fetchurl {
-                url = "https://github.com/microsoft/onnxruntime/releases/download/v${version}/onnxruntime-osx-${archSuffix}-${version}.tgz";
-                sha256 = archSha256;
+                url = "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime/${version}";
+                sha256 = "sha256-Jf4XL3/N808rWwLIuZf2uIq8KClWhJ1K9DNa8j0MTko=";
+                name = "onnxruntime-osx-${archSuffix}-${version}.zip";
               };
-              sourceRoot = "onnxruntime-osx-${archSuffix}-${version}";
               # stdenvNoCC omits cctools, so install_name_tool isn't on PATH.
               # autoSignDarwinBinariesHook re-signs ad-hoc in fixupPhase after
               # install_name_tool invalidates Microsoft's signature.
               nativeBuildInputs = [
                 pkgsUnstable.cctools
                 pkgsUnstable.darwin.autoSignDarwinBinariesHook
+                pkgsUnstable.unzip
               ];
+              # The nupkg extracts multiple top-level directories (build/,
+              # runtimes/, package/, ...) so the unpacker cannot auto-pick a
+              # source root; stay in the unpack directory.
+              sourceRoot = ".";
               dontConfigure = true;
               dontBuild = true;
-              # Strip Microsoft's broken onnxruntimeTargets.cmake (declares
-              # include/onnxruntime/ which the tgz doesn't ship) so
-              # find_package falls back to ONNXRUNTIME_ROOT include. Also
-              # rewrite the dylib's install_name from @rpath/... to its
-              # absolute store path (nix convention for a prebuilt) so we
-              # don't need nix-specific LC_RPATH workarounds in the built
-              # installables.
+              # Rewrite the dylib's install_name to its absolute store path
+              # (nix convention for a prebuilt) so we don't need
+              # nix-specific LC_RPATH workarounds in the built installables.
               installPhase = ''
                 runHook preInstall
-                mkdir -p "$out"
-                cp -r ./* "$out"/
-                rm -rf "$out/lib/cmake"
+                mkdir -p "$out/include" "$out/lib"
+                cp build/native/include/*.h "$out/include/"
+                cp "runtimes/osx-${archSuffix}/native/libonnxruntime.dylib" "$out/lib/"
+                cp LICENSE "$out/LICENSE" || true
                 install_name_tool -id \
-                  "$out/lib/libonnxruntime.${version}.dylib" \
-                  "$out/lib/libonnxruntime.${version}.dylib"
+                  "$out/lib/libonnxruntime.dylib" \
+                  "$out/lib/libonnxruntime.dylib"
                 runHook postInstall
               '';
             }

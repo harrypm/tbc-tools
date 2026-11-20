@@ -242,6 +242,7 @@ AGENTS_HARD_RULE_REQUIRED_SNIPPETS = (
     "Hard rule: Windows dedicated cache repo pushes must clear checkout-injected github.com auth headers before pull/push",
     "Hard rule: Linux AAA source builds must stay xbuild-compatible and must not require apt msbuild on arm64",
     "Hard rule: exports must use only bundled, self-contained ffmpeg",
+    "Hard rule: ONNX Runtime comes from immutable nuget.org packages, never a GitHub release",
 )
 
 # Hard rule: exports must use only bundled, self-contained ffmpeg (never a
@@ -268,12 +269,42 @@ FFMPEG_SELF_CONTAINED_LINUX_REQUIRED_SNIPPETS = (
     # Both Linux jobs (x86 AppImage + arm64 tar) bundle the flake's ffmpeg.
     "nix build .#ffmpeg --out-link ffmpeg-result",
 )
+# The explicit staging must use --remove-destination: the result/bin copy
+# loops pre-stage ffmpeg/ffprobe/ffplay as Nix-store symlinks (from the
+# flake's bundled ffmpeg launchers), and a plain `cp -a` of the same store
+# path onto that symlink fails with "are the same file" (broke the Linux
+# arm64 tar job on 2026-11-20).
 FFMPEG_SELF_CONTAINED_LINUX_APPIMAGE_SNIPPETS = (
-    'cp -a "$FFMPEG_BIN" AppDir/usr/bin/ffmpeg',
-    'cp -a "$FFPROBE_BIN" AppDir/usr/bin/ffprobe',
+    'cp -a --remove-destination "$FFMPEG_BIN" AppDir/usr/bin/ffmpeg',
+    'cp -a --remove-destination "$FFPROBE_BIN" AppDir/usr/bin/ffprobe',
 )
 FFMPEG_SELF_CONTAINED_LINUX_TARBALL_SNIPPETS = (
-    'cp -a "$FFMPEG_BIN" release/bin/ffmpeg',
+    'cp -a --remove-destination "$FFMPEG_BIN" release/bin/ffmpeg',
+    'cp -a --remove-destination "$FFPROBE_BIN" release/bin/ffprobe',
+)
+
+# Hard rule: ONNX Runtime comes from immutable nuget.org packages, never a
+# GitHub release. Microsoft purged the entire onnxruntime GitHub Releases
+# section on 2026-11-20 (v1.18.1 + v1.23.2 pins 404'd, breaking every
+# Linux/Windows/macOS CI job). The nupkgs carry the same build outputs under
+# runtimes/<platform>/native; install steps arrange them into the include/ +
+# lib/ tree ONNXRUNTIME_ROOT consumers expect.
+ORT_SOURCE_FORBIDDEN_SNIPPETS = (
+    "onnxruntime/releases/download",
+)
+ORT_SOURCE_FLAKE_REQUIRED_SNIPPETS = (
+    "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Linux/",
+    "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime/",
+    'ln -s libonnxruntime.so "$out/lib/libonnxruntime.so.${version}"',
+)
+ORT_SOURCE_WINDOWS_REQUIRED_SNIPPETS = (
+    "Microsoft.ML.OnnxRuntime.Gpu.Windows",
+    "https://www.nuget.org/api/v2/package/$nupkg/$version",
+    r"runtimes\win-arm64\native",
+)
+ORT_SOURCE_CUDA_SCRIPT_REQUIRED_SNIPPETS = (
+    "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Linux/$ORT_VERSION",
+    "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Windows/$ORT_VERSION",
 )
 FFMPEG_SELF_CONTAINED_MACOS_REQUIRED_SNIPPETS = (
     "nix build .#ffmpeg^bin",
@@ -685,6 +716,26 @@ def main() -> int:
         check_contains(MACOS_WORKFLOW, snippet, errors)
     for snippet in FFMPEG_SELF_CONTAINED_WINDOWS_REQUIRED_SNIPPETS:
         check_contains(WINDOWS_WORKFLOW, snippet, errors)
+
+    # Hard rule: ORT comes from immutable nuget.org packages; no workflow,
+    # script or flake may reference the purged onnxruntime GitHub releases.
+    for ort_file in (
+        FLAKE_FILE,
+        WINDOWS_WORKFLOW,
+        LINUX_WORKFLOW,
+        MACOS_WORKFLOW,
+        TESTS_WORKFLOW,
+        CUDA_PLUGIN_PACKAGE_SCRIPT,
+        CUDA_PLUGIN_PUBLISH_WORKFLOW,
+    ):
+        for snippet in ORT_SOURCE_FORBIDDEN_SNIPPETS:
+            check_not_contains(ort_file, snippet, errors)
+    for snippet in ORT_SOURCE_FLAKE_REQUIRED_SNIPPETS:
+        check_contains(FLAKE_FILE, snippet, errors)
+    for snippet in ORT_SOURCE_WINDOWS_REQUIRED_SNIPPETS:
+        check_contains(WINDOWS_WORKFLOW, snippet, errors)
+    for snippet in ORT_SOURCE_CUDA_SCRIPT_REQUIRED_SNIPPETS:
+        check_contains(CUDA_PLUGIN_PACKAGE_SCRIPT, snippet, errors)
 
     # Hard rule: tbc-video-export invokes only tbc-tools binaries; no legacy
     # ld-* tool naming may survive anywhere in the vendored exporter.

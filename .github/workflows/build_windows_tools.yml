@@ -80,23 +80,40 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ env.ONNXRUNTIME_VERSION }}"
+          # Microsoft purged the onnxruntime GitHub releases (2026-11-20);
+          # the immutable nuget.org packages carry the same build outputs
+          # (headers, import libraries, DLLs) under a runtimes/<arch>/native
+          # layout, so fetch the nupkg and arrange it into the include/ +
+          # lib/ tree the ONNXRUNTIME_ROOT consumers expect.
           if ("${{ matrix.arch }}" -eq "x86_64") {
-            $onnxFile = "onnxruntime-win-x64-gpu-$version.zip"
+            $nupkg = "Microsoft.ML.OnnxRuntime.Gpu.Windows"
+            $runtimeDir = "runtimes\win-x64\native"
+            $includeDir = "buildTransitive\native\include"
           } elseif ("${{ matrix.arch }}" -eq "arm64") {
-            $onnxFile = "onnxruntime-win-arm64-$version.zip"
+            # arm64 is CPU-only ONNX Runtime; the fat CPU package ships the
+            # win-arm64 natives alongside the public headers.
+            $nupkg = "Microsoft.ML.OnnxRuntime"
+            $runtimeDir = "runtimes\win-arm64\native"
+            $includeDir = "build\native\include"
           } else {
             throw "Unsupported Windows architecture '${{ matrix.arch }}' for ONNX Runtime package selection."
           }
 
-          $downloadUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$version/$onnxFile"
+          $nugetUrl = "https://www.nuget.org/api/v2/package/$nupkg/$version"
           $extractRoot = Join-Path "${{ github.workspace }}" "external\\onnxruntime"
-          New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
+          $nupkgRoot = Join-Path $extractRoot "nupkg"
+          New-Item -ItemType Directory -Force -Path $nupkgRoot | Out-Null
 
-          $archivePath = Join-Path $extractRoot $onnxFile
-          Invoke-WebRequest $downloadUrl -OutFile $archivePath
-          Expand-Archive -Path $archivePath -DestinationPath $extractRoot -Force
+          $archivePath = Join-Path $extractRoot "$nupkg.$version.nupkg.zip"
+          Invoke-WebRequest $nugetUrl -OutFile $archivePath
+          Expand-Archive -Path $archivePath -DestinationPath $nupkgRoot -Force
 
-          $onnxRoot = Join-Path $extractRoot ($onnxFile -replace '\.zip$','')
+          $onnxRoot = Join-Path $extractRoot "onnxruntime-win-${{ matrix.arch }}-$version"
+          New-Item -ItemType Directory -Force -Path (Join-Path $onnxRoot "include"), (Join-Path $onnxRoot "lib") | Out-Null
+          Copy-Item -Path (Join-Path $nupkgRoot "$includeDir\*") -Destination (Join-Path $onnxRoot "include") -Recurse -Force
+          Copy-Item -Path (Join-Path $nupkgRoot "$runtimeDir\*") -Destination (Join-Path $onnxRoot "lib") -Recurse -Force
+          Copy-Item -Path (Join-Path $nupkgRoot "LICENSE") -Destination $onnxRoot -Force
+
           if (-not (Test-Path "$onnxRoot\\include\\onnxruntime_cxx_api.h")) {
             throw "ONNX Runtime headers not found in $onnxRoot\\include"
           }

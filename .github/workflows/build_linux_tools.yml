@@ -132,11 +132,15 @@ jobs:
             ls -la ffmpeg-result* || true
             exit 1
           fi
-          cp -a "$FFMPEG_BIN" AppDir/usr/bin/ffmpeg
-          cp -a "$FFPROBE_BIN" AppDir/usr/bin/ffprobe
+          # --remove-destination: the result/bin copy loops above already
+          # staged ffmpeg/ffprobe/ffplay as symlinks into the Nix store (from
+          # the flake's bundled ffmpeg launchers); replace them with the real
+          # binaries so the bundle is self-contained.
+          cp -a --remove-destination "$FFMPEG_BIN" AppDir/usr/bin/ffmpeg
+          cp -a --remove-destination "$FFPROBE_BIN" AppDir/usr/bin/ffprobe
           # ffplay plays the Export tab's monitored audio tracks (optional)
           for ffout in ffmpeg-result ffmpeg-result-*; do
-            if [ -f "$ffout/bin/ffplay" ]; then cp -a "$ffout/bin/ffplay" AppDir/usr/bin/ffplay; break; fi
+            if [ -f "$ffout/bin/ffplay" ]; then cp -a --remove-destination "$ffout/bin/ffplay" AppDir/usr/bin/ffplay; break; fi
           done
           chmod -R u+w AppDir/usr/bin
           normalize_bin_script_shebangs() {
@@ -697,11 +701,15 @@ jobs:
             ls -la ffmpeg-result* || true
             exit 1
           fi
-          cp -a "$FFMPEG_BIN" release/bin/ffmpeg
-          cp -a "$FFPROBE_BIN" release/bin/ffprobe
+          # --remove-destination: the result/bin copy loops above already
+          # staged ffmpeg/ffprobe/ffplay as symlinks into the Nix store (from
+          # the flake's bundled ffmpeg launchers); replace them with the real
+          # binaries so the release tar is self-contained.
+          cp -a --remove-destination "$FFMPEG_BIN" release/bin/ffmpeg
+          cp -a --remove-destination "$FFPROBE_BIN" release/bin/ffprobe
           # ffplay plays the Export tab's monitored audio tracks (optional)
           for ffout in ffmpeg-result ffmpeg-result-*; do
-            if [ -f "$ffout/bin/ffplay" ]; then cp -a "$ffout/bin/ffplay" release/bin/ffplay; break; fi
+            if [ -f "$ffout/bin/ffplay" ]; then cp -a --remove-destination "$ffout/bin/ffplay" release/bin/ffplay; break; fi
           done
           chmod -R u+w release/bin
           normalize_bin_script_shebangs() {
