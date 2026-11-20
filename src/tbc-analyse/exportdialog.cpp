@@ -3916,16 +3916,11 @@ void ExportDialog::processOutputLine(const QString &line, QString *lastStatus, c
         return;
     }
 
-    // tbc-video-export's completion estimate (footer "Remaining: ... Finishes: ...")
-    static const QRegularExpression estimatePattern(
-        QStringLiteral("Remaining:\\s*(\\d+:\\d\\d:\\d\\d|\\d+ days?, \\d+:\\d\\d:\\d\\d)\\s+Finishes:\\s*(.+)$"));
-    const QRegularExpressionMatch estimate = estimatePattern.match(trimmed);
-    if (estimate.hasMatch()) {
-        appendStatus(tr("Export: %1 remaining, finishes at %2")
-                         .arg(estimate.captured(1), estimate.captured(2).trimmed()));
-        return;
-    }
-
+    // The status readout is the last status-worthy line of each tbc-video-export
+    // progress redraw - its "Size: ... Duration: ... Bitrate: ... Remaining: ...
+    // Finishes: ..." footer, which summarises the current encode state and the
+    // completion estimate. It must go through lastStatus (never appendStatus, which
+    // would bypass and then be overwritten by the per-feed Main/Proxy status lines).
     if (lastStatus) {
         *lastStatus = trimmed;
     }
