@@ -61,6 +61,16 @@ bool ReaderF2Section::open(const QString &filename)
     m_sectionSize = m_file.pos();
 
     // Calculate the number of F2Sections in the file
+    // A zero section size means the file is empty (or holds no section
+    // data) - fail cleanly instead of dividing by zero (SIGFPE)
+    if (m_sectionSize <= 0) {
+        qCritical() << "ReaderF2Section::open() - Input file" << filename
+                    << "is empty or contains no F2 Section data";
+        delete m_dataStream;
+        m_dataStream = nullptr;
+        m_file.close();
+        return false;
+    }
     m_fileSizeInSections = totalSize / m_sectionSize;
     
     // Restore original position

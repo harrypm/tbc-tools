@@ -283,6 +283,34 @@ Remaining ld-named items flagged for a decision (NOT changed here):
 - tbcmetadata.cpp writes "ld-decode" as the capture decoder name (existing
   TODO to make it configurable).
 
+## Follow-up 5 (2026-11-20 ~05:51): EFM tools SIGFPE on 0-byte input — guarded
+
+While proving the EFM suite still worked after the ld-naming purge,
+efm-decoder-d24 crashed with SIGFPE on a 0-byte input. Root cause: the four
+section readers measure one serialized section (`F2Section`/`Data24Section`
+dummy) and compute `totalSize / sectionSize`; an empty file leaves
+sectionSize = 0 → 0/0 integer division → SIGFPE.
+
+Fix: each of the four readers (efm-decoder-d24 reader_f2section,
+efm-decoder-audio reader_data24section, efm-decoder-data
+reader_data24section, efm-stacker-f2 reader_f2section) now fails cleanly
+when sectionSize <= 0 — qCritical "Input file ... is empty or contains no
+section data", stream deleted, file closed, return false. efm-decoder-f2's
+raw byte reader has no such division and is unaffected.
+
+Verified: d24/audio/data exit 1 with the guard message on 0-byte inputs;
+stacker-f2 exits 255 with the guard message (two distinct empty files — its
+CLI rejects duplicate input names); non-empty garbage does not trigger the
+guard.
+
+A/B notes (pre-existing, NOT changed here):
+- efm-decoder-d24 Aborts (SIGABRT, exit 134) on non-empty garbage input —
+  the old nix-profile 3.2.9 binary aborts identically, so this predates the
+  rebuild; a separate data-validation robustness issue.
+- efm-decoder-f2 exits 0 even when decoding fails ("Decoding FAILED" on the
+  repo EFM fixtures, which fail F2 lead-in detection in both 3.2.9 and
+  3.3.1 — fixture-data characteristic, not tool breakage).
+
 ## Key locations (for future reference)
 
 - `ExportDialog::processOutputLine` / `consumeProcessOutputChunk` /
