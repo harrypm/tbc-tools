@@ -34,8 +34,10 @@
 
 #include "exportdialog.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <thread>
 
 namespace {
 
@@ -80,6 +82,18 @@ void E2EExportDriver::start()
     }
     clock.start();
     timer.start();
+
+    // Last-resort watchdog: if the event loop itself is ever blocked (so the
+    // driver's own timeout cannot fire), exit with a diagnosable message
+    // instead of hanging until the harness kills the process.
+    const qint64 hardLimitMs = timeoutMs + 20000;
+    std::thread([hardLimitMs]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(hardLimitMs));
+        std::fprintf(stderr, "e2e: FAIL: watchdog: event loop blocked for %lld s (modal or hang)\n",
+                     static_cast<long long>(hardLimitMs / 1000));
+        std::fflush(nullptr);
+        std::_Exit(3);
+    }).detach();
 }
 
 void E2EExportDriver::handleModal()
@@ -344,26 +358,29 @@ void E2EExportDriver::tick()
         captureFrom(dialog->findChild<QPlainTextEdit *>(QStringLiteral("proxyLogTextEdit")), &capturedProxyLog);
 
         QTextStream(stderr) << "e2e: source loaded, applying spec" << Qt::endl;
-        QString applyError;
         state = State::Running;
-        if (!applySpec(&applyError)) {
-            finish(false, applyError);
-            return;
-        }
-        if (spec.value(QStringLiteral("list_only")).toBool()) {
-            // Report the controls as these widget values leave them (choices
-            // that depend on the profile/framing) without exporting.
-            finish(modalErrors == 0, QString());
-            return;
-        }
-        // click() runs the whole pre-launch flow synchronously (option
-        // probing, config dump, modal prompts); ticks keep firing inside its
-        // nested event loops to answer modals, but must not conclude early.
-        // Qt never re-delivers a timer event while that timer's handler is
-        // running, so clicking from inside tick() would freeze the driver
-        // as soon as Export opens a modal. Click from a separate event.
+        // Applying widgets (which pumps events) and the Export click (which
+        // runs the whole pre-launch flow synchronously: option probing,
+        // config dump, modal prompts) both run from a separate event. Qt
+        // never re-delivers a timer event while that timer's handler is
+        // running, so doing either inside tick() would freeze the driver as
+        // soon as a modal opened (seen on a fresh macOS runner while setting
+        // widgets). Ticks keep firing inside their nested loops to answer
+        // modals, but must not conclude early (clickInProgress).
         clickInProgress = true;
         QTimer::singleShot(0, this, [this, exportButton]() {
+            QString applyError;
+            if (!applySpec(&applyError)) {
+                finish(false, applyError);
+                return;
+            }
+            if (spec.value(QStringLiteral("list_only")).toBool()) {
+                // Report the controls as these widget values leave them
+                // (choices that depend on the profile/framing) without
+                // exporting.
+                finish(modalErrors == 0, QString());
+                return;
+            }
             QTextStream(stderr) << "e2e: clicking Export" << Qt::endl;
             exportButton->click();
             clickInProgress = false;
