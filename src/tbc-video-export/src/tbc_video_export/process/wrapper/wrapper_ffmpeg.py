@@ -276,7 +276,9 @@ class WrapperFFmpeg(Wrapper):
         input_opts = FlatList()
         if self._state.opts.export_metadata:
             # subtitles
-            if self._state.opts.dry_run:
+            if not self._get_supports_subtitles():
+                pass
+            elif self._state.opts.dry_run:
                 input_opts.append(("{-i", "[SUBTITLE_FILE]}"))
             elif (cc_file := self._state.file_helper.cc_file).is_file():
                 input_opts.append(("-i", cc_file))
@@ -401,7 +403,9 @@ class WrapperFFmpeg(Wrapper):
         """Return FFmpeg video map opts."""
         # video
         input_opts = FlatList(("-map", f"{consts.FFMPEG_VIDEO_MAP}"))
-        input_count = len(self._config.input_pipes)
+        # inputs precede audio/metadata: the pipes, plus the luma file that
+        # two-step merge mode adds first (see _get_video_input_opts)
+        input_count = len(self._config.input_pipes) + int(self._is_two_step_merge_mode())
 
         # audio
         input_opts.append(
@@ -412,7 +416,9 @@ class WrapperFFmpeg(Wrapper):
 
         if self._state.opts.export_metadata:
             # subtitles
-            if self._state.opts.dry_run:
+            if not self._get_supports_subtitles():
+                pass
+            elif self._state.opts.dry_run:
                 input_opts.append(("{-map", "[SUBTITLE_INDEX]:s}"))
             elif self._state.file_helper.cc_file.is_file():
                 input_opts.append(("-map", f"{input_count}:s"))
@@ -466,6 +472,11 @@ class WrapperFFmpeg(Wrapper):
         if not self._state.opts.standard:
             return None
 
+        # D10 has its own fixed raster (720x608 / 720x512, see the
+        # resize_*_d10 filter profiles); a D1 resize after it would undo that.
+        if self._get_profile().video_profile.output_format == "mxf_d10":
+            return None
+
         if (
             self._state.opts.vbi
             or self._state.opts.full_vertical
@@ -477,7 +488,8 @@ class WrapperFFmpeg(Wrapper):
 
         return (
             "scale=720:576:flags=lanczos:interl=1,setsar=128/117"
-            if self._state.video_system is VideoSystem.PAL
+            if self._state.video_system
+            in (VideoSystem.PAL, VideoSystem.SECAM, VideoSystem.MESECAM)
             else "scale=720:486:flags=lanczos:interl=1,setsar=12/13"
         )
 
@@ -550,28 +562,40 @@ class WrapperFFmpeg(Wrapper):
                 )
             )
 
-            if self._state.opts.export_metadata:
-                if self._state.opts.dry_run:
-                    codec_opts.append(("{-c:s", self._get_subtitle_format() + "}"))
-                elif (
-                    self._state.opts.export_metadata
-                    and self._state.file_helper.cc_file.is_file()
-                ):
-                    codec_opts.append(("-c:s", self._get_subtitle_format()))
+        if self._state.opts.export_metadata and self._get_supports_subtitles():
+            if self._state.opts.dry_run:
+                codec_opts.append(("{-c:s", self._get_subtitle_format() + "}"))
+            elif self._state.file_helper.cc_file.is_file():
+                codec_opts.append(("-c:s", self._get_subtitle_format()))
 
         return codec_opts
 
     def _get_video_codec_profile_opts(self) -> FlatList | None:
         """Return codec opts from profile with runtime compatibility adjustments."""
-        if (opts := self._get_profile().video_profile.opts) is None:
-            return None
-        if (
-            self._get_video_profile().codec.lower() != "ffv1"
-            or not self._state.opts.full_frame
-        ):
-            return opts
+        opts = self._get_profile().video_profile.opts
+        codec = self._get_video_profile().codec.lower()
+        if opts is not None and codec == "ffv1" and self._state.opts.full_frame:
+            opts = self._get_ffv1_full_frame_compatible_opts(opts)
 
-        return self._get_ffv1_full_frame_compatible_opts(opts)
+        # Signal the source colour system (PAL/NTSC/SECAM) in the stream where
+        # the codec carries it. x264/x265 take it inside their -params string,
+        # which profiles may already set (x265 interlace=1): merge, since a
+        # second -x26x-params would replace the first.
+        video_format = self._state.video_system_data.ffmpeg_config.video_format
+        params_opt = {"libx264": "-x264-params", "libx265": "-x265-params"}.get(codec)
+        if codec == "mpeg2video":
+            adjusted = list(opts.data) if opts is not None else []
+            adjusted += ["-video_format", video_format]
+            return FlatList(adjusted)
+        if params_opt is not None:
+            adjusted = list(opts.data) if opts is not None else []
+            if params_opt in adjusted:
+                index = adjusted.index(params_opt) + 1
+                adjusted[index] = f"{adjusted[index]}:videoformat={video_format}"
+            else:
+                adjusted += [params_opt, f"videoformat={video_format}"]
+            return FlatList(adjusted)
+        return opts
 
     def _get_ffv1_full_frame_compatible_opts(self, opts: FlatList) -> FlatList:
         """Ensure FFV1 full-frame exports use a slice count compatible with frame geometry."""
@@ -860,11 +884,19 @@ class WrapperFFmpeg(Wrapper):
         """Return True if attachments are supported by the profile container."""
         return self._state.file_helper.output_container.lower() == "mkv"
 
+    def _get_supports_subtitles(self) -> bool:
+        """Return True if the profile container can carry the CC subtitles.
+
+        MXF has no subtitle track type FFmpeg can mux, so CC is left out
+        rather than failing the export.
+        """
+        return self._state.file_helper.output_container.lower() in ("mkv", "mov", "mp4")
+
     def _get_subtitle_format(self) -> str:
         """Return subtitle format based on the profile container."""
         return (
             "srt"
-            if self._state.file_helper.output_container.lower() != "mov"
+            if self._state.file_helper.output_container.lower() == "mkv"
             else "mov_text"
         )
 

@@ -92,7 +92,9 @@ class TestOutput:
         },
         "h265_lossless": {
             "format": "HEVC",
-            "format_profile": "Main 4:2:2 10@L8.5@Main",
+            # MediaInfo < 24 names the HEVC RExt 4:2:2 10 profile, newer
+            # releases report its family ("Format Range")
+            "format_profile": ("Main 4:2:2 10@L8.5@Main", "Format Range@L8.5@Main"),
             "encoding_settings": ["interlace=1", " lossless "],
         },
         "h265_web": {
@@ -1466,7 +1468,11 @@ class TestOutput:
 
         # check video codec
         for k, v in test_case.output_video_codec.items():
-            if isinstance(v, list):
+            if isinstance(v, tuple):  # any one of these spellings
+                target_field = getattr(video_track, k, None)
+                assert target_field is not None
+                assert any(v_item in target_field for v_item in v)
+            elif isinstance(v, list):
                 for v_item in v:
                     target_field = getattr(video_track, k, None)
                     assert target_field is not None

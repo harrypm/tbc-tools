@@ -342,11 +342,10 @@ class TestTBCJson:
 
     procs = [
         ProcessName.FFMPEG,
-        ProcessName.LD_CHROMA_DECODER,
-        ProcessName.LD_DROPOUT_CORRECT,
-        ProcessName.LD_EXPORT_METADATA,
-        ProcessName.LD_PROCESS_EFM,
-        ProcessName.LD_PROCESS_VBI,
+        ProcessName.TBC_CHROMA_DECODER,
+        ProcessName.TBC_DROPOUT_CORRECT,
+        ProcessName.TBC_EXPORT_METADATA,
+        ProcessName.TBC_PROCESS_VBI,
     ]
 
     tbc_types = [
@@ -380,7 +379,6 @@ class TestTBCJson:
     ) -> None:
         state = program_state(
             [
-                "--process-efm",
                 "--process-vbi",
                 "--export-metadata",
             ],
@@ -391,11 +389,10 @@ class TestTBCJson:
         assert helper.tools[proc] == Path(str(proc))
 
     appimage_tbc_tools_procs = [
-        ProcessName.LD_CHROMA_DECODER,
-        ProcessName.LD_DROPOUT_CORRECT,
-        ProcessName.LD_EXPORT_METADATA,
-        ProcessName.LD_PROCESS_EFM,
-        ProcessName.LD_PROCESS_VBI,
+        ProcessName.TBC_CHROMA_DECODER,
+        ProcessName.TBC_DROPOUT_CORRECT,
+        ProcessName.TBC_EXPORT_METADATA,
+        ProcessName.TBC_PROCESS_VBI,
     ]
 
     def test_tools_appimage(  # noqa: D102
@@ -405,7 +402,6 @@ class TestTBCJson:
         with NamedTemporaryFile() as file:
             state = program_state(
                 [
-                    "--process-efm",
                     "--process-vbi",
                     "--export-metadata",
                     "--tbc-tools-appimage",
@@ -428,7 +424,6 @@ class TestTBCJson:
     ) -> None:
         state = program_state(
             [
-                "--process-efm",
                 "--process-vbi",
                 "--export-metadata",
             ],
@@ -449,7 +444,6 @@ class TestTBCJson:
         with NamedTemporaryFile(suffix=".mkv") as file:
             state = program_state(
                 [
-                    "--process-efm",
                     "--process-vbi",
                     "--export-metadata",
                 ],
@@ -468,7 +462,6 @@ class TestTBCJson:
         with NamedTemporaryFile(suffix=".luma.mkv") as file:
             state = program_state(
                 [
-                    "--process-efm",
                     "--process-vbi",
                     "--export-metadata",
                     "--two-step",

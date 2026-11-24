@@ -14,13 +14,13 @@ from tbc_video_export.opts import opt_validators, opts_parser
 from tbc_video_export.process.wrapper import WrapperConfig
 from tbc_video_export.process.wrapper.pipe import Pipe, PipeFactory
 from tbc_video_export.process.wrapper.wrapper_ffmpeg import WrapperFFmpeg
-from tbc_video_export.process.wrapper.wrapper_ld_chroma_decoder import (
-    WrapperLDChromaDecoder,
+from tbc_video_export.process.wrapper.wrapper_tbc_chroma_decoder import (
+    WrapperTBCChromaDecoder,
 )
-from tbc_video_export.process.wrapper.wrapper_ld_dropout_correct import (
-    WrapperLDDropoutCorrect,
+from tbc_video_export.process.wrapper.wrapper_tbc_dropout_correct import (
+    WrapperTBCDropoutCorrect,
 )
-from tbc_video_export.process.wrapper.wrapper_ld_process_vbi import WrapperLDProcessVBI
+from tbc_video_export.process.wrapper.wrapper_tbc_process_vbi import WrapperTBCProcessVBI
 from tbc_video_export.program_state import ProgramState
 
 if TYPE_CHECKING:
@@ -238,7 +238,7 @@ def program_state():  # noqa D102
 @pytest.fixture
 def ldtools_process_vbi_wrapper():  # noqa D102
     def _init(state: ProgramState, tbc_type: TBCType):
-        return WrapperLDProcessVBI(
+        return WrapperTBCProcessVBI(
             state,
             WrapperConfig[None, None](state.current_export_mode, tbc_type, None, None),
         )
@@ -251,7 +251,7 @@ def ldtools_dropout_correct_wrapper():  # noqa D102
     def _init(state: ProgramState, tbc_type: TBCType):
         pipe = PipeFactory.create_dummy_pipe()
 
-        return WrapperLDDropoutCorrect(
+        return WrapperTBCDropoutCorrect(
             state,
             WrapperConfig[None, Pipe](state.current_export_mode, tbc_type, None, pipe),
         )
@@ -264,7 +264,7 @@ def ldtools_chroma_decoder_wrapper():  # noqa D102
     def _init(state: ProgramState, tbc_type: TBCType):
         pipe = PipeFactory.create_dummy_pipe()
 
-        return WrapperLDChromaDecoder(
+        return WrapperTBCChromaDecoder(
             state,
             WrapperConfig[Pipe, Pipe](state.current_export_mode, tbc_type, pipe, pipe),
         )

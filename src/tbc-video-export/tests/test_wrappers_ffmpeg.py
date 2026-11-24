@@ -736,6 +736,31 @@ class TestWrappersFFmpeg:
         ),
     ]
 
+    # Colour system signalling (FFmpegConfig.video_format): MPEG-2/D10 via
+    # -video_format, x264/x265 via videoformat= merged into their -params
+    # (x265 profiles already carry interlace=1). SECAM/MESECAM must signal
+    # SECAM even though they share PAL's colour tags; PAL-M signals PAL.
+    video_format_cases = [
+        WrapperTestCase(
+            id=f"video format {profile} {system}",
+            input_tbc=f"{get_path(tbc)}.tbc",
+            input_opts=["--profile", profile, *json_opts],
+            expected_opts=[expected],
+        )
+        for system, tbc, json_opts, video_format in (
+            ("pal", "pal_composite", [], "pal"),
+            ("ntsc", "ntsc_composite", [], "ntsc"),
+            ("palm", "palm_svideo", [], "pal"),
+            ("secam", "pal_composite", ["--input-tbc-json", str(get_path("secam_composite.tbc.json"))], "secam"),
+            ("mesecam", "pal_composite", ["--input-tbc-json", str(get_path("mesecam_composite.tbc.json"))], "secam"),
+        )
+        for profile, expected in (
+            ("d10", {"-video_format", video_format}),
+            ("h264", {"-x264-params", f"videoformat={video_format}"}),
+            ("h265", {"-x265-params", f"interlace=1:videoformat={video_format}"}),
+        )
+    ]
+
     filter_cases = [
         WrapperTestCase(
             id="add filter profile",
@@ -831,7 +856,7 @@ class TestWrappersFFmpeg:
         ),
     ]
 
-    test_cases = general_cases + hwaccel_cases + bitdepth_cases + filter_cases
+    test_cases = general_cases + hwaccel_cases + bitdepth_cases + filter_cases + video_format_cases
 
     @pytest.mark.parametrize(
         "test_case",

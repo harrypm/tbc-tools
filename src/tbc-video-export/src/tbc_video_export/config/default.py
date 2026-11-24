@@ -377,18 +377,27 @@ DEFAULT_CONFIG: JsonConfig = {
         },
         {
             "name": "d10_mpeg2_ntsc",
-            "description": "D10 (Sony IMX/XDCAM) *BROKEN*",
+            "description": "D10 (Sony IMX/XDCAM)",
             "codec": "mpeg2video",
             "video_format": "yuv422p",
             "container": "mxf",
             "output_format": "mxf_d10",
+            # 525/59.94 IMX50 frames are 208541 bytes. mxf_d10 sizes its
+            # index unit as floor(b:v * 1001 / 240000) -> 208541 at 50 Mb/s,
+            # while mpeg2video's CBR padding rounds up from its rate limits:
+            # 50 Mb/s throughout gives 208542, and the old uniform 49999840
+            # gave 208541 against the muxer's 208540, so every NTSC D10
+            # export failed. b:v/maxrate stay at 50 Mb/s for the muxer and
+            # minrate sits inside the 49999844..49999868 window where the
+            # encoder pads to exactly 208541 (verified on 300 frames of
+            # noise, test pattern and mandelbrot: constant 208541).
             "opts": [
                 "-minrate",
-                "49999840",
+                "49999856",
                 "-maxrate",
-                "49999840",
+                "50000000",
                 "-b:v",
-                "49999840",
+                "50000000",
                 "-g",
                 1,
                 "-flags",
@@ -406,9 +415,9 @@ DEFAULT_CONFIG: JsonConfig = {
                 "-qmax",
                 3,
                 "-bufsize",
-                "1668328",
+                "1668334",
                 "-rc_init_occupancy",
-                "1668328",
+                "1668334",
             ],
             "video_system": "ntsc",
             "filter_profiles_additions": [
@@ -933,13 +942,20 @@ DEFAULT_CONFIG: JsonConfig = {
         },
         {
             "name": "resize_pal_d10",
-            "description": "Resize and pad to D10 (Sony IMX/XDCAM) resoluton (720x608)",  # noqa: E501
-            "video_filter": "scale=720x608:flags=lanczos",
+            "description": "Resize and pad to D10 (Sony IMX/XDCAM) resolution (720x608)",  # noqa: E501
+            # D10 625: the 576 active lines sit below 32 VBI lines in the
+            # 608-line frame; scale the picture to D1, then pad on top (a
+            # straight scale to 608 stretched the picture vertically). IMX
+            # streams flag the whole coded frame 4:3 (MPEG-2 can only signal
+            # 4:3/16:9/square); widescreen sources get setdar=16/9 later.
+            "video_filter": "scale=720:576:flags=lanczos:interl=1,pad=720:608:0:32,setdar=4/3",
         },
         {
             "name": "resize_ntsc_d10",
-            "description": "Resize and pad to D10 (Sony IMX/XDCAM) resoluton (720x512)",  # noqa: E501
-            "video_filter": "scale=720x512:flags=lanczos",
+            "description": "Resize and pad to D10 (Sony IMX/XDCAM) resolution (720x512)",  # noqa: E501
+            # D10 525: the 486 active lines sit below 26 VBI lines in the
+            # 512-line frame (see resize_pal_d10).
+            "video_filter": "scale=720:486:flags=lanczos:interl=1,pad=720:512:0:26,setdar=4/3",
         },
     ],
 }

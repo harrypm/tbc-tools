@@ -13,7 +13,14 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from tbc_video_export.common.enums import ExportMode, FlagHelper, ProcessName, TBCType
+from tbc_video_export.common.enums import (
+    ExportMode,
+    FieldOrder,
+    FlagHelper,
+    ProcessName,
+    TBCType,
+)
+from tbc_video_export.common.mxf_interlace import fix_mxf_interlace
 from tbc_video_export.common.utils import ansi, strings
 from tbc_video_export.process.process import Process
 from tbc_video_export.process.progress_handler import ProgressHandler
@@ -70,6 +77,7 @@ class ProcessHandler:
 
         if self._has_run:
             self._normalize_mkv_display_aspect()
+            self._normalize_mxf_interlace()
             self._print_completion_message()
 
     async def stop(self, cancelled_by_user: bool = False) -> None:
@@ -131,6 +139,26 @@ class ProcessHandler:
 
         temp_file = output_file.with_name(f"{output_file.stem}.remux-{os.getpid()}.mkv")
 
+        # mkvmerge does not carry FFmpeg's FlagInterlaced/FieldOrder over a
+        # remux, which would leave interlaced exports with no field order for
+        # players/NLEs. They are restored on the remux with mkvpropedit
+        # (Matroska FieldOrder codes; FlagInterlaced 1=interlaced,
+        # 2=progressive). Without mkvpropedit, keep FFmpeg's correctly
+        # flagged file rather than lose the field order.
+        field_order_codes = {"tt": 1, "bb": 6, "tb": 9, "bt": 14}
+        field_order = video_stream.get("field_order")
+        mkvpropedit = shutil.which("mkvpropedit", path=str(Path(mkvmerge).parent)) or shutil.which(
+            "mkvpropedit"
+        )
+        if field_order in (*field_order_codes, "progressive") and mkvpropedit is None:
+            self._state.export.append_message(
+                ansi.error_color(
+                    "mkvpropedit not found, skipping MKV display dimension "
+                    "normalization to preserve the field order."
+                )
+            )
+            return
+
         # mkvmerge exit code 1 means warnings, 2 means error
         result = subprocess.run(  # noqa: S603
             [
@@ -149,6 +177,20 @@ class ProcessHandler:
             text=True,
         )
 
+        if result.returncode in (0, 1) and temp_file.is_file() and mkvpropedit:
+            if field_order in field_order_codes:
+                props = ["--set", "interlaced=1", "--set", f"field-order={field_order_codes[field_order]}"]
+            elif field_order == "progressive":
+                props = ["--set", "interlaced=2"]
+            else:
+                props = []
+            if props and subprocess.run(  # noqa: S603
+                [mkvpropedit, "--quiet", str(temp_file), "--edit", "track:v1", *props],
+                check=False,
+                capture_output=True,
+            ).returncode not in (0, 1):
+                result = subprocess.CompletedProcess(result.args, 2)
+
         if result.returncode in (0, 1) and temp_file.is_file():
             temp_file.replace(output_file)
             self._state.export.append_message(
@@ -166,6 +208,43 @@ class ProcessHandler:
                 )
             )
 
+    def _normalize_mxf_interlace(self) -> None:
+        """Re-flag interlaced MXF exports with the real field order.
+
+        FFmpeg's MXF muxer describes ProRes/JPEG 2000 essence as progressive
+        and gives other interlaced essence a bottom-first FieldDominance for
+        top-field-first video (see common/mxf_interlace.py). Deinterlaced
+        (web/proxy) and progressive exports are left as FFmpeg wrote them.
+        """
+        output_file = self._state.file_helper.output_video_file
+        if output_file.suffix.lower() != ".mxf" or not output_file.is_file():
+            return
+
+        field_order = self._state.opts.field_order
+        if field_order is FieldOrder.AUTO:
+            field_order = self._state.source_field_order
+        profile_name = self._state.profile.name.lower()
+        deinterlaced = profile_name == "web" or profile_name.endswith("_web")
+        if field_order not in (FieldOrder.TFF, FieldOrder.BFF) or deinterlaced:
+            return
+
+        try:
+            changes = fix_mxf_interlace(
+                output_file, field_order is FieldOrder.TFF, self._state.output_line_map
+            )
+        except (OSError, ValueError) as error:
+            self._state.export.append_message(
+                ansi.error_color(f"Unable to fix MXF interlace metadata: {error}")
+            )
+            return
+
+        if changes:
+            self._state.export.append_message(
+                ansi.success_color(
+                    f"MXF flagged interlaced {field_order.name}: " + "; ".join(changes) + "."
+                )
+            )
+
     def _probe_video_stream(self, video_file: Path) -> dict[str, Any] | None:
         """Return the first video stream from ffprobe of video_file."""
         if (ffprobe := self._resolve_ffprobe()) is None:
@@ -179,7 +258,7 @@ class ProcessHandler:
                 "-select_streams",
                 "v:0",
                 "-show_entries",
-                "stream=index,width,height,sample_aspect_ratio",
+                "stream=index,width,height,sample_aspect_ratio,field_order",
                 "-of",
                 "json",
                 str(video_file),
