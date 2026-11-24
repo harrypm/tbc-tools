@@ -300,9 +300,122 @@ jobs:
       release_tag: ${{ needs.resolve-tag.outputs.release_tag }}
     secrets: inherit
 
+  # End-to-end export tests against the packaged artifacts users download
+  # (AppImage, arm64 tar, Windows release dir, macOS dmg), not the build
+  # tree: tbc-analyse's Export tab is driven headlessly through its hidden
+  # --e2e-export driver and tbc-video-export is run directly, with every
+  # output verified by the package's own ffprobe. --strict-bundled puts
+  # failing decoy tools first on PATH and runs from a cwd holding decoy
+  # tool directories, so a package that resolves anything outside itself
+  # (a 2026-11 AppImage export resolved ~/tbc-video-export, a directory, and
+  # could not start) fails here. Runs for build-only Tests calls too, and
+  # gates publishing.
+  package-e2e:
+    name: Packaged export E2E (${{ matrix.label }})
+    needs: [resolve-tag, build-linux, build-windows, build-macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux-x86_64-appimage
+            runner: ubuntu-24.04
+            artifact: tbc-tools_linux_x86_64
+          - label: linux-arm64-tar
+            runner: ubuntu-24.04-arm
+            artifact: tbc-tools_linux_arm64
+          - label: windows-x86_64
+            runner: windows-2022
+            artifact: tbc-tools_windows_x86_64
+          - label: windows-arm64
+            runner: windows-11-arm
+            artifact: tbc-tools_windows_arm64
+          - label: macos-arm64-dmg
+            runner: macos-15
+            artifact: tbc-tools_macos_arm64
+          - label: macos-x86_64-dmg
+            runner: macos-15-intel
+            artifact: tbc-tools_macos_x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout fixtures and test runner
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.resolve-tag.outputs.checkout_ref }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Download packaged artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.artifact }}
+          path: package
+      - name: Unpack package
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.label }}" in
+            linux-x86_64-appimage)
+              tar -xJf package/tbc-tools_linux_x86_64.tar.xz -C package
+              appimage="$(realpath "$(ls package/tbc-tools/*.AppImage | head -n 1)")"
+              chmod +x "$appimage"
+              # Extract once (runners have no FUSE) and drive the AppImage's
+              # own AppRun, which dispatches '<AppRun> <tool>' exactly like
+              # the mounted image does.
+              (cd package && "$appimage" --appimage-extract >/dev/null)
+              echo "E2E_TOOL_ARGS=--appimage package/squashfs-root/AppRun --qpa xcb" >> "$GITHUB_ENV"
+              ;;
+            linux-arm64-tar)
+              tar -xJf package/tbc-tools_linux_arm64.tar.xz -C package
+              echo "E2E_TOOL_ARGS=--analyse package/tbc-tools/bin/tbc-analyse --video-export package/tbc-tools/bin/tbc-video-export --qpa xcb" >> "$GITHUB_ENV"
+              ;;
+            windows-*)
+              echo "E2E_TOOL_ARGS=--analyse package/tbc-analyse.exe --video-export package/tbc-video-export.exe" >> "$GITHUB_ENV"
+              ;;
+            macos-*)
+              dmg="$(ls package/*.dmg | head -n 1)"
+              hdiutil attach "$dmg" -nobrowse -readonly -mountpoint /tmp/tbc-e2e-dmg
+              app="$(ls -d /tmp/tbc-e2e-dmg/*.app | head -n 1)"
+              # Install the way users do: copy the app out of the dmg.
+              cp -R "$app" package/
+              hdiutil detach /tmp/tbc-e2e-dmg
+              macos_dir="package/$(basename "$app")/Contents/MacOS"
+              echo "E2E_TOOL_ARGS=--analyse $macos_dir/tbc-analyse --video-export $macos_dir/tbc-video-export" >> "$GITHUB_ENV"
+              ;;
+          esac
+      - name: Install X server for the Linux GUI driver
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0
+      - name: Run packaged export E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner=()
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            runner=(xvfb-run -a -s "-screen 0 1920x1080x24")
+          fi
+          # shellcheck disable=SC2086
+          "${runner[@]}" python scripts/test-export-e2e.py --source . $E2E_TOOL_ARGS \
+            --level smoke --strict-bundled --jobs 4 --case-timeout 600 \
+            --work-dir e2e-work --junit e2e-work/junit.xml
+      - name: Upload E2E artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: export-e2e-${{ matrix.label }}
+          path: |
+            e2e-work/gui/*/*.txt
+            e2e-work/gui/*/*.json
+            e2e-work/gui/*/out/*.log
+            e2e-work/cli/*/*.txt
+            e2e-work/junit.xml
+          if-no-files-found: ignore
+
   upload-release-assets:
     name: Upload release assets
-    needs: [resolve-tag, build-linux, build-windows, build-macos]
+    needs: [resolve-tag, build-linux, build-windows, build-macos, package-e2e]
     if: ${{ needs.resolve-tag.outputs.publish_release == 'true' }}
     # Pinned: ubuntu-latest migrates to Ubuntu 26 on 2026-10-19
     # (actions/runner-images#14748); ubuntu-24.04 keeps today's behaviour.

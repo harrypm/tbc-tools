@@ -49,3 +49,21 @@ reads raw u16 as unsigned mono, matching the TBC format exactly.
 
 Original captures (with the FLAC-Chop snips folder `snips-official/`):
 `/home/harry/Desktop/SECAM/`
+
+## Combined `.tbc` is not a broadcast-level composite
+
+`secam-etienne-cbars-10f.tbc` is a luma-path decode output: its SECAM FM
+block (4.0-4.6 MHz) sits **45-50 dB below** the restored block in
+`secam-etienne-cbars-10f_chroma.tbc`, roughly level with the in-band
+noise/luma tail (measured 2026-11-24 on the white bar, field 3). Colour
+decoded from it is not meaningful: the SECAM decoder's porch calibration
+lands on a false cluster (F0B ~4.13-4.17 MHz instead of ~4.245 MHz) and the
+bars come out cyan-cast with blue near black. Its decode test
+(`decode-pretbc-secam-etienne-cbars`) checks black-level noise only.
+
+For composite-path colour testing, `scripts/test-export-e2e.py`
+(`build_secam_composite`) builds a real CVBS signal at test time:
+luma + the restored block scaled so the undeviated rest carrier is ~23% of
+the luminance amplitude peak-to-peak (BT.470), measured on the white bar.
+That composite decodes with correct calibration (F0B 4.246-4.252 MHz,
+porch line-ident 288/288) and colour bars matching the Y/C path.

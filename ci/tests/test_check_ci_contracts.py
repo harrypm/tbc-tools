@@ -467,6 +467,31 @@ class ContractCoverageTests(unittest.TestCase):
             expected.issubset(set(check_ci_contracts.AGENTS_HARD_RULE_REQUIRED_SNIPPETS))
         )
 
+    def test_export_e2e_contract_gates_release_on_packaged_tests(self) -> None:
+        # Packaged artifacts must pass the end-to-end export suite before any
+        # release is published (an AppImage once could not start exports).
+        expected = {
+            "package-e2e:",
+            "--strict-bundled",
+            "needs: [resolve-tag, build-linux, build-windows, build-macos, package-e2e]",
+        }
+        self.assertTrue(expected.issubset(set(check_ci_contracts.EXPORT_E2E_RELEASE_REQUIRED_SNIPPETS)))
+        content = check_ci_contracts.RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        for snippet in check_ci_contracts.EXPORT_E2E_RELEASE_REQUIRED_SNIPPETS:
+            self.assertIn(snippet, content)
+
+    def test_export_tool_resolution_rejects_directories(self) -> None:
+        content = check_ci_contracts.TBC_ANALYSE_EXPORT_DIALOG.read_text(encoding="utf-8")
+        self.assertIn("candidateInfo.isFile() && candidateInfo.isExecutable()", content)
+        self.assertNotIn("candidateInfo.exists() && candidateInfo.isExecutable()", content)
+        linux = check_ci_contracts.LINUX_WORKFLOW.read_text(encoding="utf-8")
+        self.assertGreaterEqual(linux.count(check_ci_contracts.EXPORT_TOOL_RESOLUTION_LINUX_SNIPPET), 2)
+
+    def test_ci_parity_runs_python_tests_on_ci(self) -> None:
+        content = check_ci_contracts.CI_PARITY_SCRIPT.read_text(encoding="utf-8")
+        for snippet in check_ci_contracts.CI_PARITY_PYTHON_TESTS_REQUIRED_SNIPPETS:
+            self.assertIn(snippet, content)
+
     def test_windows_teletext_vendor_contract_requires_bundle_step(self) -> None:
         # The Windows release must bundle the vendored vhs-teletext Python tree
         # at release\vendor\vhs-teletext or tbc-process-vbi's teletext HTML export

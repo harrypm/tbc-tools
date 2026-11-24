@@ -32,6 +32,11 @@ TBC_VIDEO_EXPORT_FILES_PY = ROOT / "src/tbc-video-export/src/tbc_video_export/co
 TBC_VIDEO_EXPORT_SRC_DIR = ROOT / "src/tbc-video-export/src/tbc_video_export"
 TBC_VIDEO_EXPORT_ENUMS = TBC_VIDEO_EXPORT_SRC_DIR / "common/enums.py"
 FLAKE_FILE = ROOT / "flake.nix"
+EXPORT_E2E_SCRIPT = ROOT / "scripts/test-export-e2e.py"
+EXPORT_E2E_DRIVER = ROOT / "src/tbc-analyse/e2eexportdriver.cpp"
+TBC_ANALYSE_MAIN = ROOT / "src/tbc-analyse/main.cpp"
+TBC_VIDEO_EXPORT_CMAKE = ROOT / "src/tbc-video-export/CMakeLists.txt"
+CI_PARITY_SCRIPT = ROOT / "ci/run_local_ci_parity.sh"
 AGENTS_RULES_FILE = ROOT / "AGENTS.md"
 
 XCB_RUNTIME_LIBS = (
@@ -243,6 +248,7 @@ AGENTS_HARD_RULE_REQUIRED_SNIPPETS = (
     "Hard rule: Linux AAA source builds must stay xbuild-compatible and must not require apt msbuild on arm64",
     "Hard rule: exports must use only bundled, self-contained ffmpeg",
     "Hard rule: ONNX Runtime comes from immutable nuget.org packages, never a GitHub release",
+    "Hard rule: every export mode must stay covered by the end-to-end export suite",
 )
 
 # Hard rule: exports must use only bundled, self-contained ffmpeg (never a
@@ -576,6 +582,49 @@ MACOS_UNIVERSAL_VENDOR_REQUIRED_SNIPPETS = (
 )
 
 
+# Hard rule: every export mode stays covered by the end-to-end export suite
+# (scripts/test-export-e2e.py). The tbc-analyse Export tab is driven headlessly
+# through its hidden --e2e-export driver and tbc-video-export runs directly,
+# across every profile/option the GUI offers, with ffprobe-verified outputs.
+# ctest runs it on the build tree; the Release workflow's package-e2e job runs
+# it against every packaged artifact (--strict-bundled) and gates publishing.
+# Origin (2026-11): an AppImage export resolved ~/tbc-video-export (a
+# directory: the loader-launched binary's applicationDirPath() is usr/lib) and
+# could not start, with no test anywhere exercising a packaged export.
+EXPORT_E2E_RELEASE_REQUIRED_SNIPPETS = (
+    "package-e2e:",
+    "python scripts/test-export-e2e.py",
+    "--strict-bundled",
+    "needs: [resolve-tag, build-linux, build-windows, build-macos, package-e2e]",
+)
+EXPORT_E2E_CMAKE_REQUIRED_SNIPPETS = (
+    "scripts/test-export-e2e.py",
+    "foreach(_e2e_suite contract cli gui)",
+    "NAME export-e2e-${_e2e_suite}",
+)
+EXPORT_E2E_MAIN_REQUIRED_SNIPPETS = (
+    'QCommandLineOption e2eExportOption("e2e-export"',
+    'QCommandLineOption e2eListOption("e2e-list-export-options"',
+)
+# Bundled-sibling resolution: the Linux loader wrappers declare the real bin
+# dir, and tbc-analyse searches it first and never accepts a directory as an
+# executable (QFileInfo::isExecutable() is true for searchable directories).
+EXPORT_TOOL_RESOLUTION_LINUX_SNIPPET = 'export TBC_TOOLS_APP_BIN_DIR="\\${SELF_DIR}"'
+EXPORT_TOOL_RESOLUTION_REQUIRED_SNIPPETS = (
+    'appendUniqueDir(qEnvironmentVariable("TBC_TOOLS_APP_BIN_DIR"));',
+    "candidateInfo.isFile() && candidateInfo.isExecutable()",
+)
+EXPORT_TOOL_RESOLUTION_FORBIDDEN_SNIPPETS = (
+    "candidateInfo.exists() && candidateInfo.isExecutable()",
+)
+# The tbc-video-export pytest suite runs on CI (--build-test-only) and never
+# silently skips there.
+CI_PARITY_PYTHON_TESTS_REQUIRED_SNIPPETS = (
+    "    run_full_build_and_test\n    run_python_tests\n    ;;",
+    'echo "Failed to create the pytest venv on CI" >&2',
+)
+
+
 def check_contains(path: Path, snippet: str, errors: list[str]) -> None:
     content = path.read_text(encoding="utf-8")
     if snippet not in content:
@@ -624,6 +673,11 @@ def main() -> int:
         WIN_CUDA_RUNTIME_SCRIPT,
         CUDA_PLUGIN_PUBLISH_WORKFLOW,
         CUDA_PLUGIN_PACKAGE_SCRIPT,
+        EXPORT_E2E_SCRIPT,
+        EXPORT_E2E_DRIVER,
+        TBC_ANALYSE_MAIN,
+        TBC_VIDEO_EXPORT_CMAKE,
+        CI_PARITY_SCRIPT,
     ):
         if not required_file.exists():
             errors.append(f"missing required file: {required_file}")
@@ -837,6 +891,21 @@ def main() -> int:
 
     for snippet in AGENTS_HARD_RULE_REQUIRED_SNIPPETS:
         check_contains(AGENTS_RULES_FILE, snippet, errors)
+
+    for snippet in EXPORT_E2E_RELEASE_REQUIRED_SNIPPETS:
+        check_contains(RELEASE_WORKFLOW, snippet, errors)
+    for snippet in EXPORT_E2E_CMAKE_REQUIRED_SNIPPETS:
+        check_contains(TBC_VIDEO_EXPORT_CMAKE, snippet, errors)
+    for snippet in EXPORT_E2E_MAIN_REQUIRED_SNIPPETS:
+        check_contains(TBC_ANALYSE_MAIN, snippet, errors)
+    # both loader wrappers (x86_64 AppDir, arm64 tar)
+    check_count_at_least(LINUX_WORKFLOW, EXPORT_TOOL_RESOLUTION_LINUX_SNIPPET, 2, errors)
+    for snippet in EXPORT_TOOL_RESOLUTION_REQUIRED_SNIPPETS:
+        check_contains(TBC_ANALYSE_EXPORT_DIALOG, snippet, errors)
+    for snippet in EXPORT_TOOL_RESOLUTION_FORBIDDEN_SNIPPETS:
+        check_not_contains(TBC_ANALYSE_EXPORT_DIALOG, snippet, errors)
+    for snippet in CI_PARITY_PYTHON_TESTS_REQUIRED_SNIPPETS:
+        check_contains(CI_PARITY_SCRIPT, snippet, errors)
 
     win_cache_auth_scrub_count = WINDOWS_WORKFLOW.read_text(encoding="utf-8").count(
         "config --local --unset-all http.https://github.com/.extraheader"

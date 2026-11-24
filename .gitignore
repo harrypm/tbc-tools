@@ -53,6 +53,8 @@ __pycache__
 
 # ld-decode data files
 *.tbc
+# tbc-video-export test fixtures (pytest + scripts/test-export-e2e.py) must be tracked
+!src/tbc-video-export/tests/files/*.tbc
 testout
 ci/cache/
 
