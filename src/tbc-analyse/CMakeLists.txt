@@ -9,6 +9,7 @@ set(tbc-analyse_SOURCES
     closedcaptionsdialog.cpp closedcaptionsdialog.ui
     efmhandlerdialog.cpp efmhandlerdialog.h
     exportdialog.cpp exportdialog.ui
+    e2eexportdriver.cpp e2eexportdriver.h
     exportarguments.cpp exportarguments.h
     metadataconversiondialog.cpp metadataconversiondialog.ui
     metadatastatusdialog.cpp metadatastatusdialog.ui
