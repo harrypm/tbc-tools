@@ -398,14 +398,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          runner=()
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            runner=(xvfb-run -a -s "-screen 0 1920x1080x24")
-          fi
           # shellcheck disable=SC2086
-          "${runner[@]}" python scripts/test-export-e2e.py --source . $E2E_TOOL_ARGS \
-            --level smoke --strict-bundled --jobs 4 --case-timeout 600 \
-            --work-dir e2e-work --junit e2e-work/junit.xml
+          cmd=(python scripts/test-export-e2e.py --source . $E2E_TOOL_ARGS
+               --level smoke --strict-bundled --jobs 4 --case-timeout 600
+               --work-dir e2e-work --junit e2e-work/junit.xml)
+          # No empty-array expansion: macOS runners ship bash 3.2, where
+          # "${arr[@]}" of an empty array is an unbound variable under set -u.
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            xvfb-run -a -s "-screen 0 1920x1080x24" "${cmd[@]}"
+          else
+            "${cmd[@]}"
+          fi
       - name: Upload E2E artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v7
