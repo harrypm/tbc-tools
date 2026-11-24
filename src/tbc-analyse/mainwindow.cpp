@@ -5743,6 +5743,11 @@ void MainWindow::maybePerformWeeklyUpdateCheck()
     if (!configuration.getUpdateCheckEnabled()) {
         return;
     }
+    // Headless/automated runs (the --e2e-* drivers set this) must not hit the
+    // network or pop an update dialog mid-export.
+    if (qEnvironmentVariableIsSet("TBC_ANALYSE_NO_UPDATE_CHECK")) {
+        return;
+    }
 
     // Skip the automatic check for unversioned/dev builds to avoid noisy prompts.
     const QString currentVersion = QString::fromUtf8(APP_VERSION);

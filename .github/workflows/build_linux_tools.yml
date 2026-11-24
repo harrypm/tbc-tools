@@ -471,6 +471,7 @@ jobs:
           ROOT_DIR="\$(cd "\${SELF_DIR}/.." && pwd)"
           LOADER="\${ROOT_DIR}/lib/${loader_name}"
           TARGET="\${SELF_DIR}/.${name}.real"
+          export TBC_TOOLS_APP_BIN_DIR="\${SELF_DIR}"
           exec "\$LOADER" --library-path "\${ROOT_DIR}/lib" "\$TARGET" "\$@"
           EOF
               chmod +x "$exe"
@@ -940,6 +941,7 @@ jobs:
           ROOT_DIR="\$(cd "\${SELF_DIR}/.." && pwd)"
           LOADER="\${ROOT_DIR}/lib/${loader_name}"
           TARGET="\${SELF_DIR}/.${name}.real"
+          export TBC_TOOLS_APP_BIN_DIR="\${SELF_DIR}"
           exec "\$LOADER" --library-path "\${ROOT_DIR}/lib" "\$TARGET" "\$@"
           EOF
               chmod +x "$exe"

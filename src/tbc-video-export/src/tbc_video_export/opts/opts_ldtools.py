@@ -112,7 +112,7 @@ def add_ldtool_opts(parent: argparse.ArgumentParser) -> None:
         help=(
             "Resize active-area output to standard D1 dimensions using auto "
             "padding.\\n"
-            "  - PAL: 720x576 with SAR 128/117\\n"
+            "  - PAL/SECAM/MESECAM: 720x576 with SAR 128/117\\n"
             "  - NTSC/PAL-M: 720x486 with SAR 12/13\\n"
             "  - Works with custom active-area framing."
             "\\n\\n"

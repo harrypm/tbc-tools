@@ -167,14 +167,38 @@ run_python_tests() {
   require_cmd nix
   local venv_bin="$ROOT_DIR/src/tbc-video-export/.venv/bin"
   local build_bin="$ROOT_DIR/build/bin"
+  local extra_ld_path=""
   if [[ ! -x "$venv_bin/pytest" ]]; then
-    echo "Skipping python tests: src/tbc-video-export/.venv has no pytest (create the venv to enable)" >&2
-    return 0
+    # No developer venv (always the case on CI runners): build a throwaway
+    # one instead of skipping. A silent skip here hid a fully broken
+    # tbc-video-export test suite (stale ld-* imports) from CI for weeks.
+    # PYTHONPATH=src stands in for the editable install.
+    local ci_venv="$ROOT_DIR/build/pytest-venv"
+    if [[ ! -x "$ci_venv/bin/pytest" ]]; then
+      # PYTHONPATH unset: the dev shell's PYTHONPATH carries Nix's pytest,
+      # which would make pip skip installing it into the venv.
+      if ! nix develop -c sh -c "python3 -m venv '$ci_venv' && env -u PYTHONPATH '$ci_venv/bin/pip' install --quiet \
+          'pytest>=8.1,<9' 'pytest-mock>=3.14,<4' 'pymediainfo>=6.1,<7' 'rapidfuzz>=3.14,<4' 'typing-extensions>=4.10'"; then
+        if [[ -n "${CI:-}" ]]; then
+          echo "Failed to create the pytest venv on CI" >&2
+          return 1
+        fi
+        echo "Skipping python tests: could not create $ci_venv (offline?)" >&2
+        return 0
+      fi
+    fi
+    venv_bin="$ci_venv/bin"
+    # pymediainfo dlopens libmediainfo; take it from the same pinned package
+    # set as the dev shell's python (nixpkgsLegacy) so their shared libs
+    # (openssl, ...) agree. The dev .venv relies on a host copy.
+    local mediainfo_store
+    mediainfo_store="$(nix build --inputs-from "$ROOT_DIR" nixpkgsLegacy#libmediainfo --no-link --print-out-paths | tail -n 1)"
+    extra_ld_path="$mediainfo_store/lib"
   fi
   # Run inside the root Nix dev shell so the tests use the same bundled/pulled
   # ffmpeg as the release builds (the AV1 profiles need libsvtav1, which the
   # stock distro ffmpeg lacks), with build/bin providing the renamed tools.
-  nix develop -c sh -c "export PATH=\"$venv_bin:$build_bin:\$PATH\"; cd src/tbc-video-export && pytest tests -q"
+  nix develop -c sh -c "export PATH=\"$venv_bin:$build_bin:\$PATH\" PYTHONPATH=\"$ROOT_DIR/src/tbc-video-export/src\" LD_LIBRARY_PATH=\"$extra_ld_path\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\"; cd src/tbc-video-export && '$venv_bin/python' -m pytest tests -q"
 }
 
 if [[ "$#" -gt 1 ]]; then
@@ -192,7 +216,10 @@ case "$MODE" in
     run_guardrails
     ;;
   --build-test-only)
+    # The tbc-video-export pytest suite is part of build verification
+    # (it was previously only run by --all, i.e. never on CI).
     run_full_build_and_test
+    run_python_tests
     ;;
   --python-tests-only)
     run_python_tests

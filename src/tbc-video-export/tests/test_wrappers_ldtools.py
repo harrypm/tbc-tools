@@ -12,14 +12,14 @@ from tests.conftest import WrapperTestCase, get_path
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from tbc_video_export.process.wrapper.wrapper_ld_chroma_decoder import (
-        WrapperLDChromaDecoder,
+    from tbc_video_export.process.wrapper.wrapper_tbc_chroma_decoder import (
+        WrapperTBCChromaDecoder,
     )
-    from tbc_video_export.process.wrapper.wrapper_ld_dropout_correct import (
-        WrapperLDDropoutCorrect,
+    from tbc_video_export.process.wrapper.wrapper_tbc_dropout_correct import (
+        WrapperTBCDropoutCorrect,
     )
-    from tbc_video_export.process.wrapper.wrapper_ld_process_vbi import (
-        WrapperLDProcessVBI,
+    from tbc_video_export.process.wrapper.wrapper_tbc_process_vbi import (
+        WrapperTBCProcessVBI,
     )
     from tbc_video_export.program_state import ProgramState
 
@@ -138,7 +138,7 @@ class TestWrappersProcessVBI:
         self,
         program_state: Callable[[list[str], str], ProgramState],
         ldtools_process_vbi_wrapper: Callable[
-            [ProgramState, TBCType], WrapperLDProcessVBI
+            [ProgramState, TBCType], WrapperTBCProcessVBI
         ],
         test_case: WrapperTestCase,
     ) -> None:
@@ -163,7 +163,7 @@ class TestWrappersProcessVBI:
         self,
         program_state: Callable[[list[str], str], ProgramState],
         ldtools_process_vbi_wrapper: Callable[
-            [ProgramState, TBCType], WrapperLDProcessVBI
+            [ProgramState, TBCType], WrapperTBCProcessVBI
         ],
     ) -> None:
         state = program_state(["--process-vbi"], f"{get_path('pal_svideo')}.tbc")
@@ -286,7 +286,7 @@ class TestWrappersDropoutCorrect:
         self,
         program_state: Callable[[list[str], str], ProgramState],
         ldtools_dropout_correct_wrapper: Callable[
-            [ProgramState, TBCType], WrapperLDDropoutCorrect
+            [ProgramState, TBCType], WrapperTBCDropoutCorrect
         ],
         test_case: WrapperTestCase,
     ) -> None:
@@ -890,7 +890,7 @@ class TestWrappersChromaDecoder:
         self,
         program_state: Callable[[list[str], str], ProgramState],
         ldtools_chroma_decoder_wrapper: Callable[
-            [ProgramState, TBCType], WrapperLDChromaDecoder
+            [ProgramState, TBCType], WrapperTBCChromaDecoder
         ],
         test_case: WrapperTestCase,
     ) -> None:
@@ -912,3 +912,41 @@ class TestWrappersChromaDecoder:
 
             for e in test_case.unexpected_str:
                 assert not any(e in cmd for cmd in cmds)
+
+
+@pytest.mark.parametrize(
+    ("first", "last", "expected_order"),
+    [(43, 620, "BFF"), (44, 620, "TFF")],
+)
+def test_chroma_decoder_gets_json_active_range(  # noqa: D103
+    program_state: Callable[[list[str], str, str | None], ProgramState],
+    ldtools_chroma_decoder_wrapper: Callable[[ProgramState, TBCType], WrapperTBCChromaDecoder],
+    tmp_path: Path,
+    first: int,
+    last: int,
+    expected_order: str,
+) -> None:
+    # The decoder ignores the JSON's active range unless it is passed (unset
+    # --ffrl/--lfrl reset to defaults), while source_field_order resolves
+    # from it: pass it so the flagged field order matches the decoded frames.
+    import json
+
+    data = json.loads(Path(f"{get_path('pal_composite')}.tbc.json").read_text())
+    data["videoParameters"].update(firstActiveFrameLine=first, lastActiveFrameLine=last)
+    tbc_json = tmp_path / "custom_range.tbc.json"
+    tbc_json.write_text(json.dumps(data))
+
+    state = program_state(["--input-tbc-json", str(tbc_json)], f"{get_path('pal_composite')}.tbc", "out_file")
+    cmds = ldtools_chroma_decoder_wrapper(state, TBCType.COMBINED).command.data
+
+    assert {"--ffrl", str(first), "--lfrl", str(last)}.issubset(cmds)
+    assert state.source_field_order.name == expected_order
+
+
+def test_chroma_decoder_omits_range_without_json_values(  # noqa: D103
+    program_state: Callable[[list[str], str, str | None], ProgramState],
+    ldtools_chroma_decoder_wrapper: Callable[[ProgramState, TBCType], WrapperTBCChromaDecoder],
+) -> None:
+    state = program_state([], f"{get_path('pal_composite')}.tbc", "out_file")
+    cmds = ldtools_chroma_decoder_wrapper(state, TBCType.COMBINED).command.data
+    assert "--ffrl" not in cmds and "--lfrl" not in cmds

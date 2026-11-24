@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
+
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Literal, TypeAlias
@@ -79,6 +81,11 @@ class VideoSystemData:
         color_primaries: str
         color_trc: str
         fps: str
+        # Colour system signalled in the stream (H.264/H.265 VUI
+        # video_format, MPEG-2 sequence_display_extension): pal/ntsc/secam.
+        # Colour primaries/matrix/transfer codes (H.273) do not distinguish
+        # SECAM from PAL; this is where SECAM is identified as SECAM.
+        video_format: str
 
 
 video_system_pal = VideoSystemData(
@@ -113,6 +120,7 @@ video_system_pal = VideoSystemData(
         "bt470bg",
         "bt470bg",  # BT.470 2.8-gamma transfer (gamma28) for 625-line systems
         "pal",
+        "pal",
     ),
     fps_fraction=Fraction(25),
 )
@@ -145,6 +153,7 @@ video_system_ntsc = VideoSystemData(
         "smpte170m",
         "smpte170m",
         "bt709",
+        "ntsc",
         "ntsc",
     ),
     fps_fraction=Fraction(30000, 1001),
@@ -179,6 +188,7 @@ video_system_palm = VideoSystemData(
         "bt470bg",
         "bt709",
         "ntsc",
+        "pal",  # PAL-M: PAL colour on 525/59.94
     ),
     fps_fraction=Fraction(30000, 1001),
 )
@@ -207,6 +217,7 @@ video_system_secam = VideoSystemData(
         ExportMode.CHROMA_COMBINED: ChromaDecoder.SECAM,
         ExportMode.CHROMA_COMBINED_LD: ChromaDecoder.SECAM,
     },
-    ffmpeg_config=video_system_pal.ffmpeg_config,
+    # Same 625-line colour tagging as PAL, but signalled as SECAM.
+    ffmpeg_config=dataclasses.replace(video_system_pal.ffmpeg_config, video_format="secam"),
     fps_fraction=video_system_pal.fps_fraction,
 )

@@ -37,5 +37,26 @@ if(BUILD_TESTING)
                 --source "${CMAKE_SOURCE_DIR}"
         )
         set_tests_properties(video-export-runtime PROPERTIES SKIP_RETURN_CODE 77)
+
+        # End-to-end export suites (scripts/test-export-e2e.py): GUI option
+        # contract, tbc-video-export CLI matrix, and the tbc-analyse Export tab
+        # driven headlessly through every profile/option it offers. Outputs are
+        # verified with ffprobe; JUnit reports land in the build dir.
+        foreach(_e2e_suite contract cli gui)
+            add_test(
+                NAME export-e2e-${_e2e_suite}
+                COMMAND ${Python3_EXECUTABLE}
+                    "${CMAKE_SOURCE_DIR}/scripts/test-export-e2e.py"
+                    --source "${CMAKE_SOURCE_DIR}"
+                    --build "${CMAKE_BINARY_DIR}"
+                    --suite ${_e2e_suite}
+                    --level full
+                    --junit "${CMAKE_BINARY_DIR}/export-e2e-${_e2e_suite}.xml"
+            )
+            set_tests_properties(export-e2e-${_e2e_suite} PROPERTIES
+                SKIP_RETURN_CODE 77
+                TIMEOUT 3600
+                LABELS "e2e;export")
+        endforeach()
     endif()
 endif()

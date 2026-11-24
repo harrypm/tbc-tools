@@ -1,0 +1,16 @@
+# Raw signal / metadata fixtures are binary. Without this, git's text
+# heuristic classifies some TBC files as text (e.g. chroma TBCs with no NUL in
+# their first 8 KB), and an autocrlf checkout (the default on GitHub's Windows
+# runners) would rewrite their LF bytes and silently corrupt the test data.
+*.tbc   binary
+*.tbcc  binary
+*.tbcy  binary
+*.ctbc  binary
+*.ytbc  binary
+*.db    binary
+*.pcm   binary
+*.efm   binary
+*.ac3   binary
+*.flac  binary
+*.wav   binary
+*.onnx  binary
