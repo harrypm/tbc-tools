@@ -1190,24 +1190,27 @@ bool executableSupportsOption(const QString &program, const QString &option)
         return false;
     }
 
-    static QHash<QString, bool> supportCache;
-    const QString cacheKey = program + QStringLiteral("|") + option;
-    if (supportCache.contains(cacheKey)) {
-        return supportCache.value(cacheKey);
+    // One `--help` per executable, cached as text. Probing once per option
+    // with a 5 s budget made the Windows PyInstaller one-file build (which
+    // self-extracts on every launch) time out under load, and the timeout
+    // was cached as "option not supported" for the session, silently
+    // dropping --overcorrect/--d1/... from exports. A probe that fails or
+    // times out is not cached, so the next call retries.
+    static QHash<QString, QString> helpTextCache;
+    auto cached = helpTextCache.constFind(program);
+    if (cached == helpTextCache.constEnd()) {
+        QProcess helpProcess;
+        helpProcess.setProcessChannelMode(QProcess::MergedChannels);
+        helpProcess.start(program, QStringList() << QStringLiteral("--help"));
+        if (!helpProcess.waitForStarted(30000) || !helpProcess.waitForFinished(60000)
+            || helpProcess.exitStatus() != QProcess::NormalExit) {
+            helpProcess.kill();
+            qWarning() << "Unable to probe" << program << "--help for option support";
+            return false;
+        }
+        cached = helpTextCache.insert(program, QString::fromLocal8Bit(helpProcess.readAllStandardOutput()));
     }
-
-    QProcess helpProcess;
-    helpProcess.setProcessChannelMode(QProcess::MergedChannels);
-    helpProcess.start(program, QStringList() << QStringLiteral("--help"));
-
-    bool supportsOption = false;
-    if (helpProcess.waitForStarted(3000) && helpProcess.waitForFinished(5000)) {
-        const QString helpOutput = QString::fromLocal8Bit(helpProcess.readAllStandardOutput());
-        supportsOption = helpOutput.contains(option);
-    }
-
-    supportCache.insert(cacheKey, supportsOption);
-    return supportsOption;
+    return cached->contains(option);
 }
 
 bool executableSupportsD1OutputSizing(const QString &program)
@@ -2675,9 +2678,9 @@ void ExportDialog::refreshProfiles()
     }
     listArguments << QStringLiteral("--list-profiles");
     listProcess.start(exportPath, listArguments);
-    if (!listProcess.waitForStarted(3000)) {
+    if (!listProcess.waitForStarted(30000)) {
         appendLog(tr("Failed to start profile listing; using built-in condensed profile options."));
-    } else if (!listProcess.waitForFinished(10000)) {
+    } else if (!listProcess.waitForFinished(60000)) {
         listProcess.kill();
         appendLog(tr("Profile list timed out; using built-in condensed profile options."));
     } else {
@@ -3156,7 +3159,7 @@ void ExportDialog::on_exportProfileConfigEjectButton_clicked()
     dumpProcess.setProcessChannelMode(QProcess::MergedChannels);
     dumpProcess.setWorkingDirectory(dumpDirPath);
     dumpProcess.start(exportPath, QStringList() << QStringLiteral("--dump-default-config"));
-    if (!dumpProcess.waitForStarted(3000)) {
+    if (!dumpProcess.waitForStarted(30000)) { // PyInstaller one-file self-extracts per launch
         cleanupDumpDir();
         const QString errorText = tr("Failed to start default profile ejection.");
         appendStatus(errorText);
@@ -3164,7 +3167,7 @@ void ExportDialog::on_exportProfileConfigEjectButton_clicked()
         QMessageBox::warning(this, tr("Error"), errorText);
         return;
     }
-    if (!dumpProcess.waitForFinished(15000)) {
+    if (!dumpProcess.waitForFinished(60000)) {
         dumpProcess.kill();
         cleanupDumpDir();
         const QString errorText = tr("Default profile ejection timed out.");
@@ -5578,14 +5581,16 @@ QString ExportDialog::createTemporaryExportConfig(QString *errorMessage,
         dumpProcess.setProcessChannelMode(QProcess::MergedChannels);
         dumpProcess.setWorkingDirectory(dumpDirPath);
         dumpProcess.start(exportPath, QStringList() << QStringLiteral("--dump-default-config"));
-        if (!dumpProcess.waitForStarted(3000)) {
+        // Generous budgets: the Windows PyInstaller one-file build
+        // self-extracts on every launch (see executableSupportsOption).
+        if (!dumpProcess.waitForStarted(30000)) {
             cleanupDumpDir();
             if (errorMessage) {
                 *errorMessage = tr("Failed to start export config generation.");
             }
             return QString();
         }
-        if (!dumpProcess.waitForFinished(15000)) {
+        if (!dumpProcess.waitForFinished(60000)) {
             dumpProcess.kill();
             cleanupDumpDir();
             if (errorMessage) {

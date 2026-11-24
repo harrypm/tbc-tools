@@ -310,9 +310,11 @@ jobs:
   # (a 2026-11 AppImage export resolved ~/tbc-video-export, a directory, and
   # could not start) fails here. Runs for build-only Tests calls too, and
   # gates publishing. Each entry depends on its own platform build only (a
-  # stuck macOS arm64 runner must not block the Linux/Windows package tests):
-  # the job runs once the tag resolved, and an entry whose build did not
-  # succeed fails explicitly, so publishing still needs every platform.
+  # stuck macOS arm64 runner must not block the other package tests): the
+  # job runs once the tag resolved, and an entry whose package was not built
+  # fails at its artifact download, so publishing still needs every platform.
+  # (A reusable workflow's result covers all its arches, so needs.<job>.result
+  # cannot tell the built macOS x86_64 dmg from the missing arm64 one.)
   package-e2e:
     name: Packaged export E2E (${{ matrix.label }})
     needs: [resolve-tag, build-linux, build-windows, build-macos]
@@ -322,38 +324,26 @@ jobs:
       matrix:
         include:
           - label: linux-x86_64-appimage
-            build: build-linux
             runner: ubuntu-24.04
             artifact: tbc-tools_linux_x86_64
           - label: linux-arm64-tar
-            build: build-linux
             runner: ubuntu-24.04-arm
             artifact: tbc-tools_linux_arm64
           - label: windows-x86_64
-            build: build-windows
             runner: windows-2022
             artifact: tbc-tools_windows_x86_64
           - label: windows-arm64
-            build: build-windows
             runner: windows-11-arm
             artifact: tbc-tools_windows_arm64
           - label: macos-arm64-dmg
-            build: build-macos
             runner: macos-15
             artifact: tbc-tools_macos_arm64
           - label: macos-x86_64-dmg
-            build: build-macos
             runner: macos-15-intel
             artifact: tbc-tools_macos_x86_64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
-      - name: Require this platform's package build
-        if: ${{ needs[matrix.build].result != 'success' }}
-        shell: bash
-        run: |
-          echo "::error::${{ matrix.build }} did not succeed (${{ needs[matrix.build].result }}); no ${{ matrix.label }} package to test."
-          exit 1
       - name: Checkout fixtures and test runner
         uses: actions/checkout@v5
         with:

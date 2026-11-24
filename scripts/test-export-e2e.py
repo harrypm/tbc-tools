@@ -210,6 +210,7 @@ class Case:
     expect: dict = field(default_factory=dict)
     allow_log: list = field(default_factory=list)
     expect_log: list = field(default_factory=list)  # gui: text the export log must contain
+    expect_log_regex: list = field(default_factory=list)  # gui: regexes the export log must match
 
 
 @dataclass
@@ -825,8 +826,10 @@ def gui_cases(env: Env, level: str):
 
     # MONO chosen for a Y/C source (chroma decoder dialog -> metadata): the
     # export must be luma-only, not silently colour-decoded or failed
+    # the command quoting differs per platform (Linux `script` wrapper vs
+    # Windows/macOS), so match the argument pair, not one spelling
     ffv1_case("gui-yc-mono-luma-only", [], fixture="pal_yc_mono",
-              expect={"gray": True}, expect_log=["--chroma-decoder' 'mono'"])
+              expect={"gray": True}, expect_log_regex=[r"--chroma-decoder['\"]?\s+['\"]?mono\b"])
 
     # SECAM through the Export tab: composite path, ProRes, heavy dropout
     # correction, and the 10-bit/8-bit FFV1 choice, all colour-checked.
@@ -870,6 +873,9 @@ def run_gui_case(env: Env, case: Case) -> Outcome:
         problems = verify_output(env, case, out_base)
     except AssertionError as error:
         problems = [str(error)]
+    for pattern in case.expect_log_regex:
+        if not re.search(pattern, result.get("log", "")):
+            problems.append(f"export log does not match {pattern!r}")
     return Outcome(case, not problems, time.monotonic() - started, "; ".join(problems))
 
 
