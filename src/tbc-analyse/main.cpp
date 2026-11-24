@@ -280,6 +280,12 @@ int main(int argc, char *argv[])
     }
     const bool metadataOnly = parser.isSet("metadata-only");
 
+    // Automated end-to-end runs: no background update check (network access
+    // and a dialog mid-export).
+    if (parser.isSet(e2eExportOption) || parser.isSet(e2eListOption)) {
+        qputenv("TBC_ANALYSE_NO_UPDATE_CHECK", "1");
+    }
+
     // Start the GUI application
     MainWindow w(inputFileName, metadataOnly);
     w.show();

@@ -90,14 +90,14 @@ void E2EExportDriver::start()
         QFile specFile(path);
         if (!specFile.open(QIODevice::ReadOnly)) {
             QTextStream(stderr) << "e2e: cannot read spec " << path << "\n";
-            QCoreApplication::exit(2);
+            hardExit(2); // before a.exec(): QCoreApplication::exit() would be a no-op
             return;
         }
         QJsonParseError parseError;
         const QJsonDocument doc = QJsonDocument::fromJson(specFile.readAll(), &parseError);
         if (!doc.isObject()) {
             QTextStream(stderr) << "e2e: invalid spec JSON: " << parseError.errorString() << "\n";
-            QCoreApplication::exit(2);
+            hardExit(2);
             return;
         }
         spec = doc.object();
@@ -361,7 +361,7 @@ void E2EExportDriver::tick()
             out.close();
             state = State::Done;
             timer.stop();
-            QCoreApplication::exit(0);
+            hardExit(0);
             return;
         }
 
@@ -486,10 +486,9 @@ void E2EExportDriver::finish(bool ok, const QString &reason)
     }
     QTextStream(stderr) << "e2e: " << (ok ? "PASS" : "FAIL") << (reason.isEmpty() ? QString() : ": " + reason)
                         << Qt::endl;
-    if (clickInProgress) {
-        // Still inside the Export click's nested event loop, which
-        // QCoreApplication::exit() cannot end.
-        hardExit(ok ? 0 : 1);
-    }
-    QCoreApplication::exit(ok ? 0 : 1);
+    // The verdict is written: exit now without application teardown, which
+    // is not under test and has crashed (0xC0000005) or deadlocked on the
+    // Windows packages, and cannot be reached from inside the Export click's
+    // nested event loop anyway.
+    hardExit(ok ? 0 : 1);
 }

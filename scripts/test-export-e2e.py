@@ -337,6 +337,7 @@ class Env:
             "APPDATA": str(case_home / "AppData" / "Roaming"),
             "LOCALAPPDATA": str(case_home / "AppData" / "Local"),
             "APPIMAGE_EXTRACT_AND_RUN": "1",  # CI runners have no FUSE
+            "TBC_ANALYSE_NO_UPDATE_CHECK": "1",  # no network / update dialog mid-export
         })
         if self.qpa:
             env["QT_QPA_PLATFORM"] = self.qpa
