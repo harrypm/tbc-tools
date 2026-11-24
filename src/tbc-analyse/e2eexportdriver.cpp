@@ -34,12 +34,35 @@
 
 #include "exportdialog.h"
 
+#if defined(Q_OS_WIN)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
 
 namespace {
+
+// Exit immediately (from a nested event loop or the watchdog thread). On
+// Windows std::_Exit -> ExitProcess runs every DLL's detach handler, which
+// can deadlock with live threads (seen: the process hung after "e2e: PASS");
+// TerminateProcess skips that.
+[[noreturn]] void hardExit(int code)
+{
+    std::fflush(nullptr);
+#if defined(Q_OS_WIN)
+    TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code));
+#endif
+    std::_Exit(code);
+}
 
 // Log lines that mean the GUI silently degraded or failed to reach the
 // exporter. Any of these fails a run unless the spec allow-lists it.
@@ -91,8 +114,7 @@ void E2EExportDriver::start()
         std::this_thread::sleep_for(std::chrono::milliseconds(hardLimitMs));
         std::fprintf(stderr, "e2e: FAIL: watchdog: event loop blocked for %lld s (modal or hang)\n",
                      static_cast<long long>(hardLimitMs / 1000));
-        std::fflush(nullptr);
-        std::_Exit(3);
+        hardExit(3);
     }).detach();
 }
 
@@ -370,15 +392,14 @@ void E2EExportDriver::tick()
         clickInProgress = true;
         QTimer::singleShot(0, this, [this, exportButton]() {
             QString applyError;
-            if (!applySpec(&applyError)) {
-                finish(false, applyError);
-                return;
-            }
-            if (spec.value(QStringLiteral("list_only")).toBool()) {
-                // Report the controls as these widget values leave them
-                // (choices that depend on the profile/framing) without
-                // exporting.
-                finish(modalErrors == 0, QString());
+            const bool applied = applySpec(&applyError);
+            if (!applied || spec.value(QStringLiteral("list_only")).toBool()) {
+                // Not in a nested loop here (this runs from the main event
+                // loop): finish with a normal exit. list_only reports the
+                // controls as these widget values leave them (choices that
+                // depend on the profile/framing) without exporting.
+                clickInProgress = false;
+                finish(applied && modalErrors == 0, applyError);
                 return;
             }
             QTextStream(stderr) << "e2e: clicking Export" << Qt::endl;
@@ -468,8 +489,7 @@ void E2EExportDriver::finish(bool ok, const QString &reason)
     if (clickInProgress) {
         // Still inside the Export click's nested event loop, which
         // QCoreApplication::exit() cannot end.
-        std::fflush(nullptr);
-        std::_Exit(ok ? 0 : 1);
+        hardExit(ok ? 0 : 1);
     }
     QCoreApplication::exit(ok ? 0 : 1);
 }
