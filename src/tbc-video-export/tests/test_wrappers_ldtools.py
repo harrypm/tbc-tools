@@ -912,3 +912,41 @@ class TestWrappersChromaDecoder:
 
             for e in test_case.unexpected_str:
                 assert not any(e in cmd for cmd in cmds)
+
+
+@pytest.mark.parametrize(
+    ("first", "last", "expected_order"),
+    [(43, 620, "BFF"), (44, 620, "TFF")],
+)
+def test_chroma_decoder_gets_json_active_range(  # noqa: D103
+    program_state: Callable[[list[str], str, str | None], ProgramState],
+    ldtools_chroma_decoder_wrapper: Callable[[ProgramState, TBCType], WrapperTBCChromaDecoder],
+    tmp_path: Path,
+    first: int,
+    last: int,
+    expected_order: str,
+) -> None:
+    # The decoder ignores the JSON's active range unless it is passed (unset
+    # --ffrl/--lfrl reset to defaults), while source_field_order resolves
+    # from it: pass it so the flagged field order matches the decoded frames.
+    import json
+
+    data = json.loads(Path(f"{get_path('pal_composite')}.tbc.json").read_text())
+    data["videoParameters"].update(firstActiveFrameLine=first, lastActiveFrameLine=last)
+    tbc_json = tmp_path / "custom_range.tbc.json"
+    tbc_json.write_text(json.dumps(data))
+
+    state = program_state(["--input-tbc-json", str(tbc_json)], f"{get_path('pal_composite')}.tbc", "out_file")
+    cmds = ldtools_chroma_decoder_wrapper(state, TBCType.COMBINED).command.data
+
+    assert {"--ffrl", str(first), "--lfrl", str(last)}.issubset(cmds)
+    assert state.source_field_order.name == expected_order
+
+
+def test_chroma_decoder_omits_range_without_json_values(  # noqa: D103
+    program_state: Callable[[list[str], str, str | None], ProgramState],
+    ldtools_chroma_decoder_wrapper: Callable[[ProgramState, TBCType], WrapperTBCChromaDecoder],
+) -> None:
+    state = program_state([], f"{get_path('pal_composite')}.tbc", "out_file")
+    cmds = ldtools_chroma_decoder_wrapper(state, TBCType.COMBINED).command.data
+    assert "--ffrl" not in cmds and "--lfrl" not in cmds
