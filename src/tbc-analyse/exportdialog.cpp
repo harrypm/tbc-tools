@@ -34,6 +34,7 @@
 #include <QAbstractItemView>
 #include <QSizePolicy>
 #include <QSplitter>
+#include <QStandardItemModel>
 #include <QTimer>
 #include <QUrl>
 #include <algorithm>
@@ -359,6 +360,11 @@ QStringList defaultExecutableSearchDirs(const QString &currentInputFile)
         }
         candidateDirs << dirPath;
     };
+    // The Linux AppImage/tar launchers exec the real ELF through the bundled
+    // glibc loader, so /proc/self/exe (and thus applicationDirPath()) is the
+    // loader's usr/lib dir, not usr/bin. The launcher exports the real binary
+    // dir; search it first so bundled siblings win over cwd/home lookups.
+    appendUniqueDir(qEnvironmentVariable("TBC_TOOLS_APP_BIN_DIR"));
     const QString appFilePath = QCoreApplication::applicationFilePath();
     if (!appFilePath.isEmpty()) {
         const QFileInfo appFileInfo(appFilePath);
@@ -372,6 +378,8 @@ QStringList defaultExecutableSearchDirs(const QString &currentInputFile)
     const QString appDir = QCoreApplication::applicationDirPath();
     if (!appDir.isEmpty()) {
         appendUniqueDir(appDir);
+        // Loader-launched bundle without the env override: usr/lib -> usr/bin.
+        appendUniqueDir(QDir::cleanPath(QDir(appDir).filePath(QStringLiteral("../bin"))));
 
         QDir parentDir(appDir);
         for (int i = 0; i < 4; ++i) {
@@ -1182,24 +1190,27 @@ bool executableSupportsOption(const QString &program, const QString &option)
         return false;
     }
 
-    static QHash<QString, bool> supportCache;
-    const QString cacheKey = program + QStringLiteral("|") + option;
-    if (supportCache.contains(cacheKey)) {
-        return supportCache.value(cacheKey);
+    // One `--help` per executable, cached as text. Probing once per option
+    // with a 5 s budget made the Windows PyInstaller one-file build (which
+    // self-extracts on every launch) time out under load, and the timeout
+    // was cached as "option not supported" for the session, silently
+    // dropping --overcorrect/--d1/... from exports. A probe that fails or
+    // times out is not cached, so the next call retries.
+    static QHash<QString, QString> helpTextCache;
+    auto cached = helpTextCache.constFind(program);
+    if (cached == helpTextCache.constEnd()) {
+        QProcess helpProcess;
+        helpProcess.setProcessChannelMode(QProcess::MergedChannels);
+        helpProcess.start(program, QStringList() << QStringLiteral("--help"));
+        if (!helpProcess.waitForStarted(30000) || !helpProcess.waitForFinished(60000)
+            || helpProcess.exitStatus() != QProcess::NormalExit) {
+            helpProcess.kill();
+            qWarning() << "Unable to probe" << program << "--help for option support";
+            return false;
+        }
+        cached = helpTextCache.insert(program, QString::fromLocal8Bit(helpProcess.readAllStandardOutput()));
     }
-
-    QProcess helpProcess;
-    helpProcess.setProcessChannelMode(QProcess::MergedChannels);
-    helpProcess.start(program, QStringList() << QStringLiteral("--help"));
-
-    bool supportsOption = false;
-    if (helpProcess.waitForStarted(3000) && helpProcess.waitForFinished(5000)) {
-        const QString helpOutput = QString::fromLocal8Bit(helpProcess.readAllStandardOutput());
-        supportsOption = helpOutput.contains(option);
-    }
-
-    supportCache.insert(cacheKey, supportsOption);
-    return supportsOption;
+    return cached->contains(option);
 }
 
 bool executableSupportsD1OutputSizing(const QString &program)
@@ -1767,8 +1778,16 @@ ExportDialog::ExportDialog(QWidget *parent) :
         outputAutoSet = false;
     });
     if (ui->profileComboBox) {
-        connect(ui->profileComboBox, &QComboBox::currentTextChanged, this,
-                [this](const QString &) { updateProfileDependentControls(); });
+        connect(ui->profileComboBox, &QComboBox::currentTextChanged, this, [this](const QString &) {
+            // D10 (IMX) is an MXF format (SMPTE 386M, muxed as mxf_d10): default
+            // the container to MXF when it is chosen; the user may still pick
+            // another afterwards.
+            if (selectedMainCodecId() == QStringLiteral("d10") && ui->mainContainerComboBox) {
+                ui->mainContainerComboBox->setCurrentIndex(
+                    ui->mainContainerComboBox->findData(QStringLiteral("mxf")));
+            }
+            updateProfileDependentControls();
+        });
     }
     const QList<QLineEdit *> audioTrackLineEdits = {
         ui->audio1LineEdit,
@@ -2659,9 +2678,9 @@ void ExportDialog::refreshProfiles()
     }
     listArguments << QStringLiteral("--list-profiles");
     listProcess.start(exportPath, listArguments);
-    if (!listProcess.waitForStarted(3000)) {
+    if (!listProcess.waitForStarted(30000)) {
         appendLog(tr("Failed to start profile listing; using built-in condensed profile options."));
-    } else if (!listProcess.waitForFinished(10000)) {
+    } else if (!listProcess.waitForFinished(60000)) {
         listProcess.kill();
         appendLog(tr("Profile list timed out; using built-in condensed profile options."));
     } else {
@@ -2728,6 +2747,44 @@ void ExportDialog::updateProfileDependentControls()
     const bool proxyRequested = ui
                                 && ui->generateProxyCheckBox
                                 && ui->generateProxyCheckBox->isChecked();
+    // ProRes and v210 are always 10-bit and D10 always 8-bit (their exporter
+    // profiles fix the pixel format and ignore --8bit/--10bit), so the
+    // bit-depth choice is shown locked rather than silently ignored.
+    const int fixedBitDepth = (proresSelected || mainCodecId == QStringLiteral("v210")) ? 10
+                              : mainCodecId == QStringLiteral("d10")                     ? 8
+                                                                                           : 0;
+    if (ui->mainBitDepthComboBox) {
+        if (fixedBitDepth != 0) {
+            const QSignalBlocker blocker(ui->mainBitDepthComboBox);
+            ui->mainBitDepthComboBox->setCurrentIndex(ui->mainBitDepthComboBox->findData(fixedBitDepth));
+        }
+        ui->mainBitDepthComboBox->setEnabled(canEdit && fixedBitDepth == 0);
+    }
+    if (ui->mainBitDepthLabel) {
+        ui->mainBitDepthLabel->setEnabled(canEdit && fixedBitDepth == 0);
+    }
+    // Containers FFmpeg cannot mux the selected codec into (no codec tag /
+    // essence container): such exports fail on the first frame, so those
+    // entries are disabled rather than offered. Verified by the export E2E
+    // matrix (scripts/test-export-e2e.py, profile-*-container-* cases).
+    if (auto *containerModel = ui->mainContainerComboBox
+                                   ? qobject_cast<QStandardItemModel *>(ui->mainContainerComboBox->model())
+                                   : nullptr) {
+        const QStringList unsupportedContainers =
+            (ffv1Selected || proresSelected)      ? QStringList{QStringLiteral("mp4")}
+            : mainCodecId == QStringLiteral("v210") ? QStringList{QStringLiteral("mxf"), QStringLiteral("mp4")}
+            : hevcSelected                        ? QStringList{QStringLiteral("mxf")}
+                                                  : QStringList();
+        for (int row = 0; row < containerModel->rowCount(); ++row) {
+            QStandardItem *item = containerModel->item(row);
+            item->setEnabled(!unsupportedContainers.contains(item->data(Qt::UserRole).toString()));
+        }
+        if (unsupportedContainers.contains(selectedMainContainerId())) {
+            const QSignalBlocker blocker(ui->mainContainerComboBox);
+            ui->mainContainerComboBox->setCurrentIndex(
+                ui->mainContainerComboBox->findData(QStringLiteral("mkv")));
+        }
+    }
     if (ui->ffv1SlicesLabel) {
         ui->ffv1SlicesLabel->setVisible(ffv1Selected);
         ui->ffv1SlicesLabel->setEnabled(canEdit && ffv1Selected);
@@ -3102,7 +3159,7 @@ void ExportDialog::on_exportProfileConfigEjectButton_clicked()
     dumpProcess.setProcessChannelMode(QProcess::MergedChannels);
     dumpProcess.setWorkingDirectory(dumpDirPath);
     dumpProcess.start(exportPath, QStringList() << QStringLiteral("--dump-default-config"));
-    if (!dumpProcess.waitForStarted(3000)) {
+    if (!dumpProcess.waitForStarted(30000)) { // PyInstaller one-file self-extracts per launch
         cleanupDumpDir();
         const QString errorText = tr("Failed to start default profile ejection.");
         appendStatus(errorText);
@@ -3110,7 +3167,7 @@ void ExportDialog::on_exportProfileConfigEjectButton_clicked()
         QMessageBox::warning(this, tr("Error"), errorText);
         return;
     }
-    if (!dumpProcess.waitForFinished(15000)) {
+    if (!dumpProcess.waitForFinished(60000)) {
         dumpProcess.kill();
         cleanupDumpDir();
         const QString errorText = tr("Default profile ejection timed out.");
@@ -3916,16 +3973,11 @@ void ExportDialog::processOutputLine(const QString &line, QString *lastStatus, c
         return;
     }
 
-    // tbc-video-export's completion estimate (footer "Remaining: ... Finishes: ...")
-    static const QRegularExpression estimatePattern(
-        QStringLiteral("Remaining:\\s*(\\d+:\\d\\d:\\d\\d|\\d+ days?, \\d+:\\d\\d:\\d\\d)\\s+Finishes:\\s*(.+)$"));
-    const QRegularExpressionMatch estimate = estimatePattern.match(trimmed);
-    if (estimate.hasMatch()) {
-        appendStatus(tr("Export: %1 remaining, finishes at %2")
-                         .arg(estimate.captured(1), estimate.captured(2).trimmed()));
-        return;
-    }
-
+    // The status readout is the last status-worthy line of each tbc-video-export
+    // progress redraw - its "Size: ... Duration: ... Bitrate: ... Remaining: ...
+    // Finishes: ..." footer, which summarises the current encode state and the
+    // completion estimate. It must go through lastStatus (never appendStatus, which
+    // would bypass and then be overwritten by the per-feed Main/Proxy status lines).
     if (lastStatus) {
         *lastStatus = trimmed;
     }
@@ -4326,7 +4378,7 @@ QString ExportDialog::resolveVideoExportPath() const
         for (const QString &name : candidateNames) {
             const QString candidate = QDir(dir).filePath(name);
             QFileInfo candidateInfo(candidate);
-            if (candidateInfo.exists() && candidateInfo.isExecutable()) {
+            if (candidateInfo.isFile() && candidateInfo.isExecutable()) {
                 return candidate;
             }
         }
@@ -4354,7 +4406,7 @@ QString ExportDialog::resolveFfmpegPath(const QString &toolName) const
         for (const QString &name : candidateNames) {
             const QString candidate = QDir(dir).filePath(name);
             QFileInfo candidateInfo(candidate);
-            if (candidateInfo.exists() && candidateInfo.isExecutable()) {
+            if (candidateInfo.isFile() && candidateInfo.isExecutable()) {
                 return candidate;
             }
         }
@@ -5283,16 +5335,15 @@ QStringList ExportDialog::buildArguments(QString *errorMessage, const QString &i
     QString normalizedDecoderName;
     if (!videoParameters.chromaDecoder.isEmpty()) {
         normalizedDecoderName = videoParameters.chromaDecoder.trimmed().toLower();
-        // MONO cannot decode the chroma pass of a split (Y+C) source: the
-        // merged export needs U/V planes, and MONO emits GRAY16, which fails
-        // the merge and leaves an empty output file. Omit the flag so
-        // tbc-video-export picks its per-system default chroma decoder.
-        if ((!isSplitSource || normalizedDecoderName != QStringLiteral("mono"))
-            && isValidChromaDecoderForSystem(normalizedDecoderName, videoParameters.system)) {
+        // MONO is passed for split (Y+C) sources too: tbc-video-export then
+        // exports the Y TBC only (luma mode) and leaves the C TBC alone, which
+        // is what choosing MONO means. Dropping the flag would silently fall
+        // back to a colour decoder.
+        if (isValidChromaDecoderForSystem(normalizedDecoderName, videoParameters.system)) {
             args << QStringLiteral("--chroma-decoder") << normalizedDecoderName;
         }
     }
-    const bool monoDecoderSelected = normalizedDecoderName == QStringLiteral("mono") && !isSplitSource;
+    const bool monoDecoderSelected = normalizedDecoderName == QStringLiteral("mono");
     if (!monoDecoderSelected && videoParameters.chromaGain >= 0.0) {
         args << QStringLiteral("--chroma-gain") << QString::number(videoParameters.chromaGain, 'f', 6);
     }
@@ -5414,7 +5465,10 @@ QStringList ExportDialog::buildArguments(QString *errorMessage, const QString &i
         const bool supportsD1OutputSizing = executableSupportsD1OutputSizing(exportPath);
         const bool supportsAppendVideoFilter =
             executableSupportsOption(exportPath, QStringLiteral("--append-video-filter"));
+        // Letterbox crop keeps its cropped height: tbc-video-export rejects
+        // --d1 with --letterbox and applies no D1 sizing to it.
         const bool requiresD1OutputSizing = outputResamplePlan.enabled
+                                            && !letterboxCropRequested
                                             && shouldUseD1OutputSizing(resolutionMode,
                                                                        outputResolutionMode);
         const bool mainProfileIsDeinterlaced = isWebProfileName(selectedExportProfileName());
@@ -5430,7 +5484,7 @@ QStringList ExportDialog::buildArguments(QString *errorMessage, const QString &i
                                        && (!deinterlacedOutputProfile || proxyNtscD1Fallback);
         if (useD1OutputSizing) {
             args << QStringLiteral("--d1");
-        } else if (outputResamplePlan.enabled && supportsAppendVideoFilter) {
+        } else if (outputResamplePlan.enabled && !letterboxCropRequested && supportsAppendVideoFilter) {
             const QString filterExpr = outputResampleFilter(outputResamplePlan,
                                                             !deinterlacedOutputProfile);
             if (!filterExpr.isEmpty()) {
@@ -5527,14 +5581,16 @@ QString ExportDialog::createTemporaryExportConfig(QString *errorMessage,
         dumpProcess.setProcessChannelMode(QProcess::MergedChannels);
         dumpProcess.setWorkingDirectory(dumpDirPath);
         dumpProcess.start(exportPath, QStringList() << QStringLiteral("--dump-default-config"));
-        if (!dumpProcess.waitForStarted(3000)) {
+        // Generous budgets: the Windows PyInstaller one-file build
+        // self-extracts on every launch (see executableSupportsOption).
+        if (!dumpProcess.waitForStarted(30000)) {
             cleanupDumpDir();
             if (errorMessage) {
                 *errorMessage = tr("Failed to start export config generation.");
             }
             return QString();
         }
-        if (!dumpProcess.waitForFinished(15000)) {
+        if (!dumpProcess.waitForFinished(60000)) {
             dumpProcess.kill();
             cleanupDumpDir();
             if (errorMessage) {
@@ -5626,8 +5682,10 @@ QString ExportDialog::createTemporaryExportConfig(QString *errorMessage,
         opts.append(48000);
         opts.append(QStringLiteral("-b:a"));
         opts.append(QStringLiteral("256K"));
+        // FFmpeg's AAC encoder only accepts float planar input; the 16/24
+        // naming is a bitrate tier for this lossy codec.
         opts.append(QStringLiteral("-sample_fmt"));
-        opts.append(QStringLiteral("s16"));
+        opts.append(QStringLiteral("fltp"));
         aac16Profile.insert(QStringLiteral("opts"), opts);
         upsertAudioProfile(aac16Profile);
     }
@@ -5642,7 +5700,7 @@ QString ExportDialog::createTemporaryExportConfig(QString *errorMessage,
         opts.append(QStringLiteral("-b:a"));
         opts.append(QStringLiteral("320K"));
         opts.append(QStringLiteral("-sample_fmt"));
-        opts.append(QStringLiteral("s32"));
+        opts.append(QStringLiteral("fltp"));
         aac24Profile.insert(QStringLiteral("opts"), opts);
         upsertAudioProfile(aac24Profile);
     }
@@ -5671,8 +5729,9 @@ QString ExportDialog::createTemporaryExportConfig(QString *errorMessage,
         opts.append(48000);
         opts.append(QStringLiteral("-b:a"));
         opts.append(QStringLiteral("256K"));
+        // libopus accepts s16 or float; float keeps >16-bit precision.
         opts.append(QStringLiteral("-sample_fmt"));
-        opts.append(QStringLiteral("s32"));
+        opts.append(QStringLiteral("flt"));
         opus24Profile.insert(QStringLiteral("opts"), opts);
         upsertAudioProfile(opus24Profile);
     }
@@ -5989,19 +6048,22 @@ void ExportDialog::cleanupSourceStorageTemporaryRoot()
     if (!tempDir.exists()) {
         return;
     }
-    // Best-effort removal of our own leftover temp files (always prefixed "tbc-analyse-").
-    const QStringList leftovers = tempDir.entryList(
+    // This run's own temp files were already removed by path. Sweep only
+    // stale leftovers (crashed runs): another tbc-analyse instance exporting
+    // from the same source folder shares this directory, and deleting its
+    // live config/metadata snapshot makes that export fail mid-run.
+    const QDateTime staleBefore = QDateTime::currentDateTime().addDays(-1);
+    const QFileInfoList leftovers = tempDir.entryInfoList(
         QStringList() << QStringLiteral("tbc-analyse-*"),
         QDir::Files | QDir::NoDotAndDotDot);
-    for (const QString &name : leftovers) {
-        QFile::remove(tempDir.filePath(name));
+    for (const QFileInfo &leftover : leftovers) {
+        if (leftover.lastModified() < staleBefore) {
+            QFile::remove(leftover.absoluteFilePath());
+        }
     }
-    // Only drop the folder itself when nothing else remains, so we never
-    // clobber files we do not own.
-    const QStringList remaining = tempDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-    if (remaining.isEmpty()) {
-        tempDir.removeRecursively();
-    }
+    // Drop the folder only if empty; rmdir is atomic, so files another
+    // instance creates meanwhile are never removed.
+    QDir().rmdir(tempRoot);
 }
 
 void ExportDialog::appendStatus(const QString &message)

@@ -896,6 +896,33 @@ TbcSource::ChromaDecodeMode TbcSource::getChromaDecodeMode() const
     return chromaDecodeMode;
 }
 
+// Move the active area by a framing offset (samples, frame lines; field lines
+// move by half), as an export segment's framing does
+void TbcSource::applyFramingOffset(TbcMetaData::VideoParameters &videoParameters, qint32 offsetX, qint32 offsetY)
+{
+    videoParameters.activeVideoStart += offsetX;
+    videoParameters.activeVideoEnd += offsetX;
+    videoParameters.firstActiveFrameLine += offsetY;
+    videoParameters.lastActiveFrameLine += offsetY;
+    videoParameters.firstActiveFieldLine += offsetY / 2;
+    videoParameters.lastActiveFieldLine += offsetY / 2;
+}
+
+bool TbcSource::setPreviewFramingOffset(qint32 offsetX, qint32 offsetY)
+{
+    if (previewFramingOffsetX == offsetX && previewFramingOffsetY == offsetY) {
+        return false;
+    }
+    decoders.ntscColour.requestNnTransform3DCancel();
+    previewFramingOffsetX = offsetX;
+    previewFramingOffsetY = offsetY;
+    invalidateImageCache();
+    if (sourceReady) {
+        configureChromaDecoder();
+    }
+    return true;
+}
+
 // Method to set the view mode
 void TbcSource::setViewMode(ViewMode _viewMode)
 {
@@ -1890,6 +1917,7 @@ void TbcSource::configureDecoders(ChromaDecoders &set)
     // Configure the chroma decoder
     TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
     TbcMetaData::VideoParameters decodeVideoParameters = videoParameters;
+    applyFramingOffset(decodeVideoParameters, previewFramingOffsetX, previewFramingOffsetY);
     const bool applyHybridFullFrameBounds = (chromaDecodeMode == HYBRID_CHROMA_MODE);
     if (outputConfiguration.fullFrameDecode || applyHybridFullFrameBounds) {
         applyFullFrameDecodeBounds(decodeVideoParameters);
@@ -1949,6 +1977,7 @@ void TbcSource::configureChromaDecoder()
     // Configure the OutputWriter.
     // Because we have padding disabled, this won't change the VideoParameters.
     TbcMetaData::VideoParameters videoParameters = metaData.getVideoParameters();
+    applyFramingOffset(videoParameters, previewFramingOffsetX, previewFramingOffsetY);
     outputWriter.updateConfiguration(videoParameters, outputConfiguration);
 }
 

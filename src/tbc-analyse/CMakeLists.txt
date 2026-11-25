@@ -10,6 +10,7 @@ set(tbc-analyse_SOURCES
     efmhandlerdialog.cpp efmhandlerdialog.h
     editsegmentswidget.cpp editsegmentswidget.h
     exportdialog.cpp exportdialog.ui
+    e2eexportdriver.cpp e2eexportdriver.h
     exportarguments.cpp exportarguments.h
     metadataconversiondialog.cpp metadataconversiondialog.ui
     metadatastatusdialog.cpp metadatastatusdialog.ui

@@ -135,6 +135,12 @@ jobs:
             echo "Missing ffmpeg from nixpkgs build"
             exit 1
           fi
+          # The result/bin copy loops above may already have staged a
+          # read-only copy of ffmpeg/ffprobe/ffplay from the Nix store (the
+          # flake bundles ffmpeg launchers); remove it so the plain cp below
+          # can write the real binary (BSD cp cannot overwrite a non-writable
+          # file - "Permission denied", which broke the macOS arm64 job).
+          rm -f dist/bin/ffmpeg dist/bin/ffprobe dist/bin/ffplay
           cp "$FFMPEG_STORE/bin/ffmpeg" dist/bin/ffmpeg
           chmod +x dist/bin/ffmpeg
           if [ -x "$FFMPEG_STORE/bin/ffprobe" ]; then

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from tbc_video_export.common.enums import ProcessName
 
 
-class ParserLDChromaDecoder(Parser):
+class ParserTBCChromaDecoder(Parser):
     """Parser for tbc-chroma-decoder process."""
 
     def __init__(self, process_name: ProcessName) -> None:

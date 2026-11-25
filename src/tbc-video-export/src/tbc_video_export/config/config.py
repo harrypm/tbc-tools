@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
+
 import json
 import logging
 from dataclasses import dataclass
@@ -99,6 +101,24 @@ class Config:
                 (profile for profile in self.profiles if profile_filter.match(profile)),
                 None,
             )
+
+            # Profiles with only PAL/NTSC geometry variants (e.g. D10's
+            # 720x608/720x512 rasters) serve the other systems by line count:
+            # SECAM/MESECAM are 625-line/25 fps (PAL variant), PAL-M is
+            # 525-line/29.97 (NTSC variant). The colour system itself is still
+            # signalled from the source system (FFmpegConfig.video_format). A
+            # dedicated variant for the system, when present, matched above.
+            geometry_system = {
+                VideoSystem.SECAM: VideoSystem.PAL,
+                VideoSystem.MESECAM: VideoSystem.PAL,
+                VideoSystem.PAL_M: VideoSystem.NTSC,
+            }.get(profile_filter.video_system)
+            if profile is None and geometry_system is not None:
+                geometry_filter = dataclasses.replace(profile_filter, video_system=geometry_system)
+                profile = next(
+                    (profile for profile in self.profiles if geometry_filter.match(profile)),
+                    None,
+                )
 
             if profile is None:
                 err_msg = f"Could not find profile {profile_filter.name}."

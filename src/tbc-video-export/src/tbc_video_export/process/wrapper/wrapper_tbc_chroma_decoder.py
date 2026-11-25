@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from tbc_video_export.program_state import ProgramState
 
 
-class WrapperLDChromaDecoder(Wrapper):
+class WrapperTBCChromaDecoder(Wrapper):
     """Wrapper for ld-tools-decoder."""
 
     def __init__(self, state: ProgramState, config: WrapperConfig[Pipe, Pipe]) -> None:
@@ -180,6 +180,27 @@ class WrapperLDChromaDecoder(Wrapper):
                 )
             )
 
+        # The TBC JSON's own active range (e.g. set in tbc-analyse). The
+        # decoder does not apply it on its own (unset --ffrl/--lfrl reset to
+        # the system defaults), yet ProgramState.source_field_order resolves
+        # the field order from it, so pass it through: otherwise the frames
+        # come out on the default range while being flagged for the JSON's
+        # (an odd firstActiveFrameLine flips TFF/BFF). tbc-analyse passes
+        # the same values for non-default framing.
+        tbc_json = self._state.tbc_json
+        if (
+            tbc_json.first_active_frame_line is not None
+            and tbc_json.last_active_frame_line is not None
+        ):
+            return FlatList(
+                (
+                    "--ffrl",
+                    tbc_json.first_active_frame_line,
+                    "--lfrl",
+                    tbc_json.last_active_frame_line,
+                )
+            )
+
         return None
 
     def _get_padding_opt(self) -> FlatList | None:
@@ -255,7 +276,7 @@ class WrapperLDChromaDecoder(Wrapper):
 
     @cached_property
     def process_name(self) -> ProcessName:  # noqa: D102
-        return ProcessName.LD_CHROMA_DECODER
+        return ProcessName.TBC_CHROMA_DECODER
 
     @cached_property
     def supported_pipe_types(self) -> PipeType:  # noqa: D102

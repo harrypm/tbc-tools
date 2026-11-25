@@ -28,6 +28,15 @@ TBC_ANALYSE_EXPORT_DIALOG = ROOT / "src/tbc-analyse/exportdialog.cpp"
 TBC_ANALYSE_MAIN_WINDOW = ROOT / "src/tbc-analyse/mainwindow.cpp"
 TBC_VIDEO_EXPORT_OPTS_FFMPEG = ROOT / "src/tbc-video-export/src/tbc_video_export/opts/opts_ffmpeg.py"
 TBC_VIDEO_EXPORT_FIELD_ORDER = ROOT / "src/tbc-video-export/src/tbc_video_export/common/field_order.py"
+TBC_VIDEO_EXPORT_FILES_PY = ROOT / "src/tbc-video-export/src/tbc_video_export/common/utils/files.py"
+TBC_VIDEO_EXPORT_SRC_DIR = ROOT / "src/tbc-video-export/src/tbc_video_export"
+TBC_VIDEO_EXPORT_ENUMS = TBC_VIDEO_EXPORT_SRC_DIR / "common/enums.py"
+FLAKE_FILE = ROOT / "flake.nix"
+EXPORT_E2E_SCRIPT = ROOT / "scripts/test-export-e2e.py"
+EXPORT_E2E_DRIVER = ROOT / "src/tbc-analyse/e2eexportdriver.cpp"
+TBC_ANALYSE_MAIN = ROOT / "src/tbc-analyse/main.cpp"
+TBC_VIDEO_EXPORT_CMAKE = ROOT / "src/tbc-video-export/CMakeLists.txt"
+CI_PARITY_SCRIPT = ROOT / "ci/run_local_ci_parity.sh"
 AGENTS_RULES_FILE = ROOT / "AGENTS.md"
 
 XCB_RUNTIME_LIBS = (
@@ -237,6 +246,135 @@ LINUX_AAA_FORBIDDEN_SNIPPETS = (
 AGENTS_HARD_RULE_REQUIRED_SNIPPETS = (
     "Hard rule: Windows dedicated cache repo pushes must clear checkout-injected github.com auth headers before pull/push",
     "Hard rule: Linux AAA source builds must stay xbuild-compatible and must not require apt msbuild on arm64",
+    "Hard rule: exports must use only bundled, self-contained ffmpeg",
+    "Hard rule: ONNX Runtime comes from immutable nuget.org packages, never a GitHub release",
+    "Hard rule: every export mode must stay covered by the end-to-end export suite",
+)
+
+# Hard rule: exports must use only bundled, self-contained ffmpeg (never a
+# host/system ffmpeg). Every deployment ships ffmpeg beside the tools; PATH is
+# a dev-shell fallback only. The nix profile (packages.default) symlinks the
+# flake-pinned ffmpeg.bin into $out/bin next to the tbc-video-export wrapper
+# (so `nix profile install .#` is self-contained), find_binary resolves the
+# script-adjacent binary before PATH so a bundled ffmpeg always wins, and the
+# Linux (AppImage x86 + tar arm64), macOS (.app) and Windows (release\) bundle
+# jobs copy the same pinned ffmpeg into their bundles. A prior export run
+# silently resolved Ubuntu's /usr/bin/ffmpeg 4.4.8 (single-threaded filter
+# graphs) this way, capping the encoder at one core.
+FFMPEG_SELF_CONTAINED_FLAKE_REQUIRED_SNIPPETS = (
+    "postInstall = ''",
+    "ln -s ${pkgs.ffmpeg.bin}/bin/ffmpeg $out/bin/ffmpeg",
+    "ln -s ${pkgs.ffmpeg.bin}/bin/ffprobe $out/bin/ffprobe",
+    "ln -s ${pkgs.ffmpeg.bin}/bin/ffplay $out/bin/ffplay",
+)
+FFMPEG_SELF_CONTAINED_FILES_REQUIRED_SNIPPETS = (
+    # Script-adjacent binary takes precedence over PATH (bundled ffmpeg wins).
+    "get_runtime_directory().with_name(name)",
+)
+FFMPEG_SELF_CONTAINED_LINUX_REQUIRED_SNIPPETS = (
+    # Both Linux jobs (x86 AppImage + arm64 tar) bundle the flake's ffmpeg.
+    "nix build .#ffmpeg --out-link ffmpeg-result",
+)
+# The explicit staging must use --remove-destination: the result/bin copy
+# loops pre-stage ffmpeg/ffprobe/ffplay as Nix-store symlinks (from the
+# flake's bundled ffmpeg launchers), and a plain `cp -a` of the same store
+# path onto that symlink fails with "are the same file" (broke the Linux
+# arm64 tar job on 2026-11-20).
+FFMPEG_SELF_CONTAINED_LINUX_APPIMAGE_SNIPPETS = (
+    'cp -a --remove-destination "$FFMPEG_BIN" AppDir/usr/bin/ffmpeg',
+    'cp -a --remove-destination "$FFPROBE_BIN" AppDir/usr/bin/ffprobe',
+)
+FFMPEG_SELF_CONTAINED_LINUX_TARBALL_SNIPPETS = (
+    'cp -a --remove-destination "$FFMPEG_BIN" release/bin/ffmpeg',
+    'cp -a --remove-destination "$FFPROBE_BIN" release/bin/ffprobe',
+)
+
+# Hard rule: ONNX Runtime comes from immutable nuget.org packages, never a
+# GitHub release. Microsoft purged the entire onnxruntime GitHub Releases
+# section on 2026-11-20 (v1.18.1 + v1.23.2 pins 404'd, breaking every
+# Linux/Windows/macOS CI job). The nupkgs carry the same build outputs under
+# runtimes/<platform>/native; install steps arrange them into the include/ +
+# lib/ tree ONNXRUNTIME_ROOT consumers expect.
+ORT_SOURCE_FORBIDDEN_SNIPPETS = (
+    "onnxruntime/releases/download",
+)
+ORT_SOURCE_FLAKE_REQUIRED_SNIPPETS = (
+    "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Linux/",
+    "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime/",
+    'ln -s libonnxruntime.so "$out/lib/libonnxruntime.so.${version}"',
+)
+ORT_SOURCE_WINDOWS_REQUIRED_SNIPPETS = (
+    "Microsoft.ML.OnnxRuntime.Gpu.Windows",
+    "https://www.nuget.org/api/v2/package/$nupkg/$version",
+    r"runtimes\win-arm64\native",
+)
+ORT_SOURCE_CUDA_SCRIPT_REQUIRED_SNIPPETS = (
+    "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Linux/$ORT_VERSION",
+    "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Windows/$ORT_VERSION",
+)
+# The rm -f is required: the result/bin copy loops pre-stage read-only
+# Nix-store copies of ffmpeg/ffprobe/ffplay (from the flake's bundled
+# launchers) and BSD cp cannot overwrite a non-writable file ("Permission
+# denied" - broke the macOS arm64 job on 2026-11-20).
+FFMPEG_SELF_CONTAINED_MACOS_REQUIRED_SNIPPETS = (
+    "nix build .#ffmpeg^bin",
+    "rm -f dist/bin/ffmpeg dist/bin/ffprobe dist/bin/ffplay",
+    'cp "$FFMPEG_STORE/bin/ffmpeg" dist/bin/ffmpeg',
+    'cp "$FFMPEG_STORE/bin/ffprobe" dist/bin/ffprobe',
+    'cp "$FFMPEG_STORE/bin/ffplay" dist/bin/ffplay',
+)
+# The Windows workflow writes the Copy-Item paths with doubled backslashes
+# (PowerShell tolerates them); match that literal form.
+FFMPEG_SELF_CONTAINED_WINDOWS_REQUIRED_SNIPPETS = (
+    "FFMPEG_URL:",
+    r"Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffmpeg.exe",
+    r"Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffprobe.exe",
+    r"Copy-Item -Path .\\${{ env.FFMPEG_PATH}}\\bin\\ffplay.exe",
+)
+
+# Hard rule: tbc-video-export invokes only tbc-tools binaries - no legacy
+# ld-* tool naming may survive anywhere in the vendored exporter. The
+# experimental --process-efm path's unmapped ProcessName member silently
+# derived "ld-process-efm" from its member name and resolved the legacy tool
+# from PATH on user machines; every ProcessName must now map explicitly to a
+# tbc-* binary (enums.py __str__ raises on unmapped members), and the
+# wrapper/parser modules + classes use tbc_* names. LaserDisc domain terms
+# (CHROMA_COMBINED_LD, is_combined_ld) and mentions of the upstream ld-decode
+# software are not legacy tool naming and are unaffected.
+TBC_TOOL_NAMING_ENUM_REQUIRED_SNIPPETS = (
+    'return "tbc-export-metadata"',
+    'return "tbc-dropout-correct"',
+    'return "tbc-chroma-decoder"',
+    'return "tbc-process-vbi"',
+    'return "ffmpeg"',
+    "no tbc-tools binary name mapping",
+)
+TBC_TOOL_NAMING_FORBIDDEN_SNIPPETS = (
+    "LD_PROCESS_VBI",
+    "LD_EXPORT_METADATA",
+    "LD_DROPOUT_CORRECT",
+    "LD_CHROMA_DECODER",
+    "LD_PROCESS_EFM",
+    "wrapper_ld_",
+    "parser_ld_",
+    "WrapperLD",
+    "ParserLD",
+    '"ld-chroma-decoder"',
+    '"ld-dropout-correct"',
+    '"ld-process-vbi"',
+    '"ld-export-metadata"',
+    '"ld-process-efm"',
+)
+TBC_TOOL_NAMING_REQUIRED_FILES = (
+    TBC_VIDEO_EXPORT_ENUMS,
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/wrapper/wrapper_tbc_chroma_decoder.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/wrapper/wrapper_tbc_dropout_correct.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/wrapper/wrapper_tbc_export_metadata.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/wrapper/wrapper_tbc_process_vbi.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/parser/parser_tbc_chroma_decoder.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/parser/parser_tbc_dropout_correct.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/parser/parser_tbc_export_metadata.py",
+    TBC_VIDEO_EXPORT_SRC_DIR / "process/parser/parser_tbc_process_vbi.py",
 )
 
 # tbc-analyse must route all deinterlace/proxy output through tbc-video-export web profiles
@@ -444,6 +582,49 @@ MACOS_UNIVERSAL_VENDOR_REQUIRED_SNIPPETS = (
 )
 
 
+# Hard rule: every export mode stays covered by the end-to-end export suite
+# (scripts/test-export-e2e.py). The tbc-analyse Export tab is driven headlessly
+# through its hidden --e2e-export driver and tbc-video-export runs directly,
+# across every profile/option the GUI offers, with ffprobe-verified outputs.
+# ctest runs it on the build tree; the Release workflow's package-e2e job runs
+# it against every packaged artifact (--strict-bundled) and gates publishing.
+# Origin (2026-11): an AppImage export resolved ~/tbc-video-export (a
+# directory: the loader-launched binary's applicationDirPath() is usr/lib) and
+# could not start, with no test anywhere exercising a packaged export.
+EXPORT_E2E_RELEASE_REQUIRED_SNIPPETS = (
+    "package-e2e:",
+    "python scripts/test-export-e2e.py",
+    "--strict-bundled",
+    "needs: [resolve-tag, build-linux, build-windows, build-macos, package-e2e]",
+)
+EXPORT_E2E_CMAKE_REQUIRED_SNIPPETS = (
+    "scripts/test-export-e2e.py",
+    "foreach(_e2e_suite contract cli gui)",
+    "NAME export-e2e-${_e2e_suite}",
+)
+EXPORT_E2E_MAIN_REQUIRED_SNIPPETS = (
+    'QCommandLineOption e2eExportOption("e2e-export"',
+    'QCommandLineOption e2eListOption("e2e-list-export-options"',
+)
+# Bundled-sibling resolution: the Linux loader wrappers declare the real bin
+# dir, and tbc-analyse searches it first and never accepts a directory as an
+# executable (QFileInfo::isExecutable() is true for searchable directories).
+EXPORT_TOOL_RESOLUTION_LINUX_SNIPPET = 'export TBC_TOOLS_APP_BIN_DIR="\\${SELF_DIR}"'
+EXPORT_TOOL_RESOLUTION_REQUIRED_SNIPPETS = (
+    'appendUniqueDir(qEnvironmentVariable("TBC_TOOLS_APP_BIN_DIR"));',
+    "candidateInfo.isFile() && candidateInfo.isExecutable()",
+)
+EXPORT_TOOL_RESOLUTION_FORBIDDEN_SNIPPETS = (
+    "candidateInfo.exists() && candidateInfo.isExecutable()",
+)
+# The tbc-video-export pytest suite runs on CI (--build-test-only) and never
+# silently skips there.
+CI_PARITY_PYTHON_TESTS_REQUIRED_SNIPPETS = (
+    "    run_full_build_and_test\n    run_python_tests\n    ;;",
+    'echo "Failed to create the pytest venv on CI" >&2',
+)
+
+
 def check_contains(path: Path, snippet: str, errors: list[str]) -> None:
     content = path.read_text(encoding="utf-8")
     if snippet not in content:
@@ -492,6 +673,11 @@ def main() -> int:
         WIN_CUDA_RUNTIME_SCRIPT,
         CUDA_PLUGIN_PUBLISH_WORKFLOW,
         CUDA_PLUGIN_PACKAGE_SCRIPT,
+        EXPORT_E2E_SCRIPT,
+        EXPORT_E2E_DRIVER,
+        TBC_ANALYSE_MAIN,
+        TBC_VIDEO_EXPORT_CMAKE,
+        CI_PARITY_SCRIPT,
     ):
         if not required_file.exists():
             errors.append(f"missing required file: {required_file}")
@@ -571,6 +757,55 @@ def main() -> int:
         check_contains(TBC_VIDEO_EXPORT_OPTS_FFMPEG, snippet, errors)
     check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_is_tff", errors)
     check_contains(TBC_VIDEO_EXPORT_FIELD_ORDER, "def compute_top_pad_lines", errors)
+
+    # Self-contained ffmpeg policy: the flake must bundle the pinned ffmpeg
+    # into the installed package, find_binary must keep script-adjacent
+    # resolution ahead of PATH, and every platform bundle job must copy the
+    # pinned ffmpeg into its bundle.
+    for snippet in FFMPEG_SELF_CONTAINED_FLAKE_REQUIRED_SNIPPETS:
+        check_contains(FLAKE_FILE, snippet, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_FILES_REQUIRED_SNIPPETS:
+        check_contains(TBC_VIDEO_EXPORT_FILES_PY, snippet, errors)
+    check_count_at_least(LINUX_WORKFLOW, FFMPEG_SELF_CONTAINED_LINUX_REQUIRED_SNIPPETS[0], 2, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_LINUX_APPIMAGE_SNIPPETS:
+        check_contains(LINUX_WORKFLOW, snippet, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_LINUX_TARBALL_SNIPPETS:
+        check_contains(LINUX_WORKFLOW, snippet, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_MACOS_REQUIRED_SNIPPETS:
+        check_contains(MACOS_WORKFLOW, snippet, errors)
+    for snippet in FFMPEG_SELF_CONTAINED_WINDOWS_REQUIRED_SNIPPETS:
+        check_contains(WINDOWS_WORKFLOW, snippet, errors)
+
+    # Hard rule: ORT comes from immutable nuget.org packages; no workflow,
+    # script or flake may reference the purged onnxruntime GitHub releases.
+    for ort_file in (
+        FLAKE_FILE,
+        WINDOWS_WORKFLOW,
+        LINUX_WORKFLOW,
+        MACOS_WORKFLOW,
+        TESTS_WORKFLOW,
+        CUDA_PLUGIN_PACKAGE_SCRIPT,
+        CUDA_PLUGIN_PUBLISH_WORKFLOW,
+    ):
+        for snippet in ORT_SOURCE_FORBIDDEN_SNIPPETS:
+            check_not_contains(ort_file, snippet, errors)
+    for snippet in ORT_SOURCE_FLAKE_REQUIRED_SNIPPETS:
+        check_contains(FLAKE_FILE, snippet, errors)
+    for snippet in ORT_SOURCE_WINDOWS_REQUIRED_SNIPPETS:
+        check_contains(WINDOWS_WORKFLOW, snippet, errors)
+    for snippet in ORT_SOURCE_CUDA_SCRIPT_REQUIRED_SNIPPETS:
+        check_contains(CUDA_PLUGIN_PACKAGE_SCRIPT, snippet, errors)
+
+    # Hard rule: tbc-video-export invokes only tbc-tools binaries; no legacy
+    # ld-* tool naming may survive anywhere in the vendored exporter.
+    for required_file in TBC_TOOL_NAMING_REQUIRED_FILES:
+        if not required_file.exists():
+            errors.append(f"missing required file: {required_file}")
+    for snippet in TBC_TOOL_NAMING_ENUM_REQUIRED_SNIPPETS:
+        check_contains(TBC_VIDEO_EXPORT_ENUMS, snippet, errors)
+    for py_file in sorted(TBC_VIDEO_EXPORT_SRC_DIR.rglob("*.py")):
+        for snippet in TBC_TOOL_NAMING_FORBIDDEN_SNIPPETS:
+            check_not_contains(py_file, snippet, errors)
 
     # raw.githubusercontent.com 429). Step is gated to arm64 and must appear
     # exactly once in build_windows_tools.yml.
@@ -656,6 +891,21 @@ def main() -> int:
 
     for snippet in AGENTS_HARD_RULE_REQUIRED_SNIPPETS:
         check_contains(AGENTS_RULES_FILE, snippet, errors)
+
+    for snippet in EXPORT_E2E_RELEASE_REQUIRED_SNIPPETS:
+        check_contains(RELEASE_WORKFLOW, snippet, errors)
+    for snippet in EXPORT_E2E_CMAKE_REQUIRED_SNIPPETS:
+        check_contains(TBC_VIDEO_EXPORT_CMAKE, snippet, errors)
+    for snippet in EXPORT_E2E_MAIN_REQUIRED_SNIPPETS:
+        check_contains(TBC_ANALYSE_MAIN, snippet, errors)
+    # both loader wrappers (x86_64 AppDir, arm64 tar)
+    check_count_at_least(LINUX_WORKFLOW, EXPORT_TOOL_RESOLUTION_LINUX_SNIPPET, 2, errors)
+    for snippet in EXPORT_TOOL_RESOLUTION_REQUIRED_SNIPPETS:
+        check_contains(TBC_ANALYSE_EXPORT_DIALOG, snippet, errors)
+    for snippet in EXPORT_TOOL_RESOLUTION_FORBIDDEN_SNIPPETS:
+        check_not_contains(TBC_ANALYSE_EXPORT_DIALOG, snippet, errors)
+    for snippet in CI_PARITY_PYTHON_TESTS_REQUIRED_SNIPPETS:
+        check_contains(CI_PARITY_SCRIPT, snippet, errors)
 
     win_cache_auth_scrub_count = WINDOWS_WORKFLOW.read_text(encoding="utf-8").count(
         "config --local --unset-all http.https://github.com/.extraheader"

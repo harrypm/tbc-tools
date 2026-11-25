@@ -62,6 +62,37 @@ class TestTBCJson:
         assert _shift_filter(4, "y") == "crop=iw:ih-4:0:4,pad=iw:ih+4:0:0"
         assert _shift_filter(-2, "y") == "crop=iw:ih-2:0:0,pad=iw:ih+2:0:2"
 
+    def test_segment_offset_off_picture(self) -> None:
+        """An offset moving the whole active area off the picture is refused.
+
+        The ffmpeg shift would otherwise crop a negative width.
+        """
+        from types import SimpleNamespace
+
+        from tbc_video_export.common import VideoSystemData
+        from tbc_video_export.process.segments import _segment_opts
+
+        tbc_json = TBCJsonHelper(
+            None,
+            '{"videoParameters":{"system":"PAL","activeVideoStart":185,'
+            '"activeVideoEnd":1107,"fieldWidth":1135}}',
+        )
+        system_data = VideoSystemData.get(VideoSystem.PAL)
+        state = SimpleNamespace(
+            opts=SimpleNamespace(
+                active_video_start=None,
+                active_video_end=None,
+                contains_active_line_opts=lambda: False,
+            ),
+            tbc_json=tbc_json,
+            video_system_data=system_data,
+            decoder_line_preset=system_data.active_lines["default"],
+        )
+        for offset_x, offset_y in ((-2000, 0), (0, 1000)):
+            segment = {"start": 1, "end": 2, "offset_x": offset_x, "offset_y": offset_y}
+            with pytest.raises(exceptions.InvalidOptsError, match="off the picture"):
+                _segment_opts(state, segment, Path("part"))  # type: ignore[arg-type]
+
     def test_video_system(self) -> None:  # noqa: D102
         json_data = '{"videoParameters":{"system":"PAL"}}'
         tbc_json = TBCJsonHelper(None, json_data)

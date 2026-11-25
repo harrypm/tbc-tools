@@ -112,7 +112,7 @@ def add_ldtool_opts(parent: argparse.ArgumentParser) -> None:
         help=(
             "Resize active-area output to standard D1 dimensions using auto "
             "padding.\\n"
-            "  - PAL: 720x576 with SAR 128/117\\n"
+            "  - PAL/SECAM/MESECAM: 720x576 with SAR 128/117\\n"
             "  - NTSC/PAL-M: 720x486 with SAR 12/13\\n"
             "  - Works with custom active-area framing."
             "\\n\\n"
@@ -436,32 +436,6 @@ def add_ldtool_opts(parent: argparse.ArgumentParser) -> None:
             "  - This overrides --threads, and setting to 0 uses process defaults."
             "\n\n"
         ),
-    )
-
-    # process-efm (EXPTERIMENTAL)
-    process_efm = parent.add_argument_group("process efm (EXPERIMENTAL)")
-    process_efm.add_argument(
-        "--process-efm",
-        action="store_true",
-        default=False,
-        help=argparse.SUPPRESS,
-        # help="Run ld-process-efm before exporting. (default: no)\n\n",
-    )
-
-    process_efm.add_argument(
-        "--process-efm-keep-going",
-        action="store_true",
-        default=False,
-        help=argparse.SUPPRESS,
-        # help="Keep going on errors. (default: no)\n\n",
-    )
-
-    process_efm.add_argument(
-        "--process-efm-dts",
-        action="store_true",
-        default=False,
-        help=argparse.SUPPRESS,
-        # help="Audio is DTS rather than PCM. (default: no)\n\n",
     )
 
     # export-metadata

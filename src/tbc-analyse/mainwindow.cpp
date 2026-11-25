@@ -3030,12 +3030,7 @@ TbcMetaData::VideoParameters MainWindow::displayedVideoParameters() const
     TbcMetaData::VideoParameters videoParameters = tbcSource.getVideoParameters();
     if (const int segmentIndex = editSegmentAtCurrentFrame(); segmentIndex >= 0) {
         const ExportSegment &segment = editSegmentsWidget->segment(segmentIndex);
-        videoParameters.activeVideoStart += segment.offsetX;
-        videoParameters.activeVideoEnd += segment.offsetX;
-        videoParameters.firstActiveFrameLine += segment.offsetY;
-        videoParameters.lastActiveFrameLine += segment.offsetY;
-        videoParameters.firstActiveFieldLine += segment.offsetY / 2;
-        videoParameters.lastActiveFieldLine += segment.offsetY / 2;
+        TbcSource::applyFramingOffset(videoParameters, segment.offsetX, segment.offsetY);
     }
     return videoParameters;
 }
@@ -3166,6 +3161,19 @@ void MainWindow::updateImageViewer()
     if (asyncFrameRenderInProgress && !useAsyncRender) {
         cancelInFlightAsyncFrameRender();
         asyncFrameImage = QImage();
+    }
+    // The preview levels/trims to the framing it shows: inside a segment in
+    // the Edit tab that is the segment's (an async render picks it up next)
+    if (!asyncFrameRenderInProgress && tbcSource.getIsSourceLoaded()) {
+        int offsetX = 0;
+        int offsetY = 0;
+        if (const int segmentIndex = editSegmentAtCurrentFrame(); segmentIndex >= 0) {
+            offsetX = editSegmentsWidget->segment(segmentIndex).offsetX;
+            offsetY = editSegmentsWidget->segment(segmentIndex).offsetY;
+        }
+        if (tbcSource.setPreviewFramingOffset(offsetX, offsetY)) {
+            asyncFrameImage = QImage();
+        }
     }
     QImage image;
     if (useAsyncRender) {
@@ -5833,6 +5841,11 @@ void MainWindow::maybePerformWeeklyUpdateCheck()
         return;
     }
     if (!configuration.getUpdateCheckEnabled()) {
+        return;
+    }
+    // Headless/automated runs (the --e2e-* drivers set this) must not hit the
+    // network or pop an update dialog mid-export.
+    if (qEnvironmentVariableIsSet("TBC_ANALYSE_NO_UPDATE_CHECK")) {
         return;
     }
 

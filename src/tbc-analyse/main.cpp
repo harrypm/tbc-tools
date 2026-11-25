@@ -9,7 +9,9 @@
  ******************************************************************************/
 
 #include "mainwindow.h"
+#include "e2eexportdriver.h"
 #include <QApplication>
+#include <memory>
 #include <QDebug>
 #include <QtGlobal>
 #include <QCommandLineParser>
@@ -209,6 +211,15 @@ int main(int argc, char *argv[])
     parser.addOption(QCommandLineOption("light-theme", "Pin the light Fusion theme instead of following the system light/dark setting"));
     parser.addOption(QCommandLineOption("metadata-only", "Load metadata (.db or .json) without TBC data"));
 
+    // Automated end-to-end testing (scripts/test-export-e2e.py). Hidden from
+    // --help: they drive the Export tab headlessly and exit with a verdict.
+    QCommandLineOption e2eExportOption("e2e-export", "Run the Export tab from a JSON spec and exit", "spec");
+    e2eExportOption.setFlags(QCommandLineOption::HiddenFromHelp);
+    parser.addOption(e2eExportOption);
+    QCommandLineOption e2eListOption("e2e-list-export-options", "Write the Export tab controls as JSON and exit", "file");
+    e2eListOption.setFlags(QCommandLineOption::HiddenFromHelp);
+    parser.addOption(e2eListOption);
+
     // Positional argument to specify input video file
     parser.addPositionalArgument("input", QCoreApplication::translate("main", "Specify input TBC or metadata file"));
 
@@ -269,9 +280,27 @@ int main(int argc, char *argv[])
     }
     const bool metadataOnly = parser.isSet("metadata-only");
 
+    // Automated end-to-end runs: no background update check (network access
+    // and a dialog mid-export).
+    if (parser.isSet(e2eExportOption) || parser.isSet(e2eListOption)) {
+        qputenv("TBC_ANALYSE_NO_UPDATE_CHECK", "1");
+    }
+
     // Start the GUI application
     MainWindow w(inputFileName, metadataOnly);
     w.show();
+
+    std::unique_ptr<E2EExportDriver> e2eDriver;
+    if (parser.isSet(e2eExportOption)) {
+        e2eDriver = std::make_unique<E2EExportDriver>(&w, E2EExportDriver::Mode::Export,
+                                                      parser.value(e2eExportOption));
+    } else if (parser.isSet(e2eListOption)) {
+        e2eDriver = std::make_unique<E2EExportDriver>(&w, E2EExportDriver::Mode::ListOptions,
+                                                      parser.value(e2eListOption));
+    }
+    if (e2eDriver) {
+        e2eDriver->start();
+    }
 
     return a.exec();
 }

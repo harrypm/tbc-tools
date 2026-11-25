@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from tbc_video_export.program_state import ProgramState
 
 
-class WrapperLDProcessVBI(Wrapper):
+class WrapperTBCProcessVBI(Wrapper):
     """Wrapper for tbc-process-vbi."""
 
     def __init__(self, state: ProgramState, config: WrapperConfig[None, None]) -> None:
@@ -65,7 +65,7 @@ class WrapperLDProcessVBI(Wrapper):
 
     @cached_property
     def process_name(self) -> ProcessName:  # noqa: D102
-        return ProcessName.LD_PROCESS_VBI
+        return ProcessName.TBC_PROCESS_VBI
 
     @cached_property
     def supported_pipe_types(self) -> PipeType:  # noqa: D102

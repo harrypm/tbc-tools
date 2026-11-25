@@ -13,7 +13,14 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from tbc_video_export.common.enums import ExportMode, FlagHelper, ProcessName, TBCType
+from tbc_video_export.common.enums import (
+    ExportMode,
+    FieldOrder,
+    FlagHelper,
+    ProcessName,
+    TBCType,
+)
+from tbc_video_export.common.mxf_interlace import fix_mxf_interlace
 from tbc_video_export.common.utils import ansi, strings
 from tbc_video_export.process.process import Process
 from tbc_video_export.process.progress_handler import ProgressHandler
@@ -69,7 +76,7 @@ class ProcessHandler:
             await asyncio.wait(pending)
 
         if self._has_run:
-            self._normalize_mkv_display_aspect()
+            self.normalize_output()
             self._print_completion_message()
 
     async def stop(self, cancelled_by_user: bool = False) -> None:
@@ -85,6 +92,15 @@ class ProcessHandler:
             self._user_cancellation_event.set()
 
         self._stop_event.set()
+
+    def normalize_output(self) -> None:
+        """Fix the container metadata FFmpeg writes wrongly into the output.
+
+        Also run on a joined segmented export, whose stream-copy join is muxed
+        afresh by FFmpeg.
+        """
+        self._normalize_mkv_display_aspect()
+        self._normalize_mxf_interlace()
 
     def _normalize_mkv_display_aspect(self) -> None:
         """Normalize anamorphic MKV display dimensions to whole-pixel units.
@@ -131,6 +147,26 @@ class ProcessHandler:
 
         temp_file = output_file.with_name(f"{output_file.stem}.remux-{os.getpid()}.mkv")
 
+        # mkvmerge does not carry FFmpeg's FlagInterlaced/FieldOrder over a
+        # remux, which would leave interlaced exports with no field order for
+        # players/NLEs. They are restored on the remux with mkvpropedit
+        # (Matroska FieldOrder codes; FlagInterlaced 1=interlaced,
+        # 2=progressive). Without mkvpropedit, keep FFmpeg's correctly
+        # flagged file rather than lose the field order.
+        field_order_codes = {"tt": 1, "bb": 6, "tb": 9, "bt": 14}
+        field_order = video_stream.get("field_order")
+        mkvpropedit = shutil.which("mkvpropedit", path=str(Path(mkvmerge).parent)) or shutil.which(
+            "mkvpropedit"
+        )
+        if field_order in (*field_order_codes, "progressive") and mkvpropedit is None:
+            self._state.export.append_message(
+                ansi.error_color(
+                    "mkvpropedit not found, skipping MKV display dimension "
+                    "normalization to preserve the field order."
+                )
+            )
+            return
+
         # mkvmerge exit code 1 means warnings, 2 means error
         result = subprocess.run(  # noqa: S603
             [
@@ -149,6 +185,20 @@ class ProcessHandler:
             text=True,
         )
 
+        if result.returncode in (0, 1) and temp_file.is_file() and mkvpropedit:
+            if field_order in field_order_codes:
+                props = ["--set", "interlaced=1", "--set", f"field-order={field_order_codes[field_order]}"]
+            elif field_order == "progressive":
+                props = ["--set", "interlaced=2"]
+            else:
+                props = []
+            if props and subprocess.run(  # noqa: S603
+                [mkvpropedit, "--quiet", str(temp_file), "--edit", "track:v1", *props],
+                check=False,
+                capture_output=True,
+            ).returncode not in (0, 1):
+                result = subprocess.CompletedProcess(result.args, 2)
+
         if result.returncode in (0, 1) and temp_file.is_file():
             temp_file.replace(output_file)
             self._state.export.append_message(
@@ -166,6 +216,43 @@ class ProcessHandler:
                 )
             )
 
+    def _normalize_mxf_interlace(self) -> None:
+        """Re-flag interlaced MXF exports with the real field order.
+
+        FFmpeg's MXF muxer describes ProRes/JPEG 2000 essence as progressive
+        and gives other interlaced essence a bottom-first FieldDominance for
+        top-field-first video (see common/mxf_interlace.py). Deinterlaced
+        (web/proxy) and progressive exports are left as FFmpeg wrote them.
+        """
+        output_file = self._state.file_helper.output_video_file
+        if output_file.suffix.lower() != ".mxf" or not output_file.is_file():
+            return
+
+        field_order = self._state.opts.field_order
+        if field_order is FieldOrder.AUTO:
+            field_order = self._state.source_field_order
+        profile_name = self._state.profile.name.lower()
+        deinterlaced = profile_name == "web" or profile_name.endswith("_web")
+        if field_order not in (FieldOrder.TFF, FieldOrder.BFF) or deinterlaced:
+            return
+
+        try:
+            changes = fix_mxf_interlace(
+                output_file, field_order is FieldOrder.TFF, self._state.output_line_map
+            )
+        except (OSError, ValueError) as error:
+            self._state.export.append_message(
+                ansi.error_color(f"Unable to fix MXF interlace metadata: {error}")
+            )
+            return
+
+        if changes:
+            self._state.export.append_message(
+                ansi.success_color(
+                    f"MXF flagged interlaced {field_order.name}: " + "; ".join(changes) + "."
+                )
+            )
+
     def _probe_video_stream(self, video_file: Path) -> dict[str, Any] | None:
         """Return the first video stream from ffprobe of video_file."""
         if (ffprobe := self._resolve_ffprobe()) is None:
@@ -179,7 +266,7 @@ class ProcessHandler:
                 "-select_streams",
                 "v:0",
                 "-show_entries",
-                "stream=index,width,height,sample_aspect_ratio",
+                "stream=index,width,height,sample_aspect_ratio,field_order",
                 "-of",
                 "json",
                 str(video_file),
@@ -226,19 +313,16 @@ class ProcessHandler:
         # group 1 (vbi)
         # run process vbi
         if self._state.opts.process_vbi:
-            procs |= ProcessName.LD_PROCESS_VBI
+            procs |= ProcessName.TBC_PROCESS_VBI
 
             self._procs[create_group(export_mode, TBCType.NONE, procs)] = []
 
         procs = ProcessName.NONE
 
         # group 2 (standalone)
-        # run export metadata & process efm
+        # run export metadata
         if self._state.opts.export_metadata:
-            procs |= ProcessName.LD_EXPORT_METADATA
-
-        if self._state.opts.process_efm:
-            procs |= ProcessName.LD_PROCESS_EFM
+            procs |= ProcessName.TBC_EXPORT_METADATA
 
         if procs != ProcessName.NONE:
             self._procs[create_group(export_mode, TBCType.NONE, procs)] = []
@@ -248,9 +332,9 @@ class ProcessHandler:
         # group 3 (decoding/encoding)
         if export_mode != ExportMode.LUMA_4FSC:
             if not self._state.opts.no_dropout_correct:
-                procs |= ProcessName.LD_DROPOUT_CORRECT
+                procs |= ProcessName.TBC_DROPOUT_CORRECT
 
-            procs |= ProcessName.LD_CHROMA_DECODER
+            procs |= ProcessName.TBC_CHROMA_DECODER
 
         # we always want ffmpeg
         procs |= ProcessName.FFMPEG

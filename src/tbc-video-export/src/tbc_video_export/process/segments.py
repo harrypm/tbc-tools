@@ -85,6 +85,11 @@ def _segment_opts(state: ProgramState, segment: dict[str, int], output: Path) ->
         start = state.opts.active_video_start or state.tbc_json.active_video_start
         end = state.opts.active_video_end or state.tbc_json.active_video_end
         width = state.tbc_json.field_width
+        if start is not None and end is not None and abs(offset_x) >= end - start:
+            raise exceptions.InvalidOptsError(
+                f"Segment {segment['start']}-{segment['end']} horizontal offset {offset_x} moves "
+                f"the active area ({end - start} samples wide) off the picture."
+            )
         if start is not None and end is not None and width is not None and (
             0 <= start + offset_x and end + offset_x <= width
         ):
@@ -100,6 +105,11 @@ def _segment_opts(state: ProgramState, segment: dict[str, int], output: Path) ->
                 "be even: an odd line shift swaps the field order."
             )
         ffll, lfll, ffrl, lfrl = _base_active_lines(state)
+        if abs(offset_y) > lfrl - ffrl:
+            raise exceptions.InvalidOptsError(
+                f"Segment {segment['start']}-{segment['end']} vertical offset {offset_y} moves "
+                f"the active area ({lfrl - ffrl + 1} lines) off the picture."
+            )
         default = state.video_system_data.active_lines["default"]
         field_offset = offset_y // 2
         if (
@@ -181,20 +191,30 @@ async def run_segmented_export(
             str(state.file_helper.tools[ProcessName.FFMPEG]),
             "-hide_banner", "-loglevel", "error", "-y",
             "-f", "concat", "-safe", "0", "-i", str(list_file),
+            # the concat demuxer drops the parts' global tags (tbc_tools_*,
+            # timecode): take them from the first part
+            "-i", str(parts[0]), "-map_metadata", "1",
         ]
         if state.file_helper.output_container.lower() == "mkv" and not state.opts.no_attach_json:
             command += [
                 "-attach", str(state.file_helper.tbc_json.file_name),
                 "-metadata:s:t:0", "mimetype=application/json",
             ]
-        command += ["-map", "0", "-c", "copy", "-metadata", f"tbc_segments={recorded}",
-                    str(final_output)]
+        # Picture, sound and captions only: the parts' timecode data track
+        # cannot be stream-copied into every container (mp4 refuses it).
+        command += ["-map", "0:v", "-map", "0:a?", "-map", "0:s?", "-c", "copy",
+                    "-metadata", f"tbc_segments={recorded}", str(final_output)]
 
         console.info(f"Joining {len(parts)} segments into {final_output}")
         process = await asyncio.create_subprocess_exec(*command)
         if await process.wait() != 0:
             console.error("Joining the segments failed.")
             return False
+        # export state is shared with the segments: report only the join's
+        known = len(state.export.messages)
+        ProcessHandler(state).normalize_output()
+        for message in state.export.messages[known:]:
+            console.info(message.message)
         return True
     finally:
         if not state.opts.dry_run:

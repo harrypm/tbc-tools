@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from tbc_video_export.program_state import ProgramState
 
 
-class WrapperLDDropoutCorrect(Wrapper):
+class WrapperTBCDropoutCorrect(Wrapper):
     """Wrapper for tbc-dropout-correct."""
 
     def __init__(self, state: ProgramState, config: WrapperConfig[None, Pipe]) -> None:
@@ -85,7 +85,7 @@ class WrapperLDDropoutCorrect(Wrapper):
 
     @cached_property
     def process_name(self) -> ProcessName:  # noqa: D102
-        return ProcessName.LD_DROPOUT_CORRECT
+        return ProcessName.TBC_DROPOUT_CORRECT
 
     @cached_property
     def supported_pipe_types(self) -> PipeType:  # noqa: D102

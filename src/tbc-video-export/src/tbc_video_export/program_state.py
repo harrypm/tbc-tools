@@ -83,8 +83,12 @@ class ProgramState:
                 return ExportMode.LUMA
 
             case _ as tbc_types if TBCType.CHROMA in tbc_types:
+                # MONO on a Y/C source means "luma only": process the Y TBC
+                # and leave the C TBC alone (MONO cannot decode a chroma pass).
                 return (
-                    ExportMode.LUMA if self.opts.luma_only else ExportMode.CHROMA_MERGE
+                    ExportMode.LUMA
+                    if self.opts.luma_only or self.opts.chroma_decoder is ChromaDecoder.MONO
+                    else ExportMode.CHROMA_MERGE
                 )
 
             case TBCType.COMBINED:
@@ -172,7 +176,7 @@ class ProgramState:
     def _effective_active_frame_lines(self) -> tuple[int, int]:
         """Return the (first, last) active frame lines the chroma decoder will use.
 
-        Resolution mirrors WrapperLDChromaDecoder._get_active_line_opts:
+        Resolution mirrors WrapperTBCChromaDecoder._get_active_line_opts:
         user opts take priority, then a non-default active-line preset, then the
         TBC JSON, then the video-system default preset.
         """
@@ -222,6 +226,26 @@ class ProgramState:
         )
         is_tff = compute_is_tff(first, top_pad_lines)
         return FieldOrder.TFF if is_tff else FieldOrder.BFF
+
+    @cached_property
+    def output_line_map(self) -> tuple[int, int]:
+        """Return the output's (field 1, field 2) first broadcast line numbers.
+
+        The MXF VideoLineMap of the exported frame: TBC frame line n is field
+        line n // 2 of field n % 2 (broadcast line = field line + 1), and the
+        output starts top_pad_lines above the first active frame line (0 when
+        the whole frame is exported). Field 2 lines are numbered 313 (625-line)
+        or 263 (525-line) after field 1, matching FFmpeg's MXF tables (PAL
+        active area -> 23/336).
+        """
+        trim_to_active = not (self.opts.full_frame or self.opts.luma_4fsc)
+        first, last = self._effective_active_frame_lines
+        top_pad_lines = compute_top_pad_lines(
+            first, last, self._effective_output_padding, trim_to_active
+        )
+        first_out = max(0, first - top_pad_lines) if trim_to_active else 0
+        field2_offset = 263 if self.video_system in (VideoSystem.NTSC, VideoSystem.PAL_M) else 313
+        return (first_out + 1) // 2 + 1, first_out // 2 + 1 + field2_offset
 
     @cached_property
     def dry_run(self) -> bool:

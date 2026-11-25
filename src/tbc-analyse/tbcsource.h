@@ -124,6 +124,10 @@ public:
     };
     void setChromaDecodeMode(ChromaDecodeMode mode);
     ChromaDecodeMode getChromaDecodeMode() const;
+    // Move the active area the preview levels/trims to (an export segment's
+    // framing in the Edit tab); returns true if it changed
+    bool setPreviewFramingOffset(qint32 offsetX, qint32 offsetY);
+    static void applyFramingOffset(TbcMetaData::VideoParameters &videoParameters, qint32 offsetX, qint32 offsetY);
     void setFieldView(bool _state);
     void setFieldOrder(bool _state);
 	void setCombine(bool _state);
@@ -338,6 +342,8 @@ private:
 	MonoDecoder::MonoConfiguration monoConfiguration;
     OutputWriter::Configuration outputConfiguration;
     ChromaDecodeMode chromaDecodeMode = HYBRID_CHROMA_MODE;
+    qint32 previewFramingOffsetX = 0;
+    qint32 previewFramingOffsetY = 0;
 	bool combine = false;
 
     // Chapter map

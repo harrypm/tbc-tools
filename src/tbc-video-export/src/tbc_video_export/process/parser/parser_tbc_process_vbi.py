@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from tbc_video_export.common.enums import ProcessName
 
 
-class ParserLDProcessVBI(Parser):
+class ParserTBCProcessVBI(Parser):
     """Parser for tbc-process-vbi process."""
 
     def __init__(self, process_name: ProcessName) -> None:

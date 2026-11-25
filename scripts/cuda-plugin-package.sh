@@ -20,7 +20,7 @@
 #
 # Sources:
 #   - NVIDIA redistributable pip wheels (nvidia-*-cu11) — public on PyPI, no login
-#   - ONNX Runtime GPU prebuilt (microsoft/onnxruntime releases) — for the provider lib
+#   - ONNX Runtime GPU (immutable nuget.org packages) — for the provider lib
 #
 # Modes:
 #   build-linux   [--out DIR] [--version VER] [--deps-dir DIR]
@@ -183,13 +183,12 @@ build_linux() {
     say "  staged $so ($size bytes)"
   done
 
-  # ORT CUDA EP provider .so from the ORT GPU prebuilt.
-  say "  fetching ONNX Runtime GPU prebuilt (v$ORT_VERSION) for libonnxruntime_providers_cuda.so"
-  local ort_url="https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-gpu-${ORT_VERSION}.tgz"
-  local ort_tgz="$tmp/ort-linux.tgz"
-  curl -fsSL -o "$ort_tgz" "$ort_url"
-  tar -xzf "$ort_tgz" -C "$tmp" "onnxruntime-linux-x64-gpu-${ORT_VERSION}/lib/libonnxruntime_providers_cuda.so"
-  cp "$tmp/onnxruntime-linux-x64-gpu-${ORT_VERSION}/lib/libonnxruntime_providers_cuda.so" "$pkgdir/"
+  # ORT CUDA EP provider .so from the immutable nuget.org package (the
+  # onnxruntime GitHub releases were purged by Microsoft on 2026-11-20).
+  say "  fetching ONNX Runtime GPU nuget package (v$ORT_VERSION) for libonnxruntime_providers_cuda.so"
+  local ort_nupkg="$tmp/ort-gpu-linux.nupkg.zip"
+  curl -fsSL -o "$ort_nupkg" "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Linux/$ORT_VERSION"
+  unzip -j "$ort_nupkg" "runtimes/linux-x64/native/libonnxruntime_providers_cuda.so" -d "$pkgdir/"
 
   # Remove BIND_NOW from the provider .so. The provider .so references
   # Provider_GetHost, a hidden symbol in the main libonnxruntime.so that
@@ -319,13 +318,13 @@ build_windows() {
     esac
   done
 
-  # ORT CUDA EP provider DLL from the ORT GPU prebuilt.
-  say "  fetching ONNX Runtime GPU prebuilt (v$ORT_VERSION) for onnxruntime_providers_cuda.dll"
-  local ort_url="https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-win-x64-gpu-${ORT_VERSION}.zip"
-  local ort_zip="$tmp/ort-win.zip"
-  curl -fsSL -o "$ort_zip" "$ort_url"
-  unzip -j "$ort_zip" "onnxruntime-win-x64-gpu-${ORT_VERSION}/lib/onnxruntime_providers_cuda.dll" -d "$pkgdir/"
-  unzip -j "$ort_zip" "onnxruntime-win-x64-gpu-${ORT_VERSION}/lib/onnxruntime_providers_shared.dll" -d "$pkgdir/" 2>/dev/null || true
+  # ORT CUDA EP provider DLL from the immutable nuget.org package (the
+  # onnxruntime GitHub releases were purged by Microsoft on 2026-11-20).
+  say "  fetching ONNX Runtime GPU nuget package (v$ORT_VERSION) for onnxruntime_providers_cuda.dll"
+  local ort_nupkg="$tmp/ort-gpu-win.nupkg.zip"
+  curl -fsSL -o "$ort_nupkg" "https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime.Gpu.Windows/$ORT_VERSION"
+  unzip -j "$ort_nupkg" "runtimes/win-x64/native/onnxruntime_providers_cuda.dll" -d "$pkgdir/"
+  unzip -j "$ort_nupkg" "runtimes/win-x64/native/onnxruntime_providers_shared.dll" -d "$pkgdir/" 2>/dev/null || true
   local psha psize
   psha="$(sha256_of "$pkgdir/onnxruntime_providers_cuda.dll")"; psize="$(stat -c '%s' "$pkgdir/onnxruntime_providers_cuda.dll")"
   manifest_add_file "$manifest" "onnxruntime_providers_cuda.dll" "$psha" "$psize" "$first"; first=0

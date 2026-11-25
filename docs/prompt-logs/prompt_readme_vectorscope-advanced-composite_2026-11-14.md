@@ -401,3 +401,16 @@ all changed/new files above, per repo convention.
 - EditSegmentsWidget rewritten: viewer slot (the Viewer's scroll area moves between Viewer and Edit on tab switch), SegmentTimeline (numbered blocks across the source, cut gaps dark, pending-start marker, playhead; click/drag seeks), Segment start / Segment end at the current frame, Remove, Start/End/X/Y fields for the segment under the playhead; segments kept in timeline (= export) order.
 - MainWindow: isViewerTabActive includes Edit; getActiveVideoRects applies the playhead segment's offsets in Edit; the export-boundary edge drag inside a segment sets that segment's offsets (left/right -> X, top -> Y, even); boundary always shown inside a segment in Edit; timeline playhead follows updateImage. Removed the unused ExportDialog in/out getters.
 - Verified on Tape_03: picture moves to Edit and back; segments 1000-1299 and 3000-3149 made via start/end; offsets 8/5 -> box (134,40)->(142,44), 5 -> 4; box back to global between segments and on the Viewer tab. ctest 38/38.
+
+## Phase 32 - Segment editor moved to branch tbc-seg-edit (2026-11-18)
+- User: commit/push live playback + monitor features with bug fixes; put the editor mode on a branch "tbc-seg-edit".
+- Branch tbc-seg-edit = main @ 81ce461 + 045e964 (WIP: X/Y fields removed in favour of dragging / Video Parameters dialog editing the segment under the playhead; Start/End re-sort fix). Pending there: decide on X/Y fields; hybrid active-area preview inside a segment follows the global framing.
+- main: single revert of 7e66058, 0424341, 81ce461 (segments metadata field, Edit tab, decoder --active-video-start/end, tbc-video-export segments). Playback, audio monitor, export speed/ETA/dropout work stays on main.
+
+## Phase 33 - Segment editor brought up to date with main (2026-11-25)
+- User: "lets continue the multi-segment editor works".
+- tbc-seg-edit rebuilt on main (revert of ece67be + 045e964): a plain merge of main would have re-applied the revert to the auto-merged files and silently dropped the segment code.
+- Joined exports (found by new e2e cases): MP4/MOV joins failed (`-map 0` carried the parts' timecode data track) -> map v/a?/s? only; the concat demuxer dropped the parts' global tags -> metadata from the first part; the join is re-muxed by FFmpeg, so `ProcessHandler.normalize_output()` (MKV aspect + MXF interlace re-flag) now runs on the joined file too (MXF read progressive before); ExportState is shared across segment states -> only the join's messages printed.
+- Offsets that move the whole active area off the picture are refused (the ffmpeg shift built a negative crop).
+- Edit tab preview: TbcSource::setPreviewFramingOffset moves the output writer's active area (Hybrid levelled window, Active-only trim) and the non-full-frame decoder bounds to the segment under the playhead; SECAM keeps the metadata bounds for its rest-carrier measurement. Not checked visually (no display available).
+- E2E: fixtures pal_segments / pal_segments_edge (UserSegmentsJson override); CLI cases segments-{mkv,mxf-prores,mp4-h264,d10,web,past-edge,ignored}, GUI cases gui-segments(-prores); verify_output gains a format_tag check.

@@ -122,24 +122,34 @@ class ProcessName(Flag):
     """Process names for parsing messages."""
 
     NONE = auto()
-    LD_PROCESS_VBI = auto()
-    LD_EXPORT_METADATA = auto()
-    LD_PROCESS_EFM = auto()
-    LD_DROPOUT_CORRECT = auto()
-    LD_CHROMA_DECODER = auto()
+    TBC_PROCESS_VBI = auto()
+    TBC_EXPORT_METADATA = auto()
+    TBC_DROPOUT_CORRECT = auto()
+    TBC_CHROMA_DECODER = auto()
     FFMPEG = auto()
 
     def __str__(self) -> str:
-        """Return formatted enum name as string."""
-        if self is ProcessName.LD_EXPORT_METADATA:
+        """Return the tbc-tools binary name for the process.
+
+        Every member maps explicitly to a tbc-tools binary (ffmpeg is the one
+        external tool); an unmapped member raises instead of silently deriving
+        a legacy tool name from the member name and resolving it from PATH.
+        """
+        if self is ProcessName.TBC_EXPORT_METADATA:
             return "tbc-export-metadata"
-        if self is ProcessName.LD_DROPOUT_CORRECT:
+        if self is ProcessName.TBC_DROPOUT_CORRECT:
             return "tbc-dropout-correct"
-        if self is ProcessName.LD_CHROMA_DECODER:
+        if self is ProcessName.TBC_CHROMA_DECODER:
             return "tbc-chroma-decoder"
-        if self is ProcessName.LD_PROCESS_VBI:
+        if self is ProcessName.TBC_PROCESS_VBI:
             return "tbc-process-vbi"
-        return str(self.name).replace("_", "-").lower()
+        if self is ProcessName.FFMPEG:
+            return "ffmpeg"
+        if self is ProcessName.NONE:
+            return "none"
+        raise ValueError(
+            f"ProcessName {self.name} has no tbc-tools binary name mapping"
+        )
 
 
 class ProcessStatus(Flag):
